@@ -4,13 +4,17 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
 {
     modelBox.addItem ("htdemucs", 1);
     modelBox.addItem ("htdemucs_6s", 2);
-    modelBox.setText (proc.model, juce::dontSendNotification);
-    modelBox.onChange = [this] { proc.model = modelBox.getText(); };
+    modelBox.setText (proc.isSixStems() ? "htdemucs_6s" : "htdemucs", juce::dontSendNotification);
+    modelBox.onChange = [this]
+    {
+        proc.setSixStems (modelBox.getText() == "htdemucs_6s");
+        lastState = JobState::Idle;   // a re-split may finish at once from the cache
+    };
     addAndMakeVisible (modelBox);
 
-    pythonField.setText (proc.pythonPath, false);
-    pythonField.setTooltip ("Python executable (default: python on PATH)");
-    pythonField.onTextChange = [this] { proc.pythonPath = pythonField.getText().trim(); };
+    pythonField.setText (proc.getPythonPath(), false);
+    pythonField.setTooltip ("Python executable (empty: find it automatically)");
+    pythonField.onTextChange = [this] { proc.setPythonPath (pythonField.getText().trim()); };
     addAndMakeVisible (pythonField);
 
     cancelButton.onClick = [this] { proc.job.cancel(); };
@@ -21,7 +25,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     status.setColour (juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible (status);
 
-    if (proc.stemDir.isDirectory()) showStems (proc.stemDir);
+    if (proc.hasStems()) showStems (proc.getStemDir());
     else status.setText ("Drop an audio file here", juce::dontSendNotification);
 
     setSize (520, 360);
@@ -61,9 +65,7 @@ bool StemSplitterEditor::isInterestedInFileDrag (const juce::StringArray& files)
 void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
 {
     tiles.clear();
-    proc.lastInput = juce::File (files[0]);
-    proc.stemDir = juce::File();
-    proc.job.start (proc.lastInput, proc.model, proc.pythonPath);
+    proc.startSplit (juce::File (files[0]));
     lastState = JobState::Idle;   // force a UI refresh on the next tick
 }
 
@@ -81,11 +83,11 @@ void StemSplitterEditor::timerCallback()
     switch (s)
     {
         case JobState::Running:
-            status.setText ("Separating " + proc.lastInput.getFileName() + "...", juce::dontSendNotification);
+            status.setText ("Separating " + proc.getLastInput().getFileName() + "...", juce::dontSendNotification);
             break;
         case JobState::Done:
-            proc.stemDir = proc.job.getStemDir();
-            showStems (proc.stemDir);
+            proc.syncWithJob();
+            showStems (proc.getStemDir());
             break;
         case JobState::Failed:
             status.setText (proc.job.getError(), juce::dontSendNotification);

@@ -17,6 +17,7 @@ set(LISN_SOURCES
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/SeparationJob.cpp
+    Source/PythonFinder.cpp
     Source/Theme.cpp)
 
 juce_add_plugin(StemSplitter
@@ -45,7 +46,9 @@ juce_add_console_app(lisn_tests PRODUCT_NAME "lisn_tests")
 target_sources(lisn_tests PRIVATE
     ${LISN_SOURCES}
     tests/TestMain.cpp
-    tests/ThemeTests.cpp)
+    tests/ThemeTests.cpp
+    tests/PythonFinderTests.cpp
+    tests/ProcessorStateTests.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1
