@@ -28,6 +28,8 @@ const Theme& themeFor (const juce::String& id)
     return id == "midnight" ? midnight : dusk;
 }
 
+JUCE_IMPLEMENT_SINGLETON (FontSet)
+
 FontSet::FontSet()
     : display (juce::Typeface::createSystemTypefaceFor (BinaryData::UnboundedBold_ttf, (size_t) BinaryData::UnboundedBold_ttfSize)),
       regular (juce::Typeface::createSystemTypefaceFor (BinaryData::DMSansRegular_ttf, (size_t) BinaryData::DMSansRegular_ttfSize)),
@@ -36,19 +38,26 @@ FontSet::FontSet()
 {
 }
 
+namespace
+{
+    // FontOptions (Typeface::Ptr) dereferences the pointer, so fall back to the default font on a failed load.
+    juce::Font make (const juce::Typeface::Ptr& tf, float px)
+    {
+        return juce::Font ((tf != nullptr ? juce::FontOptions (tf) : juce::FontOptions()).withPointHeight (px));
+    }
+}
+
 namespace Fonts
 {
     juce::Font display (float px)
     {
-        juce::SharedResourcePointer<FontSet> fonts;
-        return juce::Font (juce::FontOptions (fonts->display).withPointHeight (px));
+        return make (FontSet::getInstance()->display, px);
     }
 
     juce::Font body (float px, int weight)
     {
-        juce::SharedResourcePointer<FontSet> fonts;
-        const auto& tf = weight >= 700 ? fonts->bold : weight >= 500 ? fonts->medium : fonts->regular;
-        return juce::Font (juce::FontOptions (tf).withPointHeight (px));
+        auto* fonts = FontSet::getInstance();
+        return make (weight >= 700 ? fonts->bold : weight >= 500 ? fonts->medium : fonts->regular, px);
     }
 
     juce::Font mono (float px)

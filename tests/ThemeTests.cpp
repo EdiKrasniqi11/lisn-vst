@@ -28,12 +28,13 @@ struct ThemeTests : juce::UnitTest
         expect (midnight.layers[2] == Colour (0xff101A2E));
 
         beginTest ("fonts");
-        juce::SharedResourcePointer<FontSet> fonts;
+        auto* fonts = FontSet::getInstance();
+        expect (fonts->display != nullptr && fonts->regular != nullptr && fonts->medium != nullptr && fonts->bold != nullptr);
+        expect (FontSet::getInstance() == fonts);   // one load per JUCE lifetime
+        if (fonts->display == nullptr || fonts->regular == nullptr || fonts->medium == nullptr || fonts->bold == nullptr) return;
         const auto display = Fonts::display (22).getTypefacePtr();
         const auto medium  = Fonts::body (14, 500).getTypefacePtr();
         const auto bold    = Fonts::body (12, 700).getTypefacePtr();
-        expect (display != nullptr && medium != nullptr && bold != nullptr);
-        if (display == nullptr || medium == nullptr || bold == nullptr) return;
         expect (display->getName().contains ("Unbounded"), display->getName());
         expect (medium->getName().contains ("DM Sans"), medium->getName());
         expect (medium->getStyle().contains ("Medium"), medium->getStyle());

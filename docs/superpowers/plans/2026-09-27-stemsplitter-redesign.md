@@ -195,12 +195,14 @@ struct Theme
 
 const Theme& themeFor (const juce::String& id);         // unknown id -> dusk
 
-// Typefaces loaded once from BinaryData. The editor (and tests) keep a SharedResourcePointer<FontSet>
-// member alive so the typefaces aren't reloaded on every call.
-struct FontSet
+// Typefaces loaded from BinaryData once per JUCE lifetime (freed at shutdownJuce_GUI). Each
+// createSystemTypefaceFor call registers a DirectWrite loader that is never released, so never reload.
+struct FontSet : juce::DeletedAtShutdown
 {
     FontSet();
-    juce::Typeface::Ptr display, regular, medium, bold;
+    ~FontSet() override { clearSingletonInstance(); }
+    juce::Typeface::Ptr display, regular, medium, bold;       // null if a font failed to load
+    JUCE_DECLARE_SINGLETON (FontSet, false)
 };
 
 namespace Fonts
@@ -213,8 +215,8 @@ namespace Fonts
 - [ ] **Step 4: `Source/Theme.cpp`.**
   - **Palettes:** two function-local `static const Theme` objects with the spec's exact values. `rgba(r,g,b,a)` maps to `juce::Colour ((uint8) r, (uint8) g, (uint8) b, a)`.
   - **`themeFor`:** returns `midnight` when `id == "midnight"`, otherwise `dusk`.
-  - **`FontSet`:** loads the four typefaces with `juce::Typeface::createSystemTypefaceFor (BinaryData::X, (size_t) BinaryData::XSize)`.
-  - **`Fonts::*`:** each one reads the typefaces through a local `juce::SharedResourcePointer<FontSet>` and returns `juce::Font (juce::FontOptions (tf).withPointHeight (px))`. The weight picks the typeface: 700+ bold, 500+ medium, otherwise regular.
+  - **`FontSet`:** a `DeletedAtShutdown` singleton (`JUCE_IMPLEMENT_SINGLETON (FontSet)`) that loads the four typefaces with `juce::Typeface::createSystemTypefaceFor (BinaryData::X, (size_t) BinaryData::XSize)`. It must load only once per JUCE lifetime: each load copies the TTF bytes into a DirectWrite loader that JUCE never releases, so a per-editor `SharedResourcePointer` would leak ~494 KB on every window open.
+  - **`Fonts::*`:** each one reads `FontSet::getInstance()` and returns `juce::Font ((tf != nullptr ? juce::FontOptions (tf) : juce::FontOptions()).withPointHeight (px))` (`FontOptions (Typeface::Ptr)` dereferences the pointer, so a failed load falls back to the default font instead of crashing). The weight picks the typeface: 700+ bold, 500+ medium, otherwise regular.
   - **`mono`:** returns `juce::Font (juce::FontOptions ("Consolas", 0.0f, juce::Font::plain).withPointHeight (px))`.
 - [ ] **Step 5: `tests/TestMain.cpp`.**
 ```cpp
@@ -245,7 +247,7 @@ int main (int argc, char* argv[])
   - unknown ids return dusk;
   - `stemColour ("drums")` is correct in both themes, and an unknown stem gives `other`;
   - `layers[2]` is `#7B5467` for dusk and `#101A2E` for midnight;
-  - `Fonts::display (22)` and `Fonts::body (14, 500)` have a non-null typeface whose family name contains "Unbounded" / "DM Sans".
+  - all four `FontSet::getInstance()` typefaces are non-null (checked before any `Fonts::*` call), and `Fonts::display (22)` and `Fonts::body (14, 500)` have a typeface whose family name contains "Unbounded" / "DM Sans".
 - [ ] **Step 7:** Build all targets (`cmake --build build --config Debug`). Then run `build\lisn_tests_artefacts\Debug\lisn_tests.exe` (find the real path with `dir /s /b build\lisn_tests.exe`) and ctest; all must pass. Run pluginval; it must print SUCCESS. Commit: `feat: theme table, embedded fonts, lisn_tests runner, standalone build`.
 
 ---
@@ -696,7 +698,6 @@ public:
     WaveBackground& background() { return waves; }
 private:
     void timerCallback() override { tick(); }
-    juce::SharedResourcePointer<FontSet> fonts;     // first member: keeps the typefaces loaded
     // ...
 };
 ```

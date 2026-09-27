@@ -19,12 +19,14 @@ struct Theme
 
 const Theme& themeFor (const juce::String& id);         // unknown id -> dusk
 
-// Typefaces loaded once from BinaryData. The editor (and tests) keep a SharedResourcePointer<FontSet>
-// member alive so the typefaces aren't reloaded on every call.
-struct FontSet
+// Typefaces loaded from BinaryData once per JUCE lifetime (freed at shutdownJuce_GUI). Each
+// createSystemTypefaceFor call registers a DirectWrite loader that is never released, so never reload.
+struct FontSet : juce::DeletedAtShutdown
 {
     FontSet();
-    juce::Typeface::Ptr display, regular, medium, bold;
+    ~FontSet() override { clearSingletonInstance(); }
+    juce::Typeface::Ptr display, regular, medium, bold;       // null if a font failed to load
+    JUCE_DECLARE_SINGLETON (FontSet, false)
 };
 
 namespace Fonts
