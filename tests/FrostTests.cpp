@@ -37,15 +37,22 @@ struct FrostTests : juce::UnitTest
         expectGreaterThan ((int) soft.getPixelAt (50, 50).getRed(), 200);
         const auto outside = (int) soft.getPixelAt (71, 50).getRed();   // 12 px right of the square (x 40..59)
         expect (outside > 0 && outside < 255, juce::String (outside));
+        const auto below = (int) soft.getPixelAt (50, 71).getRed();     // 12 px below the square (y 40..59)
+        expect (below > 0 && below < 255, juce::String (below));
 
         beginTest ("half-plane sigma");
         auto mask = image (juce::Image::SingleChannel, 300, 100, juce::Colours::transparentBlack);
         mask.clear ({ 0, 0, 150, 100 }, juce::Colours::white);
         blurImage (mask, 14);
-        const auto edge = (int) mask.getPixelAt (150, 50).getAlpha();
-        const auto oneSigma = (int) mask.getPixelAt (164, 50).getAlpha();
-        expectWithinAbsoluteError (edge, 128, 12);
-        expectWithinAbsoluteError (oneSigma, 40, 10);
+        expectWithinAbsoluteError ((int) mask.getPixelAt (150, 50).getAlpha(), 128, 12);
+        expectWithinAbsoluteError ((int) mask.getPixelAt (164, 50).getAlpha(), 40, 10);
+
+        beginTest ("half-plane sigma, vertical");
+        auto rows = image (juce::Image::SingleChannel, 100, 300, juce::Colours::transparentBlack);
+        rows.clear ({ 0, 0, 100, 150 }, juce::Colours::white);
+        blurImage (rows, 14);
+        expectWithinAbsoluteError ((int) rows.getPixelAt (50, 150).getAlpha(), 128, 12);
+        expectWithinAbsoluteError ((int) rows.getPixelAt (50, 164).getAlpha(), 40, 10);
     }
 };
 
