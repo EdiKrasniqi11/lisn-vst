@@ -7,11 +7,11 @@ FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.
 FetchContent_MakeAvailable(JUCE)
 
 juce_add_plugin(StemSplitter
-    COMPANY_NAME "lisn"
+    COMPANY_NAME "LISN"
     PLUGIN_MANUFACTURER_CODE Lisn
     PLUGIN_CODE Stsp
     FORMATS VST3
-    PRODUCT_NAME "StemSplitter"
+    PRODUCT_NAME "LISN StemSplitter"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
