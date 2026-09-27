@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SeparationJob.h"
 
 class StemSplitterProcessor : public juce::AudioProcessor
 {
@@ -27,8 +28,14 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock&) override {}
-    void setStateInformation (const void*, int) override {}
+    void getStateInformation (juce::MemoryBlock&) override;
+    void setStateInformation (const void*, int) override;
+
+    SeparationJob job;
+    juce::String model = "htdemucs";
+    juce::String pythonPath = "python";
+    juce::File lastInput;   // last dropped file
+    juce::File stemDir;     // folder of finished stems, empty if none
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemSplitterProcessor)
