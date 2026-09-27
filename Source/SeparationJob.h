@@ -11,7 +11,13 @@ public:
     ~SeparationJob() override { cancel(); }
 
     void start (juce::File input, juce::String model, juce::String python);
-    void cancel() { stopThread (5000); }
+    void cancel()
+    {
+        signalThreadShouldExit();
+        if (isThreadRunning())
+            proc.kill();   // unblocks the blocking readProcessOutput() in run()
+        stopThread (5000);
+    }
 
     JobState getState() const      { return state.load(); }
     double getProgress() const     { return progress.load(); }
@@ -27,6 +33,7 @@ private:
 
     juce::File inputFile, outDir;
     juce::String modelName, pythonExe, error;
+    juce::ChildProcess proc;
     std::atomic<JobState> state { JobState::Idle };
     std::atomic<double> progress { 0.0 };
 };

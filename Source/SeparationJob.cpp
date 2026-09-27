@@ -36,7 +36,6 @@ void SeparationJob::run()
     auto root = outDir.getParentDirectory();   // demucs writes <root>/<model>/{stem}.wav
     root.createDirectory();
 
-    juce::ChildProcess proc;
     juce::StringArray cmd { pythonExe, "-m", "demucs", "-n", modelName,
                             "-o", root.getFullPathName(), "--filename", "{stem}.{ext}",
                             inputFile.getFullPathName() };
@@ -49,12 +48,13 @@ void SeparationJob::run()
     }
 
     std::string output;
-    char buf[1024];
+    char buf[64];
     for (;;)
     {
         if (threadShouldExit())
         {
             proc.kill();
+            proc.waitForProcessToFinish (2000);
             outDir.deleteRecursively();       // don't cache a half-written result
             state = JobState::Cancelled;
             return;
@@ -72,10 +72,18 @@ void SeparationJob::run()
             wait (50);
     }
 
-    if (proc.getExitCode() != 0 || stemsIn (outDir).isEmpty())
+    auto exitCode = proc.getExitCode();
+    if (exitCode != 0 || stemsIn (outDir).isEmpty())
     {
-        auto tail = juce::String (output).trim();
-        error = "demucs failed:\n" + tail.substring (juce::jmax (0, tail.length() - 600));
+        if (exitCode == 9009)
+        {
+            error = "Could not start Python (\"" + pythonExe + "\"). Set the Python path in settings.";
+        }
+        else
+        {
+            auto tail = juce::String (output).trim();
+            error = "demucs failed:\n" + tail.substring (juce::jmax (0, tail.length() - 600));
+        }
         outDir.deleteRecursively();
         state = JobState::Failed;
         return;
