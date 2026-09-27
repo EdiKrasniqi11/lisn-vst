@@ -47,16 +47,21 @@ void SeparationJob::run()
         return;
     }
 
+    auto handleCancel = [this]
+    {
+        proc.kill();
+        proc.waitForProcessToFinish (2000);
+        outDir.deleteRecursively();       // don't cache a half-written result
+        state = JobState::Cancelled;
+    };
+
     std::string output;
     char buf[64];
     for (;;)
     {
         if (threadShouldExit())
         {
-            proc.kill();
-            proc.waitForProcessToFinish (2000);
-            outDir.deleteRecursively();       // don't cache a half-written result
-            state = JobState::Cancelled;
+            handleCancel();
             return;
         }
         auto n = proc.readProcessOutput (buf, sizeof (buf));
@@ -70,6 +75,12 @@ void SeparationJob::run()
             break;
         else
             wait (50);
+    }
+
+    if (threadShouldExit())
+    {
+        handleCancel();
+        return;
     }
 
     auto exitCode = proc.getExitCode();

@@ -10,7 +10,7 @@ def load_audio(path):
         # Use ffmpeg to convert mp3 to wav
         with tempfile.TemporaryDirectory() as tmpdir:
             wav_path = os.path.join(tmpdir, 'temp.wav')
-            subprocess.run(['C:\\ffmpeg\\bin\\ffmpeg.exe', '-i', path, '-q:a', '9', wav_path],
+            subprocess.run(['ffmpeg', '-i', path, '-q:a', '9', wav_path],
                            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             audio_data, sr = soundfile.read(wav_path)
     else:

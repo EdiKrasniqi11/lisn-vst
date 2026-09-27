@@ -7,6 +7,9 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new StemSplitt
 
 void StemSplitterProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
+    if (stemDir == juce::File() && job.getState() == JobState::Done)
+        stemDir = job.getStemDir();
+
     juce::ValueTree s ("StemSplitter");
     s.setProperty ("model", model, nullptr);
     s.setProperty ("python", pythonPath, nullptr);
