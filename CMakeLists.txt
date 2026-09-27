@@ -28,3 +28,9 @@ target_compile_definitions(StemSplitter PUBLIC
 target_link_libraries(StemSplitter
     PRIVATE juce::juce_audio_utils
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+
+enable_testing()
+add_executable(progress_test tests/progress_test.cpp)
+target_compile_definitions(progress_test PRIVATE
+    SAMPLE_OUTPUT_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/demucs_sample_output.txt")
+add_test(NAME progress_test COMMAND progress_test)
