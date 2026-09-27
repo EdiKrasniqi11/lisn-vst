@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drop a song</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=Unbounded:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+button{font-family:inherit}
+button:focus-visible{outline:2px solid #FFF4EA;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 760px; height: 500px; position: relative; overflow: hidden; background: #6F7679; color: #FFF4EA; font-family: 'DM Sans', sans-serif">
+  <div style="position: absolute; left: 0; top: 0; width: 760px; height: 500px">
+    <dc-import name="Waves" hint-size="760px,500px"></dc-import>
+  </div>
+  <div style="position: absolute; left: 24px; top: 16px; width: 712px; height: 44px; display: flex; align-items: center; justify-content: space-between">
+    <div style="display: flex; align-items: baseline; gap: 10px">
+      <span style="font-family: 'Unbounded', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: 0.08em">LISN</span>
+      <span style="font-size: 14px; font-weight: 500">StemSplitter</span>
+    </div>
+    <div style="display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(32, 18, 27, 0.62); border: 1px solid rgba(255, 244, 234, 0.14); backdrop-filter: blur(12px)">
+      <button type="button" onClick="{{pickFour}}" aria-pressed="{{fourOn}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700; background: {{fourPill.bg}}; color: {{fourPill.fg}}">4 stems</button>
+      <button type="button" onClick="{{pickSix}}" aria-pressed="{{sixOn}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700; background: {{sixPill.bg}}; color: {{sixPill.fg}}">6 stems</button>
+    </div>
+  </div>
+  <div style="position: absolute; left: 24px; top: 76px; width: 712px; height: 400px; box-sizing: border-box; padding: 14px; border-radius: 22px; background: rgba(32, 18, 27, 0.6); border: 1px solid rgba(255, 244, 234, 0.14); box-shadow: 0 26px 50px -22px rgba(20, 8, 16, 0.75); backdrop-filter: blur(18px) saturate(1.15)">
+    <div style="width: 100%; height: 100%; box-sizing: border-box; border: 2px dashed rgba(255, 244, 234, 0.36); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px">
+      <div style="width: 64px; height: 64px; border-radius: 999px; background: rgba(255, 244, 234, 0.12); display: flex; align-items: center; justify-content: center">
+        <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 28px; height: 28px; fill: none; stroke: #FFF4EA; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path></svg>
+      </div>
+      <span style="font-family: 'Unbounded', sans-serif; font-size: 24px; font-weight: 700">Drop a song here</span>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255, 244, 234, 0.72)">
+        or
+        <button type="button" style="height: 34px; padding: 0 16px; border-radius: 10px; border: none; background: #FFF4EA; color: #2B1822; font-size: 13px; font-weight: 700; cursor: pointer">Browse…</button>
+      </div>
+      <span style="font-size: 12px; letter-spacing: 0.06em; color: rgba(255, 244, 234, 0.62)">WAV · MP3 · FLAC · AIFF · OGG</span>
+      <div style="margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+        <span style="font-size: 12px; color: rgba(255, 244, 234, 0.62)">You'll get these stems</span>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: center">
+          <sc-for list="{{chips}}" as="c" hint-placeholder-count="4">
+            <span style="height: 28px; display: flex; align-items: center; gap: 7px; padding: 0 12px 0 10px; border-radius: 999px; background: rgba(255, 244, 234, 0.08); font-size: 12px; font-weight: 700">
+              <span style="width: 8px; height: 8px; border-radius: 999px; background: {{c.color}}"></span>
+              {{c.name}}
+            </span>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const six = !!(this.state && this.state.six);
+    const four = [
+      { name: 'Vocals', color: '#F4A76F' }, { name: 'Drums', color: '#EF7A7F' },
+      { name: 'Bass', color: '#C9A0BD' }, { name: 'Other', color: '#A9B8BC' }
+    ];
+    const chips = six
+      ? [four[0], four[1], four[2], { name: 'Guitar', color: '#F3CD7F' }, { name: 'Piano', color: '#EFE3D6' }, four[3]]
+      : four;
+    const pill = (active) => ({ bg: active ? '#FFF4EA' : 'rgba(255, 244, 234, 0)', fg: active ? '#2B1822' : '#FFF4EA' });
+    return {
+      chips: chips, fourPill: pill(!six), sixPill: pill(six), fourOn: !six, sixOn: six,
+      pickFour: () => this.setState({ six: false }),
+      pickSix: () => this.setState({ six: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

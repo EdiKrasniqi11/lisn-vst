@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python not found</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=Unbounded:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+button{font-family:inherit}
+button:focus-visible{outline:2px solid #FFF4EA;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 760px; height: 500px; position: relative; overflow: hidden; background: #6F7679; color: #FFF4EA; font-family: 'DM Sans', sans-serif">
+  <div style="position: absolute; left: 0; top: 0; width: 760px; height: 500px">
+    <dc-import name="Waves" hint-size="760px,500px"></dc-import>
+  </div>
+  <div style="position: absolute; left: 24px; top: 16px; width: 712px; height: 44px; display: flex; align-items: center; justify-content: space-between">
+    <div style="display: flex; align-items: baseline; gap: 10px">
+      <span style="font-family: 'Unbounded', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: 0.08em">LISN</span>
+      <span style="font-size: 14px; font-weight: 500">StemSplitter</span>
+    </div>
+    <div style="display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(32, 18, 27, 0.62); border: 1px solid rgba(255, 244, 234, 0.14); backdrop-filter: blur(12px)">
+      <button type="button" aria-pressed="true" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700; background: #FFF4EA; color: #2B1822">4 stems</button>
+      <button type="button" aria-pressed="false" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700; background: rgba(255, 244, 234, 0); color: #FFF4EA">6 stems</button>
+    </div>
+  </div>
+  <div style="position: absolute; left: 24px; top: 76px; width: 712px; height: 400px; box-sizing: border-box; border-radius: 22px; background: rgba(32, 18, 27, 0.7); border: 1px solid rgba(255, 244, 234, 0.14); box-shadow: 0 26px 50px -22px rgba(20, 8, 16, 0.75); backdrop-filter: blur(18px) saturate(1.15); display: flex; align-items: center; justify-content: center">
+    <div style="width: 520px; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; align-items: center; gap: 14px">
+        <div style="width: 44px; height: 44px; flex-shrink: 0; border-radius: 999px; background: rgba(239, 122, 127, 0.18); display: flex; align-items: center; justify-content: center">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 22px; height: 22px; fill: none; stroke: #EF7A7F; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+        </div>
+        <span style="font-family: 'Unbounded', sans-serif; font-size: 20px; font-weight: 700">Python isn't set up yet</span>
+      </div>
+      <span style="font-size: 14px; line-height: 1.55; color: rgba(255, 244, 234, 0.8)">StemSplitter splits songs with Demucs, a free AI tool that runs on Python. Install Python 3.11 from python.org, then run this once in a terminal:</span>
+      <div style="height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 6px 0 16px; border-radius: 12px; background: rgba(12, 6, 10, 0.55); border: 1px solid rgba(255, 244, 234, 0.12)">
+        <span style="flex-grow: 1; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 14px">python -m pip install demucs</span>
+        <button type="button" style="height: 32px; padding: 0 12px 0 10px; display: flex; align-items: center; gap: 6px; border-radius: 8px; border: none; background: rgba(255, 244, 234, 0.12); color: #FFF4EA; font-size: 12px; font-weight: 700; cursor: pointer">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M9 9h10v10H9zM5 15V5h10"></path></svg>
+          Copy
+        </button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px">
+        <button type="button" style="height: 38px; padding: 0 18px; border-radius: 10px; border: none; background: #FFF4EA; color: #2B1822; font-size: 13px; font-weight: 700; cursor: pointer">Try again</button>
+        <button type="button" style="height: 38px; padding: 0 16px; border-radius: 10px; border: 1px solid rgba(255, 244, 234, 0.3); background: rgba(255, 244, 234, 0.06); color: #FFF4EA; font-size: 13px; font-weight: 700; cursor: pointer">Already installed? Find python.exe…</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

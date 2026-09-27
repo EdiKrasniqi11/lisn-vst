@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stems ready · Dusk glass</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&amp;family=Unbounded:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 760px; height: 500px; position: relative; overflow: hidden; color: #FFF4EA; font-family: 'DM Sans', sans-serif; background: {{ground}}">
+  <div style="position: absolute; left: 0; top: 0; width: 760px; height: 500px">
+    <dc-import name="Waves" palette="{{palette}}" flow="{{flow}}" pulse="{{pulse}}" hint-size="760px,500px"></dc-import>
+  </div>
+  <div style="position: absolute; left: 24px; top: 16px; width: 712px; height: 44px; display: flex; align-items: center; justify-content: space-between">
+    <div style="display: flex; align-items: baseline; gap: 10px">
+      <span style="font-family: 'Unbounded', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: 0.08em">LISN</span>
+      <span style="font-size: 14px; font-weight: 500">StemSplitter</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px">
+    <div style="display: flex; gap: 2px; padding: 3px; border-radius: 999px; border: 1px solid rgba(255, 244, 234, 0.14); background: {{pill}}">
+      <button type="button" onClick="{{pickDusk}}" aria-pressed="{{duskOn}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; background: {{duskPill.bg}}; color: {{duskPill.fg}}">Dusk</button>
+      <button type="button" onClick="{{pickMidnight}}" aria-pressed="{{midnightOn}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; background: {{midnightPill.bg}}; color: {{midnightPill.fg}}">Midnight</button>
+    </div>
+    <div style="display: flex; gap: 2px; padding: 3px; border-radius: 999px; border: 1px solid rgba(255, 244, 234, 0.14); background: {{pill}}">
+      <button type="button" onClick="{{pickFour}}" aria-pressed="{{fourOn}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; background: {{fourPill.bg}}; color: {{fourPill.fg}}">4 stems</button>
+      <button type="button" onClick="{{pickSix}}" aria-pressed="{{sixOn}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; background: {{sixPill.bg}}; color: {{sixPill.fg}}">6 stems</button>
+    </div>
+    </div>
+  </div>
+  <div style="position: absolute; left: 24px; top: 76px; width: 712px; height: 400px; box-sizing: border-box; border-radius: 22px; overflow: hidden; border: 1px solid rgba(255, 244, 234, 0.14); box-shadow: 0 26px 50px -22px rgba(20, 8, 16, 0.75); background: {{ground}}">
+    <div style="position: absolute; left: -25px; top: -77px; width: 760px; height: 500px; filter: blur(18px) saturate(1.15)">
+      <dc-import name="Waves" palette="{{palette}}" hint-size="760px,500px"></dc-import>
+    </div>
+    <div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: {{tint}}"></div>
+    <div style="position: relative; height: 100%; box-sizing: border-box; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+      <div style="height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 12px">
+        <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(255, 244, 234, 0.1); display: flex; align-items: center; justify-content: center">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; fill: none; stroke: #FFF4EA; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M10 17.5V11l4-1"></path></svg>
+        </div>
+        <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 15px; font-weight: 700; line-height: 1.2">Travis Snippet.mp3</span>
+          <span style="font-size: 12px; line-height: 1.2; color: rgba(255, 244, 234, 0.64)">0:30 · split into {{summary}}</span>
+        </div>
+        <button type="button" style="height: 34px; padding: 0 14px 0 10px; display: flex; align-items: center; gap: 6px; border-radius: 10px; border: 1px solid rgba(255, 244, 234, 0.22); background: rgba(255, 244, 234, 0.06); color: #FFF4EA; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M12 5v14M5 12h14"></path></svg>
+          New song
+        </button>
+      </div>
+      <div style="height: 1px; flex-shrink: 0; background: rgba(255, 244, 234, 0.12)"></div>
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: {{rowGap}}px">
+        <sc-for list="{{stems}}" as="s" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 14px; padding: 0 10px; border-radius: 14px; flex-shrink: 0; height: {{s.rowH}}px; background: {{s.rowBg}}">
+            <div style="width: 118px; flex-shrink: 0; display: flex; align-items: center; gap: 10px">
+              <div style="width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: {{s.tint}}">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke: {{s.color}}"><path d="{{s.icon}}"></path></svg>
+              </div>
+              <div style="min-width: 0; display: flex; flex-direction: column; gap: 1px">
+                <span style="font-size: 14px; font-weight: 700; line-height: 1.2">{{s.name}}</span>
+                <span style="font-size: 11px; line-height: 1.2; color: rgba(255, 244, 234, 0.6)">{{s.file}}</span>
+              </div>
+            </div>
+            <button type="button" onClick="{{s.toggle}}" aria-label="{{s.playLabel}}" style="width: 38px; height: 38px; flex-shrink: 0; padding: 0; border: none; border-radius: 999px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #2B1822; background: {{s.btnBg}}">
+              <sc-if value="{{s.isPlaying}}" hint-placeholder-val="{{false}}">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; fill: currentColor"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"></path></svg>
+              </sc-if>
+              <sc-if value="{{s.isPaused}}" hint-placeholder-val="{{true}}">
+                <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; margin-left: 2px; fill: currentColor"><path d="M8 5.5v13l10.5-6.5z"></path></svg>
+              </sc-if>
+            </button>
+            <button type="button" onClick="{{s.seek}}" aria-label="{{s.seekLabel}}" style="position: relative; flex-shrink: 0; padding: 0; border: none; background: none; cursor: pointer; width: {{s.waveW}}px; height: {{s.waveH}}px">
+              <svg viewBox="0 0 {{s.waveW}} {{s.waveH}}" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: {{s.waveW}}px; height: {{s.waveH}}px; fill: {{s.dim}}"><path d="{{s.wave}}"></path></svg>
+              <span style="position: absolute; left: 0; top: 0; bottom: 0; overflow: hidden; width: {{s.pct}}%">
+                <svg viewBox="0 0 {{s.waveW}} {{s.waveH}}" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: {{s.waveW}}px; height: {{s.waveH}}px; fill: {{s.color}}"><path d="{{s.wave}}"></path></svg>
+              </span>
+              <sc-if value="{{s.showHead}}" hint-placeholder-val="{{false}}">
+                <span style="position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 2px; background: #FFF4EA; left: {{s.pct}}%"></span>
+              </sc-if>
+            </button>
+            <span style="width: 32px; flex-shrink: 0; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: rgba(255, 244, 234, 0.72)">{{s.time}}</span>
+            <div title="Drag onto a track in your DAW" style="height: 32px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 12px 0 8px; border-radius: 10px; border: 1px dashed rgba(255, 244, 234, 0.3); color: rgba(255, 244, 234, 0.82); font-size: 12px; font-weight: 700; cursor: grab">
+              <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"></path></svg>
+              Drag
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="height: 16px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255, 244, 234, 0.62)">
+        <svg viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px; fill: currentColor"><path d="M8 5.5v13l10.5-6.5z"></path></svg>
+        Play a stem to hear it, then drag it onto any track.
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"palette":{"editor":"enum","options":["dusk","midnight","aurora","lilac","ember"],"default":"dusk"},"$preview":{"width":760,"height":500}}'>
+class Component extends DCLogic {
+  st() { return Object.assign({ six: false, playing: '', prog: { vocals: 0.38 }, flow: 0, pulse: 0, theme: '' }, this.state || {}); }
+  themeId() { return this.st().theme || this.props.palette || 'dusk'; }
+  componentDidMount() { this.alive = true; }
+  componentWillUnmount() { this.alive = false; cancelAnimationFrame(this.raf); this.raf = 0; }
+  toggle(key) {
+    this.setState({ playing: this.st().playing === key ? '' : key });
+    this.run();
+  }
+  seek(key, e) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const prog = Object.assign({}, this.st().prog);
+    prog[key] = Math.min(0.999, Math.max(0, (e.clientX - r.left) / r.width));
+    this.setState({ prog: prog });
+  }
+  // One animation loop, capped at 30 fps. It runs only while a stem plays, then while the waves
+  // settle back to rest, and stops completely after that.
+  run() {
+    if (this.raf) return;
+    let last = 0;
+    const frame = (now) => {
+      this.raf = 0;
+      if (!this.alive) return;
+      if (last && now - last < 33) { this.raf = requestAnimationFrame(frame); return; }
+      const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 30;
+      last = now;
+      const s = this.st();
+      if (s.playing) {
+        const p = (s.prog[s.playing] || 0) + dt / 30;
+        const prog = Object.assign({}, s.prog);
+        prog[s.playing] = p >= 1 ? 0 : p;
+        const target = this.levelAt(s.playing, Math.min(p, 0.999));
+        const pulse = target > s.pulse ? target : s.pulse + (target - s.pulse) * Math.min(1, dt * 5);
+        this.setState({ prog: prog, playing: p >= 1 ? '' : s.playing, pulse: pulse, flow: s.flow + dt * (8 + 60 * pulse) });
+        this.raf = requestAnimationFrame(frame);
+      } else if (s.pulse > 0.01) {
+        const pulse = s.pulse * Math.pow(0.05, dt);
+        this.setState({ pulse: pulse, flow: s.flow + dt * 8 * pulse });
+        this.raf = requestAnimationFrame(frame);
+      } else if (s.pulse !== 0) {
+        this.setState({ pulse: 0 });
+      }
+    };
+    this.raf = requestAnimationFrame(frame);
+  }
+  colors() {
+    const all = {
+      dusk: { ground: '#6F7679', tint: 'rgba(32, 18, 27, 0.66)', pill: 'rgba(32, 18, 27, 0.72)', stems: { vocals: '#F4A76F', drums: '#EF7A7F', bass: '#C9A0BD', guitar: '#F3CD7F', piano: '#EFE3D6', other: '#A9B8BC' } },
+      midnight: { ground: '#152238', tint: 'rgba(8, 14, 28, 0.66)', pill: 'rgba(8, 14, 28, 0.72)', stems: { vocals: '#F3B98A', drums: '#6FD3C6', bass: '#A9B4FF', guitar: '#F4D58D', piano: '#E3ECF7', other: '#8DB8DB' } },
+      aurora: { ground: '#1C2B33', tint: 'rgba(14, 12, 28, 0.66)', pill: 'rgba(14, 12, 28, 0.72)', stems: { vocals: '#F2CB8B', drums: '#F291B0', bass: '#93DEC2', guitar: '#F4D58D', piano: '#E7E3F6', other: '#86C3D6' } },
+      lilac: { ground: '#857F9F', tint: 'rgba(38, 28, 56, 0.64)', pill: 'rgba(38, 28, 56, 0.72)', stems: { vocals: '#F7B9A6', drums: '#F28FAD', bass: '#C6B7F6', guitar: '#F4D58D', piano: '#F5EDF8', other: '#B7C3E6' } },
+      ember: { ground: '#1D1719', tint: 'rgba(20, 10, 12, 0.68)', pill: 'rgba(20, 10, 12, 0.74)', stems: { vocals: '#F0A456', drums: '#F07A6E', bass: '#E3B39E', guitar: '#F4D58D', piano: '#F2E6DA', other: '#C8B6A6' } }
+    };
+    return all[this.themeId()] || all.dusk;
+  }
+  rng(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  level(kind, t, i, r) {
+    if (kind === 'vocals') {
+      const on = (t > 0.05 && t < 0.3) || (t > 0.35 && t < 0.6) || (t > 0.66 && t < 0.95);
+      return on ? 0.3 + 0.62 * r * (0.7 + 0.3 * Math.sin(t * 37)) : 0.03 + 0.05 * r;
+    }
+    if (kind === 'drums') {
+      const k = i % 8;
+      if (k === 0) return 0.88 + 0.12 * r;
+      if (k === 4) return 0.72 + 0.16 * r;
+      if (k === 1 || k === 5) return 0.42 + 0.12 * r;
+      return 0.16 + 0.14 * r;
+    }
+    if (kind === 'bass') {
+      if ((t > 0.47 && t < 0.52) || t > 0.97) return 0.04;
+      return 0.46 + 0.12 * Math.sin(t * 23) + 0.12 * r;
+    }
+    if (kind === 'guitar') return 0.22 + 0.5 * Math.abs(Math.sin(t * 17)) * (0.6 + 0.4 * r);
+    if (kind === 'piano') return t > 0.14 && t < 0.86 ? 0.18 + 0.55 * r * r : 0.04;
+    return 0.26 + 0.34 * r + 0.28 * t;
+  }
+  levels(stem, n) {
+    if (!this.lv) this.lv = {};
+    const id = stem.key + ':' + n;
+    if (this.lv[id]) return this.lv[id];
+    const rnd = this.rng(stem.seed), out = [];
+    for (let i = 0; i < n; i++) out.push(Math.min(1, this.level(stem.key, i / (n - 1), i, rnd())));
+    this.lv[id] = out;
+    return out;
+  }
+  // The mockup's stand-in for the real audio level: the stem's own waveform at the playhead.
+  levelAt(key, p) {
+    const lv = this.levels(this.stemDefs(true).find((d) => d.key === key), 104);
+    return lv[Math.floor(p * lv.length)];
+  }
+  wave(stem, w, h, n) {
+    if (!this.waves) this.waves = {};
+    const key = stem.key + ':' + w + 'x' + h;
+    if (this.waves[key]) return this.waves[key];
+    const lv = this.levels(stem, n), step = w / n, bw = step * 0.6, mid = h / 2;
+    let d = '';
+    for (let i = 0; i < n; i++) {
+      const half = Math.max(0.75, lv[i] * (mid - 0.5));
+      d += 'M' + (i * step).toFixed(1) + ' ' + (mid - half).toFixed(1) + 'h' + bw.toFixed(1) + 'v' + (2 * half).toFixed(1) + 'h-' + bw.toFixed(1) + 'z';
+    }
+    this.waves[key] = d;
+    return d;
+  }
+  alpha(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return 'rgba(' + (n >> 16) + ', ' + ((n >> 8) & 255) + ', ' + (n & 255) + ', ' + a + ')';
+  }
+  clock(sec) { const s = Math.floor(sec); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  stemDefs(six) {
+    const all = {
+      vocals: { key: 'vocals', name: 'Vocals', seed: 11, icon: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8' },
+      drums: { key: 'drums', name: 'Drums', seed: 23, icon: 'M4 9a8 3 0 1 0 16 0a8 3 0 1 0-16 0M4 9v7a8 3 0 0 0 16 0V9M7 3l3.5 5M17 3l-3.5 5' },
+      bass: { key: 'bass', name: 'Bass', seed: 37, icon: 'M3 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0' },
+      guitar: { key: 'guitar', name: 'Guitar', seed: 41, icon: 'M20 4l-6.5 6.5M17.5 2.5l4 4M11 10.5a3.6 3.6 0 0 0-5.3 1.2c-.8 1.5-.2 2.5-1.7 3.9a2.8 2.8 0 0 0 4 4c1.4-1.5 2.4-.9 3.9-1.7a3.6 3.6 0 0 0 1.2-5.3z' },
+      piano: { key: 'piano', name: 'Piano', seed: 53, icon: 'M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 5v8M12 5v14M16 5v8' },
+      other: { key: 'other', name: 'Other', seed: 67, icon: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0M21 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0' }
+    };
+    const order = six ? ['vocals', 'drums', 'bass', 'guitar', 'piano', 'other'] : ['vocals', 'drums', 'bass', 'other'];
+    return order.map((k) => all[k]);
+  }
+  renderVals() {
+    const st = this.st(), six = st.six, pal = this.colors();
+    const w = 330, h = six ? 26 : 40, n = six ? 96 : 104;
+    const stems = this.stemDefs(six).map((d) => {
+      const p = st.prog[d.key] || 0, on = st.playing === d.key, color = pal.stems[d.key];
+      return {
+        name: d.name, file: d.key + '.wav', color: color, icon: d.icon,
+        tint: this.alpha(color, 0.16), dim: this.alpha(color, 0.3),
+        rowH: six ? 42 : 62, waveW: w, waveH: h, wave: this.wave(d, w, h, n),
+        pct: (p * 100).toFixed(2), showHead: p > 0, time: this.clock(p * 30),
+        isPlaying: on, isPaused: !on,
+        btnBg: on ? color : '#FFF4EA',
+        rowBg: on ? 'rgba(255, 244, 234, 0.08)' : 'rgba(255, 244, 234, 0)',
+        playLabel: (on ? 'Pause ' : 'Play ') + d.name.toLowerCase() + ' preview',
+        seekLabel: 'Jump to a point in ' + d.name.toLowerCase(),
+        toggle: () => this.toggle(d.key),
+        seek: (e) => this.seek(d.key, e)
+      };
+    });
+    const pill = (active) => ({ bg: active ? '#FFF4EA' : 'rgba(255, 244, 234, 0)', fg: active ? '#2B1822' : '#FFF4EA' });
+    return {
+      palette: this.themeId(), ground: pal.ground, tint: pal.tint, pill: pal.pill,
+      duskPill: pill(this.themeId() !== 'midnight'), midnightPill: pill(this.themeId() === 'midnight'),
+      duskOn: this.themeId() !== 'midnight', midnightOn: this.themeId() === 'midnight',
+      pickDusk: () => this.setState({ theme: 'dusk' }),
+      pickMidnight: () => this.setState({ theme: 'midnight' }),
+      flow: st.flow, pulse: st.pulse,
+      stems: stems, rowGap: six ? 5 : 10, summary: six ? '6 stems' : '4 stems',
+      fourPill: pill(!six), sixPill: pill(six), fourOn: !six, sixOn: six,
+      pickFour: () => this.setState({ six: false, playing: '' }),
+      pickSix: () => this.setState({ six: true, playing: '' })
+    };
+  }
+}
+</script>
+</body>
+</html>

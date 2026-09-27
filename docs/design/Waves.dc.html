@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Background waves</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 760px; height: 500px; position: relative; overflow: hidden; background: {{ground}}">
+<sc-for list="{{layers}}" as="layer" hint-placeholder-count="5">
+<svg viewBox="0 0 760 500" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 760px; height: 500px; filter: drop-shadow(12px -4px 14px {{layer.shadow}})"><path d="{{layer.d}}" style="fill: {{layer.fill}}"></path></svg>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"palette":{"editor":"enum","options":["dusk","midnight","aurora","lilac","ember"],"default":"dusk"},"flow":{"editor":null},"pulse":{"editor":null},"$preview":{"width":760,"height":500}}'>
+class Component extends DCLogic {
+  colors() {
+    const all = {
+      dusk: { ground: '#6F7679', shadow: 'rgba(36, 14, 28, 0.42)', layers: ['#D9775F', '#F4A76F', '#7B5467', '#D95F6B', '#F08A7C'] },
+      midnight: { ground: '#152238', shadow: 'rgba(2, 6, 18, 0.5)', layers: ['#2C4A78', '#4F86B8', '#101A2E', '#35679C', '#86B6DD'] },
+      aurora: { ground: '#1C2B33', shadow: 'rgba(6, 8, 20, 0.5)', layers: ['#23706E', '#6FC2A0', '#231D3D', '#5E4FA0', '#9C86D6'] },
+      lilac: { ground: '#857F9F', shadow: 'rgba(40, 28, 60, 0.38)', layers: ['#B892BD', '#F0C3D0', '#4E3F6B', '#E394B3', '#F6D8C4'] },
+      ember: { ground: '#1D1719', shadow: 'rgba(10, 4, 6, 0.55)', layers: ['#6E2A2A', '#DD7438', '#251619', '#AE412D', '#F0A456'] }
+    };
+    return all[this.props.palette] || all.dusk;
+  }
+  // One wavy edge: a slanted line from (xTop, -80) to (xBottom, 580) with a sine offset across it.
+  // phase slides the ripples along the edge (flow); push moves the whole edge outward (beat).
+  edge(s, phase, push) {
+    const x0 = s.xTop, y0 = -80, dx = s.xBottom - s.xTop, dy = 660;
+    const len = Math.hypot(dx, dy), nx = dy / len, ny = -dx / len;
+    const pts = [];
+    for (let i = 0; i <= 28; i++) {
+      const t = i / 28;
+      const off = push + s.amp * Math.sin((t * len / s.wl) * Math.PI * 2 + phase);
+      pts.push([x0 + dx * t + nx * off, y0 + dy * t + ny * off]);
+    }
+    return pts;
+  }
+  // The filled layer is everything left of the edge; Catmull-Rom smoothing through the points.
+  region(s, phase, push) {
+    const p = this.edge(s, phase, push);
+    const f = (q) => q[0].toFixed(1) + ' ' + q[1].toFixed(1);
+    let d = 'M-140 -140 L' + f(p[0]);
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[Math.max(0, i - 1)], b = p[i], c = p[i + 1], e = p[Math.min(p.length - 1, i + 2)];
+      d += ' C' + f([b[0] + (c[0] - a[0]) / 6, b[1] + (c[1] - a[1]) / 6]) + ' ' + f([c[0] - (e[0] - b[0]) / 6, c[1] - (e[1] - b[1]) / 6]) + ' ' + f(c);
+    }
+    return d + ' L-140 660 Z';
+  }
+  renderVals() {
+    const pal = this.colors();
+    const flow = Number(this.props.flow) || 0, pulse = Number(this.props.pulse) || 0;
+    // back to front; front layers flow faster and push further (parallax)
+    const shapes = [
+      { xTop: 500, xBottom: 980, amp: 26, wl: 260, ph: 0.3, speed: 0.6, push: 4 },
+      { xTop: 330, xBottom: 800, amp: 30, wl: 240, ph: 1.7, speed: 0.8, push: 7 },
+      { xTop: 180, xBottom: 620, amp: 28, wl: 230, ph: 3.1, speed: 1.0, push: 10 },
+      { xTop: -120, xBottom: 400, amp: 26, wl: 220, ph: 4.4, speed: 1.2, push: 13 },
+      { xTop: -330, xBottom: 180, amp: 22, wl: 210, ph: 5.2, speed: 1.4, push: 16 }
+    ];
+    return {
+      ground: pal.ground,
+      layers: shapes.map((s, i) => ({
+        fill: pal.layers[i], shadow: pal.shadow,
+        d: this.region(s, s.ph - (flow * s.speed / s.wl) * Math.PI * 2, pulse * s.push)
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>
