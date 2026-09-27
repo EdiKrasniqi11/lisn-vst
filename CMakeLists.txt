@@ -19,7 +19,10 @@ set(LISN_SOURCES
     Source/SeparationJob.cpp
     Source/PythonFinder.cpp
     Source/Theme.cpp
-    Source/StemPreview.cpp)
+    Source/StemPreview.cpp
+    Source/Peaks.cpp
+    Source/WaveGeometry.cpp
+    Source/Frost.cpp)
 
 juce_add_plugin(StemSplitter
     COMPANY_NAME "LISN"
@@ -50,7 +53,10 @@ target_sources(lisn_tests PRIVATE
     tests/ThemeTests.cpp
     tests/PythonFinderTests.cpp
     tests/ProcessorStateTests.cpp
-    tests/StemPreviewTests.cpp)
+    tests/StemPreviewTests.cpp
+    tests/PeaksTests.cpp
+    tests/WaveGeometryTests.cpp
+    tests/FrostTests.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1
