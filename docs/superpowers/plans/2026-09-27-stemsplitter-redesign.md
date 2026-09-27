@@ -33,6 +33,105 @@
   - pluginval via `C:\tools\pluginval\pluginval.exe --strictness-level 5 --validate "%USERPROFILE%\VST3\LISN StemSplitter.vst3"`.
 - **Commits:** each commit message ends with a blank line and then `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Don't push.
 
+## Review corrections (binding; they override the task text where they conflict)
+These come from an independent plan review with verification against the JUCE 8.0.4 sources in `build/_deps/juce-src`.
+
+**Global**
+- **G1 · Non-ASCII UI text:** every UI literal that isn't plain ASCII uses escaped UTF-8, e.g. `juce::String (juce::CharPointer_UTF8 ("Browse\xe2\x80\xa6"))`, and keep a non-hex character right after each `\x` escape. Put the shared pieces in `Screens.cpp`, e.g. `const juce::String dot (juce::CharPointer_UTF8 (" \xc2\xb7 "));`. `String (const char*)` treats bytes as ASCII: it asserts and garbles `·` and `…`.
+- **G2 · Text measurement:** measure text with `juce::GlyphArrangement::getStringWidth (font, text)`. `Font::getStringWidth(Float)` is deprecated in JUCE 8 and would add C4996 warnings.
+- **G3 · Source lists:** new `.cpp` files go inside the single `set(LISN_SOURCES …)` call, which must stay above both `target_sources` calls. New test files go inside `target_sources(lisn_tests PRIVATE …)`. Never use `list(APPEND …)` after the targets are declared.
+- **G4 · Letter spacing:** CSS letter-spacing in em maps to `font.withExtraKerningFactor (em * font.getHeightToPointsFactor())`, because JUCE multiplies the tracking by `getHeight()`, not by the em size.
+- **G5 · Box heights:** CSS boxes are content-box unless the mockup sets `box-sizing: border-box`, so a 1 px border adds 2 px:
+  - pill container: outer 38 px tall, items inset 4 px (1 border + 3 padding);
+  - drag chip: outer 34 px tall;
+  - error code box: outer 46 px tall;
+  - buttons are border-box, so their heights are exactly as given.
+- **G6 · Filled icons:** play, pause and the footer play icon are **filled** (`g.fillPath`); every other icon is stroked. The play icon is shifted **+1 px** in x (CSS `margin-left: 2px` inside a centred box). The playhead is `fillRoundedRectangle (fraction * w - 1, -5, 2, h + 10, 1)`.
+- **G7 · Multi-line text:** use `g.drawMultiLineText (text, x, firstBaseline, maxWidth, justification, leading)`:
+  - `leading = px * lineHeight - font.getHeight()`;
+  - `firstBaseline = top + leading / 2 + font.getAscent()`;
+  - `height = lines * px * lineHeight`.
+  Never use `drawFittedText`, which squeezes the text horizontally.
+
+**Task 1**
+- **T1a · Font weight test:** also assert that `Fonts::body (14, 500).getTypefacePtr()->getStyle()` contains "Medium" and that `body (12, 700)` contains "Bold".
+
+**Task 2**
+- **T2a · Timeout and PATH quoting:** `findPython` calls `checkPython (candidate, 10000, shouldAbort)`. Unquote PATH entries (`entry.trim().unquoted()`) before the absolute-path check. In the test, add `path2/python.exe`, give it the PATH entry `"<path2>"` (quoted), and expect `[pf311, path1, path2, lad312, lad310, sd39, miniconda3]`.
+- **T2b · Bare hints:** a hint with no path separator, such as legacy `"python"`, is **dropped**, because CreateProcess could resolve it to the Microsoft Store stub. So `pythonCandidates ("python", dirs) == pythonCandidates ("", dirs)`. Test 4 checks exactly that.
+- **T2c · Race between start() and kill():** add `juce::CriticalSection procLock;` to `SeparationJob`.
+  - **run():** `{ const juce::ScopedLock sl (procLock); if (threadShouldExit()) { state = JobState::Cancelled; return; } started = proc.start (cmd, …); }`.
+  - **cancel():** `signalThreadShouldExit(); { const juce::ScopedLock sl (procLock); proc.kill(); } stopThread (5000);`.
+  This way `kill()` never races `start()`, which resets `activeProcess`.
+- **T2d · Settings lock:** the processor gets `juce::CriticalSection settingsLock;`, which guards `theme`, `model`, `pythonPath`, `lastInput`, `stemDir` and `stemDirHasWav`.
+  - **Setters:** add `setTheme (String)` and `setPythonPath (String)`. The editor never assigns those fields directly and reads them through getters that return copies under the lock.
+  - **Callers:** `startSplit`, `setSixStems`, `syncWithJob` and `setStateInformation` take the lock.
+  - **`getStateInformation`:** it is **read-only**. Under the lock it copies the fields, and it substitutes `job.getStemDir()` or `job.getPythonExe()` as `syncWithJob` would, without writing any members.
+- **T2e · Cached "has stems" flag:** the processor keeps `bool stemDirHasWav`, recomputed only where `stemDir` is assigned. `uiStateFor` uses that flag and never scans the disk on every tick.
+- **T2f · Notify the host:** `setTheme` and `setSixStems` call `updateHostDisplay (juce::AudioProcessor::ChangeDetails().withNonParameterStateChanged (true));` so the DAW marks the project as modified.
+
+**Task 3**
+- **T3a · Preview rewrite:** replaced by the rewritten Steps 1–4 above (no `transport.stop()`, the `wanted`/`sounding`/`readPos` atomics, the threaded no-stall test).
+
+**Task 5**
+- **T5a · Caches:** replaced by the rewritten Step 2 above (image type chosen with `dynamic_cast`, and shadows blurred with our own blur at σ 14 and 25).
+- **T5b · Repainting the motion region:** `Component::repaint` has no `RectangleList` overload, so use `for (auto r : motionRegion()) repaint (r);`. `setMotion` computes the five snapped physical-pixel offsets (`(motionOffset (...) * lastScale).roundToInt()`) and returns early when they equal the last painted offsets.
+- **T5c · Shadow test:** add a test that the layer shadow mask 30 px outside the shape edge is still > 10 % of its peak.
+
+**Task 6**
+- **T6a · Repaint only on change:** `StemRow::setPlayback` repaints only when `playing`, the playhead pixel `roundToInt (fraction * 330)` or the displayed `m:ss` string changed, and then repaints only the waveform and time rects. The test calls it twice with the same values and asserts no second repaint, using a paint counter in a test subclass or a `getRepaintCount()` debug counter.
+- **T6b · Playhead position test:** `setPlayback (false, 0.5, 30)` puts the playhead at waveform x = 165 and the time at "0:15".
+- **T6c · Chip height:** the drag chip is 34 tall in the test (G5).
+- **T6d · Mockup gaps:**
+  - name block: 10 px between the badge and the text; name and file name 1 px apart, line-height 1.2;
+  - drag chip: grip-to-text gap 6, dash 3 and gap 3;
+  - footer: play icon 14 px filled in cream@0.62, with an 8 px gap before the text.
+
+**Task 7**
+- **T7a · Data for every screen:** add `SplittingScreen::setSong (String name, bool six)` and `ErrorScreen::setError (ErrorKind, String text, String pythonExe)`. `show (s)` always calls `drop.setSixStems (s.sixStems); drop.setHighlighted (false); splitting.setSong (s.songName, s.sixStems); error.setError (s.error, s.errorText, s.pythonExe);`.
+- **T7b · Rebuilding rows:** every time `stems.setStems` rebuilds the rows, also set `activeRow = -1` and call `proc.preview.unload()`. The screen resets `positions` to the new row count, and every `rows[i]`/`positions[i]` access is bounds-checked.
+- **T7c · Peak jobs:** `StemsScreen` keeps `int generation`. `setStems` does `++generation; pool.removeAllJobs (true, 2000);` and queues **one** job that reads every row file in order. The job checks `ThreadPoolJob::getCurrentThreadPoolJob()->shouldExit()` between files and passes that check to `readPeaks` as `shouldAbort`. It captures files, bars and `gen` by value, then posts `callAsync` with a SafePointer. The posted lambda returns unless `safe != nullptr && safe->generation == gen`, and bounds-checks rows. `bool hasPeaks() const` reports when they have arrived.
+- **T7d · Positions and seeking:** `positions` is private to StemsScreen. The WaveformView seek handler inside the screen sets `positions[i] = f`, updates `rows[i]->setPlayback (…)` right away (even for a row that isn't playing), then calls `onSeek (i, f)`. The editor's `onSeek` only calls `proc.preview.setPositionFraction (f)` when `i == activeRow`. Add `double positionOf (int row) const`.
+- **T7e · Play/pause on the active row:** `onPlayPause (i)`:
+  - if `i == activeRow`, toggle `preview.play()` / `pause()` without calling `load()` again;
+  - otherwise `load` the file, then `setPositionFraction (stems.positionOf (i))`, `play()` and set `activeRow = i`.
+- **T7f · Active row from the preview:** in `tick()`, derive `activeRow` as the index of the row whose `getFile() == proc.preview.getFile()`, or −1 if there is none. That covers reopening the editor and the snapshot hooks. At end of stem, `if (proc.preview.takeReachedEnd())` sets the active row's position to 0 and calls `setPositionFraction (0)`; drop the old `fraction >= 0.999` rule.
+- **T7g · Applying the theme:** `applyTheme (const Theme&)` sets every screen, the header, the rows and `waves`, and records `appliedThemeId`. Call it at the end of the constructor, and in `tick()` whenever `proc.getTheme() != appliedThemeId` (for example after the host restores state).
+- **T7h · Reading job strings:** `uiStateFor (const StemSplitterProcessor&)` reads `job.getError()` and `getPythonExe()` **only** when the job state is Failed or Done; the worker thread writes them before storing the state.
+- **T7i · Stem count from disk:** the compact row mode and the "N stems" count come from the number of stem files on disk (`compact = files.size() > 4`). The model flag only drives the header pill, the Drop chips and the Splitting subtitle.
+- **T7j · Header baseline:** draw "LISN" and "StemSplitter" with `g.drawSingleLineText` on a shared baseline at header-local y = 30.25. "StemSplitter" starts at LISN's advance (including tracking) + 10.
+- **T7k · Error screen text:**
+  - **Python-missing body:** "StemSplitter splits songs with Demucs, a free AI tool that runs on Python. Install Python 3.11 from python.org, then run this once in a terminal:".
+  - **Failed variant:** build the lines with `StringArray::fromLines (text.fromFirstOccurrenceOf ("\n", false, false).replaceCharacter ('\r', '\n'))`, remove empty lines and lines containing "%|", and keep the last 6. Draw each line single-line in mono 14 on an 18 px pitch, ellipsized when too wide. The box height is 20 + 18·n, with Copy at the top-right (right − 6 − w, top + 6). Copy copies the full error text.
+  - **Demucs-missing command:** while the command is too wide, shorten the middle path components to "…" (keep the drive and the last two components). Copy always copies the full command.
+- **T7l · Error screen gaps:** 14 px between the icon circle and the title; 12 px between the code text and Copy. The Copy icon is 14 px, stroke 2, with a 6 px gap before its label.
+- **T7m · Drop screen gaps:** 10 px between "or" and Browse; 8 px between "You'll get these stems" and the chips.
+- **T7n · Stems top row:**
+  - 12 px gap after the icon box;
+  - the title and subtitle are 2 px apart with line-height 1.2;
+  - the New song plus icon is 16 px, stroke 2, with a 6 px gap before its label;
+  - the rows container fills the space, so the footer sits at the bottom (window y 427), rows start at content y + 57, and there's 5 or 6 px of slack.
+- **T7o · Focus and banned-control test:** add an editor test that builds `StemSplitterEditor` on each forced screen and walks every descendant. It asserts that none wants keyboard focus, that every `juce::Button` has `getMouseClickGrabsKeyboardFocus() == false`, and that nothing `dynamic_cast`s to ComboBox, TextEditor or ProgressBar. Also assert that the Browse label contains U+2026.
+- **T7p · Standalone smoke test** (PowerShell):
+  ```powershell
+  $p = Start-Process -FilePath '<exe>' -PassThru
+  Start-Sleep 5
+  if ($p.HasExited) { throw 'standalone exited' }
+  Stop-Process -Id $p.Id
+  ```
+- **T7q · Stale peak results after a switch:** add a test that calls `setStems` with 6 rows, sets `activeRow` 5, calls `setStems` with 4 rows, then runs `tick()` and pumps messages without crashing or going out of bounds.
+
+**Task 8**
+- **T8a · Wait for the peaks:** snapshots wait for `stems.hasPeaks()`, polling `runDispatchLoopUntil (50)` for up to 3 s, instead of a fixed 400 ms. `stems4-dusk-playing` works through T7f.
+- **T8b · What the bench times:**
+  - **`motion_frame_ms`:** bench the **whole editor**, not the bare background. Build `StemSplitterEditor` forced to Stems (4 stems) with vocals loaded and playing. Each frame: `ed.background().setMotion (...)`, then `juce::Graphics g (img)` on a 760×500 `SoftwareImageType` ARGB image, `g.reduceClipRegion (region)` where region is `motionRegion()` plus the active row's waveform and time bounds in editor coordinates, then `ed.paintEntireComponent (g, true)`.
+  - **Extra metrics:** also print `motion_frame_ms_2x` (1520×1000 image with `g.addTransform (AffineTransform::scale (2))`) and `background_only_ms`.
+  - **Budget:** it applies to `motion_frame_ms`.
+  - **`process_block_us_preview`:** time bursts of ≤ 50 blocks with `Thread::sleep (60)` between bursts, outside the timed region. Assert `proc.preview.takePeak() > 0` after each burst, and print both the mean and the max.
+
+**Task 9**
+- **T9a · Install into FL's folder:** the controller installs the Release bundle into `C:\Program Files\Common Files\VST3` (an elevated copy, done by the controller rather than an implementer). The user then runs a click-through checklist in FL, recorded in the final report. It covers: both pills, Browse, drop, Cancel, play/pause/seek on each row, switching rows, dragging to the playlist, Copy, Try again, Find python.exe, the 4/6 switch while playing, and closing the window mid-split and while previewing. After each click, the spacebar must still toggle FL's transport.
+
 ## File map
 ```
 CMakeLists.txt              fonts binary data, VST3+Standalone, LISN_SOURCES shared by plugin and lisn_tests
@@ -230,14 +329,14 @@ PythonFound findPython (const juce::String& hint, const PythonSearchDirs& dirs, 
 
 **Produces:** `StemPreview` and `processor.preview`. `processBlock` mixes the preview in, and `startSplit` stops it.
 
-- [ ] **Step 1: `Source/StemPreview.h`.**
+- [ ] **Step 1: `Source/StemPreview.h`.** Design constraint: **never call `transport.stop()`**. It busy-waits up to 500 × Sleep(2) until the audio thread renders another block (juce_AudioTransportSource.cpp:133-145), which would freeze FL's UI on every pause or row switch, and forever if the host isn't calling processBlock. Play/pause is our own atomic flag. The UI reads the position from an atomic, never through the transport's callbackLock.
 ```cpp
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <atomic>
 
 // Plays one stem file through the plugin's output, on top of the audio passing through.
-// Message thread: load/unload/play/pause/seek/queries. Audio thread: addTo(). UI: takePeak().
+// Message thread: load/unload/play/pause/seek/queries. Audio thread: addTo(). UI: takePeak()/takeReachedEnd().
 class StemPreview
 {
 public:
@@ -247,18 +346,19 @@ public:
     void prepare (double sampleRate, int maxBlockSize);   // from prepareToPlay
     void release();                                        // from releaseResources
 
-    bool load (const juce::File& audioFile);   // stops, then loads at position 0; false if unreadable (nothing loaded)
+    bool load (const juce::File& audioFile);   // pauses, then loads at position 0; false if unreadable (nothing loaded)
     void unload();
     juce::File getFile() const { return file; }
-    void play();
-    void pause();
-    bool isPlaying() const;
-    double getLengthSeconds() const;
-    double getPositionFraction() const;        // 0..1
+    void play();                                // no-op without a loaded file; restarts from 0 if the stream had finished
+    void pause();                               // never blocks: the audio thread renders one faded-out block, then stops pulling
+    bool isPlaying() const { return wanted.load(); }
+    double getLengthSeconds() const { return lengthSec; }
+    double getPositionFraction() const;         // 0..1, from readPos (no lock)
     void setPositionFraction (double);
+    bool takeReachedEnd() { return reachedEnd.exchange (false); }   // true once after the stem played to its end
 
-    void addTo (juce::AudioBuffer<float>& buffer);   // audio thread; returns at once when not playing
-    float takePeak();                                // highest preview sample level since the last call
+    void addTo (juce::AudioBuffer<float>& buffer);   // audio thread; idle = two relaxed atomic loads, then return
+    float takePeak() { return peak.exchange (0.0f); }  // highest preview sample level since the last call
 
 private:
     juce::AudioFormatManager formats;
@@ -266,47 +366,70 @@ private:
     std::unique_ptr<juce::AudioFormatReaderSource> source;
     juce::AudioTransportSource transport;
     juce::AudioBuffer<float> scratch;
+    std::atomic<bool> wanted { false }, prepared { false }, reachedEnd { false };
+    std::atomic<juce::int64> readPos { 0 };      // host-rate samples, written by addTo and setPositionFraction
     std::atomic<float> peak { 0.0f };
+    bool sounding = false;                       // audio thread only: last block was audible (for the fade-out block)
+    double lengthSec = 0.0, hostRate = 44100.0;
     juce::File file;
-    int maxBlock = 0;
 };
 ```
 - [ ] **Step 2: `Source/StemPreview.cpp`.**
-  - **Construction:** the constructor calls `formats.registerBasicFormats(); readAhead.startThread();`. The destructor calls `transport.setSource (nullptr); readAhead.stopThread (2000);`.
-  - **`prepare`:** `scratch.setSize (2, maxBlockSize); maxBlock = maxBlockSize; transport.prepareToPlay (maxBlockSize, sampleRate);`. **`release`:** `transport.releaseResources()`.
-  - **`load`:** `transport.stop(); transport.setSource (nullptr); source.reset();`. Then create a reader with `formats.createReaderFor (f)`, returning false on nullptr. Otherwise `source = std::make_unique<AudioFormatReaderSource> (reader, true); transport.setSource (source.get(), 32768, &readAhead, reader->sampleRate, 2); file = f;`. Capture the reader's sample rate before passing ownership.
-  - **Queries:** `play()` is `transport.start()`, `pause()` is `transport.stop()` and `isPlaying()` is `transport.isPlaying()`. Length and position come from `transport.getLengthInSeconds()` and `getCurrentPosition()`; return 0 when the length is 0. **Seek:** `transport.setPosition (fraction * length)`.
+  - **Construction:** the constructor calls `formats.registerBasicFormats(); readAhead.startThread();`. The destructor calls `wanted = false; transport.setSource (nullptr); readAhead.stopThread (2000);`.
+  - **`prepare (sr, maxBlock)`:** set `prepared = false; scratch.setSize (2, maxBlock); hostRate = sr;`. Then call `transport.prepareToPlay (maxBlock, sr)` **twice**; the second call sizes the resampler for the ratio the first one set (juce_AudioTransportSource.cpp:233-237). Finally `prepared = true`. **`release()`:** `prepared = false; transport.releaseResources();`.
+  - **`load (f)`:**
+    1. `wanted = false; transport.setSource (nullptr); source.reset(); file = {}; lengthSec = 0; readPos = 0;`.
+    2. Create a reader with `formats.createReaderFor (f)`, returning false on nullptr.
+    3. Capture `srcRate = reader->sampleRate` and `lengthSec = reader->lengthInSamples / srcRate`.
+    4. `source = std::make_unique<juce::AudioFormatReaderSource> (reader, true); transport.setSource (source.get(), 32768, &readAhead, srcRate, 2); transport.setPosition (0); transport.start(); file = f; return true;`.
+    `start()` only sets flags under the lock; we gate audio with `wanted`, so it never makes sound on its own.
+  - **`unload()`:** `wanted = false; transport.setSource (nullptr); source.reset(); file = {}; lengthSec = 0; readPos = 0;`.
+  - **`play()`:** `if (source == nullptr) return; if (! transport.isPlaying()) { if (transport.hasStreamFinished()) { transport.setPosition (0); readPos = 0; } transport.start(); }`. The transport stops itself only at end of file, and a seek made after the end is kept. Then `wanted = true;`.
+  - **`pause()`:** `wanted = false;` and nothing else.
+  - **Position:** `getPositionFraction()` returns `lengthSec > 0 ? jlimit (0.0, 1.0, readPos / (lengthSec * hostRate)) : 0.0`. `setPositionFraction (f)` sets `transport.setPosition (f * lengthSec); readPos = (int64) (f * lengthSec * hostRate);`.
   - **`addTo`:**
 ```cpp
 void StemPreview::addTo (juce::AudioBuffer<float>& buffer)
 {
-    if (! transport.isPlaying()) return;
-    const int n = buffer.getNumSamples();
-    if (n > scratch.getNumSamples()) return;              // host broke its promised block size; skip rather than allocate
-    juce::AudioSourceChannelInfo info (&scratch, 0, n);
-    transport.getNextAudioBlock (info);
-    const float blockPeak = scratch.getMagnitude (0, n);
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        buffer.addFrom (ch, 0, scratch, juce::jmin (ch, scratch.getNumChannels() - 1), 0, n);
+    const bool want = wanted.load (std::memory_order_relaxed);
+    if ((! want && ! sounding) || ! prepared.load (std::memory_order_relaxed)) return;   // idle: nothing else runs
+    juce::ScopedNoDenormals noDenormals;
+    const int total = buffer.getNumSamples();
+    float blockPeak = 0.0f;
+    for (int start = 0; start < total; start += scratch.getNumSamples())               // chunks if the host exceeds its block size
+    {
+        const int n = juce::jmin (scratch.getNumSamples(), total - start);
+        juce::AudioSourceChannelInfo info (&scratch, 0, n);
+        transport.getNextAudioBlock (info);
+        if (! want) scratch.applyGainRamp (0, n, 1.0f, 0.0f);                          // the one faded block after pause()
+        blockPeak = juce::jmax (blockPeak, scratch.getMagnitude (0, n));
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            buffer.addFrom (ch, start, scratch, juce::jmin (ch, scratch.getNumChannels() - 1), 0, n);
+        if (! want) break;
+    }
+    sounding = want && transport.isPlaying();
+    if (want && ! transport.isPlaying()) { wanted = false; reachedEnd = true; }           // played to the end
+    readPos.store (transport.getNextReadPosition(), std::memory_order_relaxed);
     if (blockPeak > peak.load (std::memory_order_relaxed)) peak.store (blockPeak, std::memory_order_relaxed);   // benign race with takePeak
 }
-float StemPreview::takePeak() { return peak.exchange (0.0f); }
 ```
-  - **Lock note:** add `// ponytail: AudioTransportSource briefly locks while the message thread swaps sources in load(); fine for a preview.`
+  - **Lock note:** add `// ponytail: while previewing, the audio thread can briefly wait on BufferingAudioSource's lock during a 2048-frame disk read, and load() swaps sources without a fade (a click is possible when switching rows); idle blocks take no lock. Upgrade path: decode the stem into memory on load and play it lock-free.`
 - [ ] **Step 3: Processor.**
   - Add the member `StemPreview preview;`.
   - `prepareToPlay` calls `preview.prepare`, and `releaseResources` calls `preview.release`.
-  - `processBlock` becomes `juce::ScopedNoDenormals nd; preview.addTo (buffer);`.
+  - `processBlock` becomes just `preview.addTo (buffer);`. Put no ScopedNoDenormals here; it lives inside addTo after the idle return.
   - `startSplit` calls `preview.unload()` first.
-- [ ] **Step 4: `tests/StemPreviewTests.cpp`.** A helper writes a 2 s, 44.1 kHz stereo WAV into a temp file (sine at 440 Hz, amplitude 0.5) with `juce::WavAudioFormat().createWriterFor`. Then:
+- [ ] **Step 4: `tests/StemPreviewTests.cpp`.** A helper writes a 2 s, 44.1 kHz stereo WAV into a temp file (sine at 440 Hz, amplitude 0.5) with `juce::WavAudioFormat().createWriterFor`. Call `juce::Thread::sleep (30)` after every `load()` and every `setPositionFraction()` before pulling blocks, so the read-ahead thread fills its buffer. Then:
   1. `prepare (48000, 512)` and `load` succeed, and the length ≈ 2.0 s (±0.01).
   2. **Not playing:** fill the buffer with 0.25, call `addTo`, and every sample must still be exactly 0.25.
   3. **Playing:** `play()`, then 20 blocks. The RMS of blocks 3–20 is > 0.2, `takePeak()` is in 0.45–0.55, and a second `takePeak()` returns 0.
   4. **Position:** after the 20 blocks it's within 0.05 s of 20·512/48000. That checks resampling, because the file is 44.1 kHz and the host 48 kHz.
-  5. **Pause:** `pause()` leaves the buffer unchanged and the position stable.
+  5. **Pause:** `pause()` returns in < 20 ms (time it). The next block is the fade-out block (RMS falls across it), and the block after that is unchanged (0.25 fill preserved). The position is then stable over 5 more blocks.
   6. **Seek:** `setPositionFraction (0.5)` gives `getPositionFraction()` within 0.01 of 0.5.
-  7. **End of file:** play from 0.98 until it stops (within 200 blocks); then `isPlaying()` is false.
+  7. **End of file:** seek to 0.98, sleep 50 ms, then `play()` and pull blocks with `juce::Thread::sleep (1)` between them (cap 400). `isPlaying()` must become false, and `takeReachedEnd()` returns true once, then false.
   8. **Bad files:** `load` returns false for a missing file and for a `.txt` file.
+  9. **No stall with a live audio thread:** a `std::thread` calls `addTo` on a 2×512 buffer every 5 ms. Meanwhile the test thread calls `play()`, sleeps 50 ms, and checks that each of `pause()`, `play()`, `load (sameFile)` (< 100 ms, since it includes the prefill) and `unload()` returns within its bound (< 20 ms unless stated). Then stop and join the thread.
+  10. **Oversized block:** after `prepare (48000, 256)`, a 1024-sample block while playing is filled completely; the RMS of its last 256 samples is > 0.2.
 - [ ] **Step 5:** Build, run the tests and pluginval. Commit: `feat: stem preview playback mixed into the plugin output`.
 
 ---
@@ -317,11 +440,11 @@ float StemPreview::takePeak() { return peak.exchange (0.0f); }
 
 - [ ] **Step 1: `Peaks`.**
 ```cpp
-// Peak level (0..1, loudest channel) of `bars` equal slices of the file.
-std::vector<float> readPeaks (juce::AudioFormatReader& reader, int bars);
+// Peak level (0..1, loudest channel) of `bars` equal slices of the file. Returns early (remaining bars 0) when shouldAbort() is true.
+std::vector<float> readPeaks (juce::AudioFormatReader& reader, int bars, const std::function<bool()>& shouldAbort = {});
 double lengthSeconds (const juce::AudioFormatReader& reader);   // 0 when sampleRate is 0
 ```
-  - **Slices:** read each slice with `reader.readMaxLevels (start, end - start, ranges, numChannels)`, where slice `i` spans `[len·i/bars, len·(i+1)/bars)`. `ranges` is a `std::vector<juce::Range<float>>` sized to `min(numChannels, 8)`.
+  - **Slices:** read each slice with `reader.readMaxLevels (start, end - start, ranges.data(), (int) ranges.size())`, where slice `i` spans `[len·i/bars, len·(i+1)/bars)`. `ranges` is a `std::vector<juce::Range<float>>` sized to `min(numChannels, 8)`; the channel count passed must equal `ranges.size()` (juce_AudioFormatReader.cpp:218-221). Return all zeros when `numChannels == 0`, `lengthInSamples <= 0` or `bars <= 0`, and check `shouldAbort` between slices.
   - **Level:** `min(1, max(|range.start|, |range.end|))` over the channels.
   - **Test:** build an in-memory mono 44.1 kHz WAV with `MemoryOutputStream` and `WavAudioFormat`, made of 4 equal segments: silence, a 0.5 sine, silence, a 1.0 sine. `readPeaks (reader, 4)` must be ≈ [0, 0.5, 0, 1] ± 0.02, and `readPeaks (reader, 0)` is empty.
 - [ ] **Step 2: `WaveGeometry`** (an exact port of `docs/design/Waves.dc.html`).
@@ -357,13 +480,22 @@ namespace WaveGeometry
   - **(c) Unit vectors:** `direction` and `normal` have length 1 and are perpendicular.
 - [ ] **Step 3: `Frost`.**
 ```cpp
-// Static frosted-glass blur (CSS blur(radius)): shrink the image 4x, run three box blurs horizontally and vertically
-// with r = round((sqrt(1 + 4*s*s) - 1) / 2), where s = radius/4, clamping at the edges, then scale back up.
+// In-place Gaussian approximation on a SoftwareImageType image (SingleChannel or ARGB, premultiplied):
+// three running-sum box blurs horizontally, then three vertically, with r = max(1, round((sqrt(1 + 4*sigma*sigma) - 1) / 2))
+// (a box of radius r has variance r(r+1)/3, so three passes give sigma^2 = r(r+1)), clamping at the edges. sigma is in this image's pixels.
+void blurImage (juce::Image& image, float sigma);
+
+// Static frosted-glass blur (CSS blur(radius) = Gaussian with sigma = radius px): shrink 4x with high resampling quality,
+// blurImage (small, radius / 4), then scale back up with high resampling quality.
 // The result is ARGB, the same size as src, and a SoftwareImageType image.
 juce::Image frosted (const juce::Image& src, float radius);
 ```
-  - **Implementation:** do the box blur on `Image::BitmapData` (readWrite) with a running sum per channel over premultiplied ARGB pixels.
-  - **Tests:** a uniform 200×120 image stays uniform (±2 per channel). A black image with a 20×20 white square in the middle gives a centre that stays bright (>200) and a pixel 12 px outside the square that is >0 and <255. The output size equals the input size.
+  - **Implementation:** read and write through `Image::BitmapData (readWrite)`, using `pixelStride` and `lineStride` so the same code serves SingleChannel (1 byte) and ARGB (4 bytes, every channel). `WaveBackground` also uses `blurImage` for its layer and panel shadows.
+  - **Tests:**
+    - A uniform 200×120 image stays uniform (±2 per channel) with `frosted (img, 18)`.
+    - A black image with a 20×20 white square in the middle, through `frosted (img, 4.0f)`: the centre stays bright (>200), and a pixel 12 px outside the square is >0 and <255.
+    - The output size equals the input size.
+    - **Half-plane, SingleChannel 300×100:** the left half is 255, and `blurImage (mask, 14)` runs at full resolution. The alpha is ≈128 (±12) at the edge column and ≈40 (±10) 14 px outside it, which is one σ.
 - [ ] **Step 4:** Build and test. Commit: `feat: peaks, wave geometry port and frost blur`.
 
 ---
@@ -394,14 +526,21 @@ public:
   5. Fill `theme.panelTint.withAlpha (tintAlpha)` inside the rounded rect.
   6. Stroke a 1 px `cream.withAlpha (0.14f)` border along the rounded rect (inset 0.5 px).
 - [ ] **Step 2: The caches**, built lazily inside `paint`.
-  - **Scale and image type:** `scale = jlimit (1.0f, 2.0f, g.getInternalContext().getPhysicalPixelScaleFactor())`. Create images with `g.getInternalContext().getPreferredImageTypeForTemporaryImages()`, so window paints get GPU images and snapshots get software ones. Rebuild everything when the scale or `typeid` of that image type changes.
+  - **Scale and image type:** `scale = jlimit (1.0f, 2.0f, g.getInternalContext().getPhysicalPixelScaleFactor())`. JUCE 8.0.4 has **no** "preferred image type" query, so choose the type from the context:
+```cpp
+const bool software = dynamic_cast<juce::LowLevelGraphicsSoftwareRenderer*> (&g.getInternalContext()) != nullptr;
+const juce::ImageType& type = software ? static_cast<const juce::ImageType&> (softwareType) : nativeType;   // members: juce::SoftwareImageType softwareType; juce::NativeImageType nativeType;
+```
+    Rebuild everything when `(scale, software)` changes. Window paints **and** `createComponentSnapshot` use the native (Direct2D) branch on Windows. Only images created explicitly with `SoftwareImageType` (the Task 5 test and the Task 8 bench) take the software branch.
+  - **No `juce::DropShadow`.** Its radius r gives σ = √(4r/3), 3–4× tighter than the CSS values. Build every soft shadow with Frost's box blur (Task 4 `blurImage`, which handles SingleChannel and ARGB) on a quarter-resolution software image, then upscale to full size with high resampling quality and `type.convert (...)`.
   - **Layer masks:** two `Image::SingleChannel` masks per layer, independent of theme:
-    - **shape:** `layerPath (shape, shape.phase, 0, shape.wavelength + 40)` filled in white;
-    - **shadow:** `juce::DropShadow (Colours::white, 14, { 12, -4 }).drawForPath (g, path)`. This matches CSS `drop-shadow(12px -4px 14px)`.
-    - **Mask bounds:** the window, expanded 40 px, united with that same rect translated by −(direction·(wavelength+40)) and −(normal·push). Render at `scale` using the transform `translated (-bounds.origin).scaled (scale)`.
+    - **shape:** `layerPath (shape, shape.phase, 0, shape.wavelength + 40)` filled in white at full cache resolution;
+    - **shadow:** the same path translated by (12, −4), filled into a quarter-resolution software mask, then blurred with **σ = 14** (CSS `drop-shadow(12px -4px 14px)`: the third length is the Gaussian standard deviation). In quarter-resolution pixels that is σ = 14·scale/4.
+    - **Mask bounds:** the window, expanded 40 px, united with that same rect translated by −(direction·(wavelength+40)) and −(normal·push). Expand the shadow mask bounds by 3σ (42 px) more. Render at `scale` using the transform `translated (-bounds.origin).scaled (scale)`.
     - **Drawing:** use `drawImageTransformed (mask, AffineTransform::scale (1/scale).translated (snapped origin), true)` so the current colour fills the mask. Snap the offset to whole physical pixels to avoid resampling.
-  - **Panel shadow:** CSS `0 26px 50px -22px rgba(20,8,16,.75)` is drawn as `DropShadow (Colour (20,8,16).withAlpha (0.75f), 25, { 0, 26 })` for the panel rounded rect reduced by 22 px. It's pre-rendered once per scale into an ARGB image.
-  - **Frost:** render the full static background (flow 0, pulse 0, no panel) at `scale` into a software ARGB image. Then apply `frosted (image, 18 * scale)` and convert it to the preferred image type. The cache is keyed by (theme id, scale, type) and is only drawn inside the panel clip.
+    - **Bench fallback:** if the bench misses its budget, pre-composite shadow + shape per layer into one ARGB image per theme. Source-over is associative, so the result is exact.
+  - **Panel shadow:** CSS `0 26px 50px -22px rgba(20,8,16,.75)` is the panel rect reduced by 22 px (the spread shrinks the corner radius too, 22 − 22 = 0) and offset (0, 26), blurred with **σ = 25** (box-shadow blur 50 px = 2σ). Colour it `Colour (20, 8, 16).withAlpha (0.75f)` into an ARGB image once per scale. CSS clips a box-shadow under its own box, so the panel's frost and tint cover the part inside the panel.
+  - **Frost:** render the full static background (flow 0, pulse 0, no panel) at `scale` **directly** (fill the layer paths and blur their shadows as above) into a software ARGB image. Don't draw it from the cached masks, which may be GPU images. Then apply `frosted (image, 18 * scale)` and `type.convert (...)`. The cache is keyed by (theme id, scale, software) and is only drawn inside the panel clip.
 - [ ] **Step 3: Tests.**
   1. `motionRegion()` contains (10, 10), (380, 40) and (5, 300) and the panel corner (26, 78), but not the panel centre (380, 276).
   2. `setMotion` with the same values twice doesn't crash.
