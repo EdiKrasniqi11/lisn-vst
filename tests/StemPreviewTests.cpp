@@ -74,18 +74,23 @@ struct StemPreviewTests : juce::UnitTest
         p.play();
         expect (p.isPlaying());
         double sumSq = 0;
+        int crossings = 0;   // 440 Hz resampled to 48 kHz: 18 x 512 samples hold ~169 sign changes; unresampled 478.9 Hz gives ~184
         for (int block = 1; block <= 20; ++block)
         {
             pull (0.0f);
-            if (block >= 3) sumSq += juce::square ((double) rms (buf, 0, 512));
+            if (block < 3) continue;
+            sumSq += juce::square ((double) rms (buf, 0, 512));
+            for (int i = 1; i < 512; ++i)
+                crossings += (buf.getSample (0, i - 1) < 0) != (buf.getSample (0, i) < 0);
         }
         expectGreaterThan (std::sqrt (sumSq / 18), 0.2);
+        expect (std::abs (crossings - 169) <= 5, "pitch: " + juce::String (crossings) + " sign changes");
         const float peak = p.takePeak();
         expect (peak > 0.45f && peak < 0.55f, "peak " + juce::String (peak));
         expectEquals (p.takePeak(), 0.0f);
 
         beginTest ("position after resampling 44.1 kHz to 48 kHz");
-        expectWithinAbsoluteError (p.getPositionFraction() * p.getLengthSeconds(), 20 * 512 / 48000.0, 0.05);
+        expectWithinAbsoluteError (p.getPositionFraction() * p.getLengthSeconds(), 20 * 512 / 48000.0, 0.01);
 
         beginTest ("pause");
         expectLessThan (msTaken ([&] { p.pause(); }), 20.0);
