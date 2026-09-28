@@ -78,8 +78,8 @@ void WaveBackground::setTheme (const Theme& t)
 
 void WaveBackground::setPanel (juce::Rectangle<int> bounds, float cornerRadius, float tintAlpha)
 {
-    if (bounds != panel || cornerRadius != radius)
-        panelShadow = {};
+    if (bounds != panel || cornerRadius != radius || tintAlpha != tint)
+        panelImage = {};
     panel = bounds;
     radius = cornerRadius;
     tint = tintAlpha;
@@ -132,76 +132,81 @@ void WaveBackground::paint (juce::Graphics& g)
             const auto base = window.expanded (40.0f);
             const auto area = base.getUnion (base - WaveGeometry::direction (s) * (s.wavelength + 40.0f))
                                   .getUnion (base - WaveGeometry::normal (s) * s.push);
-            auto shape = shapeMask (s, area, scale);
-            auto shadow = shadowMask (s, area, scale);
-            shapes[i] = { type.convert (shape.image), shape.origin };
-            shadows[i] = { type.convert (shadow.image), shadow.origin };
+            shapes[i] = shapeMask (s, area, scale);
+            shadows[i] = shadowMask (s, area, scale);
         }
-        panelShadow = {};
-        frost = {};
+        compositeTheme = {};
     }
 
-    if (! panel.isEmpty() && panelShadow.image.isNull())
+    if (compositeTheme != theme.id)
     {
-        // box-shadow 0 26px 50px -22px: the panel shrunk by the spread (the corner radius too), moved down 26 px.
-        juce::Path p;
-        p.addRoundedRectangle (panel.toFloat().reduced (22.0f).translated (0.0f, 26.0f), juce::jmax (0.0f, radius - 22.0f));
-        auto m = softShadow (juce::Image::ARGB, p.getBounds().expanded (3.0f * panelSigma), scale, p,
-                             juce::Colour (0xff140810).withAlpha (0.75f), panelSigma);
-        panelShadow = { type.convert (m.image), m.origin };
-    }
-
-    if (frost.isNull() || frostTheme != theme.id)
-    {
-        // The resting background rendered directly in software (the cached masks may be GPU images), then blurred.
+        // One ARGB image per layer: shadow then shape in the theme colours (source-over is associative, so blitting the
+        // composite equals drawing both masks). The shadow mask's bounds contain the shape mask's. The frost is the
+        // resting background built from the same software composites, then blurred.
         juce::Image src (juce::Image::ARGB, juce::roundToInt (window.getWidth() * scale), juce::roundToInt (window.getHeight() * scale),
                          true, juce::SoftwareImageType());
         {
             juce::Graphics fg (src);
-            fg.addTransform (juce::AffineTransform::scale (scale));
             fg.fillAll (theme.ground);
             for (size_t i = 0; i < kLayers.size(); ++i)
             {
-                const auto& s = kLayers[i];
-                fg.setColour (theme.shadow);
-                drawMask (fg, shadowMask (s, window, scale), {}, scale, true);
-                fg.setColour (theme.layers[i]);
-                fg.fillPath (WaveGeometry::layerPath (s, s.phase, 0.0f));
+                const auto& shadow = shadows[i];
+                juce::Image c (juce::Image::ARGB, shadow.image.getWidth(), shadow.image.getHeight(), true, juce::SoftwareImageType());
+                {
+                    juce::Graphics cg (c);
+                    cg.setColour (theme.shadow);
+                    cg.drawImageAt (shadow.image, 0, 0, true);
+                    cg.setColour (theme.layers[i]);
+                    const auto d = shapes[i].origin - shadow.origin;
+                    cg.drawImageAt (shapes[i].image, d.x, d.y, true);
+                }
+                fg.drawImageAt (c, shadow.origin.x, shadow.origin.y);
+                composites[i] = { type.convert (c), shadow.origin };
             }
         }
-        frost = type.convert (frosted (src, 18.0f * scale));
-        frostTheme = theme.id;
+        frost = frosted (src, 18.0f * scale);
+        compositeTheme = theme.id;
+        panelImage = {};
     }
 
-    offsets = snappedOffsets (flow, pulse, scale);
+    if (! panel.isEmpty() && panelImage.image.isNull())
+    {
+        // Main.dc.html panel: box-shadow 0 26px 50px -22px (the panel shrunk by the spread, corner radius too, moved down
+        // 26 px), then a border-box with a 1 px border. The ground shows under the border; the frost and tint are
+        // clipped to the padding box (inner radius = radius - 1).
+        const auto outer = panel.toFloat();
+        juce::Path p;
+        p.addRoundedRectangle (outer.reduced (22.0f).translated (0.0f, 26.0f), juce::jmax (0.0f, radius - 22.0f));
+        const auto shadowArea = p.getBounds().expanded (3.0f * panelSigma);
+        const auto shadow = softShadow (juce::Image::ARGB, shadowArea, scale, p, juce::Colour (0xff140810).withAlpha (0.75f), panelSigma);
+        const auto phys = (shadowArea.getUnion (outer).getIntersection (window) * scale).getSmallestIntegerContainer();
+        juce::Image img (juce::Image::ARGB, phys.getWidth(), phys.getHeight(), true, juce::SoftwareImageType());
+        {
+            juce::Graphics pg (img);
+            pg.addTransform (juce::AffineTransform::scale (scale).translated (-phys.getPosition().toFloat()));
+            drawMask (pg, shadow, {}, scale, false);
+            pg.setColour (theme.ground);
+            pg.fillRoundedRectangle (outer, radius);
+            {
+                juce::Graphics::ScopedSaveState save (pg);
+                juce::Path clip;
+                clip.addRoundedRectangle (outer.reduced (1.0f), radius - 1.0f);
+                pg.reduceClipRegion (clip);
+                pg.drawImageTransformed (frost, juce::AffineTransform::scale (1.0f / scale));
+                pg.setColour (theme.panelTint.withAlpha (tint));
+                pg.fillAll();
+            }
+            pg.setColour (Theme::cream.withAlpha (0.14f));
+            pg.drawRoundedRectangle (outer.reduced (0.5f), radius - 0.5f, 1.0f);
+        }
+        panelImage = { type.convert (img), phys.getPosition() };
+    }
 
+    // Per frame: only blits at whole physical pixel offsets.
+    offsets = snappedOffsets (flow, pulse, scale);
     g.fillAll (theme.ground);
     for (size_t i = 0; i < kLayers.size(); ++i)
-    {
-        g.setColour (theme.shadow);
-        drawMask (g, shadows[i], offsets[i], scale, true);
-        g.setColour (theme.layers[i]);
-        drawMask (g, shapes[i], offsets[i], scale, true);
-    }
-
-    if (panel.isEmpty())
-        return;
-
-    // Main.dc.html panel: border-box with a 1 px border. The ground background shows under the border; the frost and
-    // tint are clipped to the padding box (inner radius = radius - 1).
-    const auto outer = panel.toFloat(), inner = outer.reduced (1.0f);
-    drawMask (g, panelShadow, {}, scale, false);
-    g.setColour (theme.ground);
-    g.fillRoundedRectangle (outer, radius);
-    {
-        juce::Graphics::ScopedSaveState save (g);
-        juce::Path clip;
-        clip.addRoundedRectangle (inner, radius - 1.0f);
-        g.reduceClipRegion (clip);
-        g.drawImageTransformed (frost, juce::AffineTransform::scale (1.0f / scale));
-        g.setColour (theme.panelTint.withAlpha (tint));
-        g.fillAll();
-    }
-    g.setColour (Theme::cream.withAlpha (0.14f));
-    g.drawRoundedRectangle (outer.reduced (0.5f), radius - 0.5f, 1.0f);
+        drawMask (g, composites[i], offsets[i], scale, false);
+    if (! panel.isEmpty())
+        drawMask (g, panelImage, {}, scale, false);
 }

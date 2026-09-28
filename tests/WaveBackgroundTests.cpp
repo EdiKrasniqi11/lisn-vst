@@ -56,6 +56,13 @@ struct WaveBackgroundTests : juce::UnitTest
         const auto midnight = render (bg, "midnight").getPixelAt (740, 10);
         expect (matches (midnight, 0xff152238, 6), midnight.toDisplayString (false));
 
+        beginTest ("panel tint change rebuilds the panel image");
+        const auto tinted = render (bg, "midnight").getPixelAt (380, 276);
+        bg.setPanel ({ 24, 76, 712, 400 }, 22.0f, 0.0f);
+        const auto clear = render (bg, "midnight").getPixelAt (380, 276);
+        expect (tinted != clear, tinted.toDisplayString (false) + " vs " + clear.toDisplayString (false));
+        bg.setPanel ({ 24, 76, 712, 400 }, 22.0f, 0.66f);
+
         beginTest ("layer shadow reach");
         // 30 px outside layer 2's edge at a trough (sin = -1): outside the shape, but sigma 14 still reaches it.
         const auto& s = kLayers[2];
