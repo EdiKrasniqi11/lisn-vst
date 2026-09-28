@@ -1,0 +1,588 @@
+#include "Screens.h"
+#include "Icons.h"
+#include "Peaks.h"
+
+namespace
+{
+    // Non-ASCII UI text is escaped UTF-8: String (const char*) would read the bytes as ASCII.
+    const juce::String dot (juce::CharPointer_UTF8 (" \xc2\xb7 "));
+    const juce::String ellipsis (juce::CharPointer_UTF8 ("\xe2\x80\xa6"));
+    const char* const note = "The first split downloads the AI model (about 80 MB), so it can sit at 0% for a minute. "
+                             "After that it starts right away.";
+
+    constexpr float panelW = 712.0f, centreX = 356.0f;
+
+    const juce::StringArray allStems { "vocals", "drums", "bass", "guitar", "piano", "other" };
+    juce::StringArray stemKeys (bool six) { return six ? allStems : juce::StringArray { "vocals", "drums", "bass", "other" }; }
+
+    int stemRank (const juce::File& f)                 // unknown stems sort last
+    {
+        const auto i = allStems.indexOf (f.getFileNameWithoutExtension().toLowerCase());
+        return i < 0 ? allStems.size() : i;
+    }
+
+    juce::Font tracked (const juce::Font& f, float em)   // CSS letter-spacing in em; JUCE scales kerning by the height, not the em
+    {
+        return f.withExtraKerningFactor (em * f.getHeightInPoints() / f.getHeight());
+    }
+
+    // One line of text, vertically centred in r like a CSS line box.
+    void text (juce::Graphics& g, const juce::Font& f, juce::Colour c, const juce::String& s, juce::Rectangle<float> r,
+               juce::Justification j = juce::Justification::centred)
+    {
+        g.setFont (f);
+        g.setColour (c);
+        g.drawText (s, r, j, true);
+    }
+
+    int lineCount (const juce::Font& f, const juce::String& s, float width)
+    {
+        juce::GlyphArrangement ga;
+        ga.addJustifiedText (f, s, 0.0f, 0.0f, width, juce::Justification::left);
+        int lines = 0;
+        auto last = std::numeric_limits<float>::lowest();
+        for (int i = 0; i < ga.getNumGlyphs(); ++i)
+            if (ga.getGlyph (i).getBaselineY() > last)
+            {
+                ++lines;
+                last = ga.getGlyph (i).getBaselineY();
+            }
+        return juce::jmax (1, lines);
+    }
+
+    // Text wrapped to area's width with a CSS line-height of lineHeightPx.
+    void paragraph (juce::Graphics& g, const juce::Font& f, juce::Colour c, const juce::String& s, juce::Rectangle<float> area,
+                    float lineHeightPx, juce::Justification j)
+    {
+        const auto leading = lineHeightPx - f.getHeight();
+        g.setFont (f);
+        g.setColour (c);
+        g.drawMultiLineText (s, juce::roundToInt (area.getX()), juce::roundToInt (area.getY() + leading / 2.0f + f.getAscent()),
+                             juce::roundToInt (area.getWidth()), j, leading);
+    }
+
+    juce::String pipFor (const juce::String& exe) { return "\"" + exe + "\" -m pip install demucs"; }
+
+    // pipFor (exe) with the middle folders of exe replaced by "..." until it fits; the drive and the last two parts stay.
+    juce::String shortCommand (const juce::String& exe, float maxWidth)
+    {
+        const auto font = Fonts::mono (14.0f);
+        const auto parts = juce::StringArray::fromTokens (exe, "\\", "");
+        auto command = pipFor (exe);
+        for (int cut = 1; juce::GlyphArrangement::getStringWidth (font, command) > maxWidth && parts.size() - cut >= 3; ++cut)
+        {
+            auto p = parts;
+            p.removeRange (1, cut);
+            p.insert (1, ellipsis);
+            command = pipFor (p.joinIntoString ("\\"));
+        }
+        return command;
+    }
+}
+
+//==============================================================================
+Header::Header() : themePill ({ "Dusk", "Midnight" }), stemsPill ({ "4 stems", "6 stems" })
+{
+    const auto lisn = tracked (Fonts::display (22.0f), 0.08f);
+    title.addLineOfText (lisn, "LISN", 0.0f, 30.25f);   // shared baseline
+    title.addLineOfText (Fonts::body (14.0f, 500), "StemSplitter", juce::GlyphArrangement::getStringWidth (lisn, "LISN") + 10.0f, 30.25f);
+
+    themePill.onChange = [this] (int i) { if (onTheme != nullptr) onTheme (i == 1 ? "midnight" : "dusk"); };
+    stemsPill.onChange = [this] (int i) { if (onSixStems != nullptr) onSixStems (i == 1); };
+    addAndMakeVisible (themePill);
+    addAndMakeVisible (stemsPill);
+}
+
+void Header::setTheme (const Theme& t)
+{
+    themePill.setTheme (t);
+    stemsPill.setTheme (t);
+    themePill.setSelected (t.id == "midnight" ? 1 : 0);
+}
+
+void Header::setSixStems (bool six)
+{
+    stemsPill.setSelected (six ? 1 : 0);
+}
+
+void Header::setEnabledSwitches (bool on)
+{
+    for (auto* p : { &themePill, &stemsPill })
+    {
+        p->setEnabled (on);
+        p->setAlpha (on ? 1.0f : 0.55f);
+    }
+}
+
+void Header::paint (juce::Graphics& g)
+{
+    g.setColour (Theme::cream);
+    title.draw (g);
+}
+
+void Header::resized()
+{
+    const auto w = stemsPill.preferredWidth();
+    stemsPill.setBounds (getWidth() - w, 3, w, 38);
+    themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);
+}
+
+//==============================================================================
+// Panel padding 14; the 2 px dashed zone is (15, 15, 682, 370) and its content box (17, 17, 678, 366).
+DropScreen::DropScreen() : browse (juce::String (juce::CharPointer_UTF8 ("Browse\xe2\x80\xa6")), LisnButton::Style::Primary)
+{
+    browse.onClick = [this] { if (onBrowse != nullptr) onBrowse(); };   // 34 tall, padding 16, font 13: the defaults
+    addAndMakeVisible (browse);
+}
+
+void DropScreen::setTheme (const Theme& t)
+{
+    theme = t;
+    repaint();
+}
+
+void DropScreen::setSixStems (bool s)
+{
+    if (s != six) { six = s; repaint(); }
+}
+
+void DropScreen::setHighlighted (bool h)
+{
+    if (h != highlighted) { highlighted = h; repaint(); }
+}
+
+float DropScreen::columnTop() const
+{
+    const auto total = 64.0f + 14.0f + Fonts::display (24.0f).getHeight() + 14.0f + 34.0f + 14.0f + Fonts::body (12.0f).getHeight()
+                     + 14.0f + 10.0f + Fonts::body (12.0f).getHeight() + 8.0f + 28.0f;
+    return 17.0f + (366.0f - total) / 2.0f;
+}
+
+void DropScreen::resized()
+{
+    const auto orW = juce::GlyphArrangement::getStringWidth (Fonts::body (14.0f), "or");
+    const auto w = browse.preferredWidth();
+    browse.setBounds (juce::roundToInt (centreX - (orW + 10.0f + (float) w) / 2.0f + orW + 10.0f),
+                      juce::roundToInt (columnTop() + 64.0f + 14.0f + Fonts::display (24.0f).getHeight() + 14.0f), w, browse.height);
+}
+
+void DropScreen::paint (juce::Graphics& g)
+{
+    const juce::Rectangle<float> zone (15.0f, 15.0f, 682.0f, 370.0f);
+    if (highlighted)
+    {
+        g.setColour (Theme::cream.withAlpha (0.04f));
+        g.fillRoundedRectangle (zone, 16.0f);
+    }
+    drawDashedRoundedRect (g, zone.reduced (1.0f), 15.0f, 2.0f, 6.0f, 5.0f, Theme::cream.withAlpha (highlighted ? 0.7f : 0.36f));
+
+    auto y = columnTop();
+    g.setColour (Theme::cream.withAlpha (0.12f));
+    g.fillEllipse (centreX - 32.0f, y, 64.0f, 64.0f);
+    g.setColour (Theme::cream);
+    strokeIcon (g, Icons::upload, { centreX - 14.0f, y + 18.0f, 28.0f, 28.0f }, 1.8f);
+    y += 64.0f + 14.0f;
+
+    const auto titleFont = Fonts::display (24.0f);
+    text (g, titleFont, Theme::cream, "Drop a song here", { 0.0f, y, panelW, titleFont.getHeight() });
+    y += titleFont.getHeight() + 14.0f;
+
+    text (g, Fonts::body (14.0f), Theme::cream.withAlpha (0.72f), "or", { 0.0f, y, (float) browse.getX() - 10.0f, 34.0f },
+          juce::Justification::centredRight);
+    y += 34.0f + 14.0f;
+
+    const auto small = Fonts::body (12.0f);
+    text (g, tracked (small, 0.06f), Theme::cream.withAlpha (0.62f), "WAV" + dot + "MP3" + dot + "FLAC" + dot + "AIFF" + dot + "OGG",
+          { 0.0f, y, panelW, small.getHeight() });
+    y += small.getHeight() + 14.0f + 10.0f;
+    text (g, small, Theme::cream.withAlpha (0.62f), "You'll get these stems", { 0.0f, y, panelW, small.getHeight() });
+    y += small.getHeight() + 8.0f;
+
+    // Chips: 28 tall, padding 0 12 0 10, an 8 px dot, 7 px, Bold 12; 6 px apart, centred.
+    const auto chipFont = Fonts::body (12.0f, 700);
+    const auto keys = stemKeys (six);
+    juce::StringArray names;
+    juce::Array<float> widths;
+    auto total = -6.0f;
+    for (const auto& k : keys)
+    {
+        const auto name = k.substring (0, 1).toUpperCase() + k.substring (1);
+        names.add (name);
+        widths.add (10.0f + 8.0f + 7.0f + juce::GlyphArrangement::getStringWidth (chipFont, name) + 12.0f);
+        total += widths.getLast() + 6.0f;
+    }
+    auto x = centreX - total / 2.0f;
+    for (int i = 0; i < keys.size(); ++i)
+    {
+        g.setColour (Theme::cream.withAlpha (0.08f));
+        g.fillRoundedRectangle (x, y, widths[i], 28.0f, 14.0f);
+        g.setColour (theme.stemColour (keys[i]));
+        g.fillEllipse (x + 10.0f, y + 10.0f, 8.0f, 8.0f);
+        text (g, chipFont, Theme::cream, names[i], { x + 25.0f, y, widths[i], 28.0f }, juce::Justification::centredLeft);
+        x += widths[i] + 6.0f;
+    }
+}
+
+//==============================================================================
+SplittingScreen::SplittingScreen() : cancel ("Cancel", LisnButton::Style::Ghost)
+{
+    cancel.height = 36;
+    cancel.padLeft = cancel.padRight = 18.0f;
+    cancel.borderAlpha = 0.3f;
+    cancel.onClick = [this] { if (onCancel != nullptr) onCancel(); };
+    addAndMakeVisible (cancel);
+
+    for (int x = 4; x <= 436; x += 2)
+    {
+        const auto y = 20.0f + 8.0f * std::sin ((float) x / 55.0f * juce::MathConstants<float>::twoPi);
+        if (x == 4) track.startNewSubPath ((float) x, y);
+        else        track.lineTo ((float) x, y);
+    }
+    noteLines = lineCount (Fonts::body (12.0f), note, 420.0f);
+    setSong ({}, false);
+}
+
+void SplittingScreen::setTheme (const Theme& t)
+{
+    theme = t;
+    repaint();
+}
+
+void SplittingScreen::setSong (const juce::String& name, bool six)
+{
+    song = name;
+    subtitle = "Splitting into " + stemKeys (six).joinIntoString (dot);
+    repaint();
+}
+
+void SplittingScreen::setProgress (double p)
+{
+    const auto pc = juce::jlimit (0, 100, (int) (p * 100.0));
+    if (pc != percent) { percent = pc; repaint(); }
+}
+
+// Centred column, 18 px gaps: name / 4 / subtitle, percentage, wave (40), Cancel (36), note (12 px, line-height 1.5).
+float SplittingScreen::columnTop() const
+{
+    const auto total = Fonts::body (15.0f, 700).getHeight() + 4.0f + Fonts::body (13.0f).getHeight() + 18.0f
+                     + Fonts::display (40.0f).getHeight() + 18.0f + 40.0f + 18.0f + 36.0f + 18.0f + (float) noteLines * 18.0f;
+    return 1.0f + (398.0f - total) / 2.0f;
+}
+
+void SplittingScreen::resized()
+{
+    const auto y = columnTop() + Fonts::body (15.0f, 700).getHeight() + 4.0f + Fonts::body (13.0f).getHeight() + 18.0f
+                 + Fonts::display (40.0f).getHeight() + 18.0f + 40.0f + 18.0f;
+    const auto w = cancel.preferredWidth();
+    cancel.setBounds (juce::roundToInt (centreX - (float) w / 2.0f), juce::roundToInt (y), w, cancel.height);
+}
+
+void SplittingScreen::paint (juce::Graphics& g)
+{
+    const auto nameFont = Fonts::body (15.0f, 700), subFont = Fonts::body (13.0f), pctFont = Fonts::display (40.0f);
+    auto y = columnTop();
+    text (g, nameFont, Theme::cream, song, { 0.0f, y, panelW, nameFont.getHeight() });
+    y += nameFont.getHeight() + 4.0f;
+    text (g, subFont, Theme::cream.withAlpha (0.68f), subtitle, { 0.0f, y, panelW, subFont.getHeight() });
+    y += subFont.getHeight() + 18.0f;
+    text (g, pctFont, Theme::cream, juce::String (percent) + "%", { 0.0f, y, panelW, pctFont.getHeight() });
+    y += pctFont.getHeight() + 18.0f;
+
+    // The wavy line: track in cream 0.2, the done part in the accent, then the knob with its 4 px ring.
+    const auto left = centreX - 220.0f, done = 440.0f * (float) percent / 100.0f;
+    const auto origin = juce::AffineTransform::translation (left, y);
+    const juce::PathStrokeType stroke (4.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded);
+    g.setColour (Theme::cream.withAlpha (0.2f));
+    g.strokePath (track, stroke, origin);
+    {
+        juce::Graphics::ScopedSaveState save (g);
+        g.reduceClipRegion (juce::roundToInt (left), juce::roundToInt (y), juce::roundToInt (done), 40);
+        g.setColour (theme.accent());
+        g.strokePath (track, stroke, origin);
+    }
+    const juce::Point<float> knob (left + done, y + 20.0f + 8.0f * std::sin (done / 55.0f * juce::MathConstants<float>::twoPi));
+    g.setColour (theme.accent().withAlpha (0.35f));
+    g.fillEllipse (juce::Rectangle<float> (22.0f, 22.0f).withCentre (knob));
+    g.setColour (Theme::cream);
+    g.fillEllipse (juce::Rectangle<float> (14.0f, 14.0f).withCentre (knob));
+    y += 40.0f + 18.0f + 36.0f + 18.0f;
+
+    paragraph (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.6f), note, { centreX - 210.0f, y, 420.0f, 0.0f }, 18.0f,
+               juce::Justification::centred);
+}
+
+//==============================================================================
+// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (283 tall), footer at 367.
+namespace { constexpr float footerY = 367.0f; }
+
+StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
+{
+    newSong.icon = Icons::plus;                    // 16 px, stroke 2; 34 tall, border 0.22, font 13: the defaults
+    newSong.padLeft = 10.0f;
+    newSong.padRight = 14.0f;
+    newSong.onClick = [this] { if (onNewSong != nullptr) onNewSong(); };
+    addAndMakeVisible (newSong);
+}
+
+StemsScreen::~StemsScreen()
+{
+    pool.removeAllJobs (true, 2000);
+}
+
+void StemsScreen::setTheme (const Theme& t)
+{
+    theme = t;
+    for (auto* r : rows)
+        r->setTheme (t);
+    repaint();
+}
+
+void StemsScreen::setStems (const juce::File& newDir, const juce::String& songName)
+{
+    ++generation;
+    pool.removeAllJobs (true, 2000);
+    dir = newDir;
+    song = songName;
+    length = activeLength = 0.0;
+    activeRow = -1;
+    activePlaying = peaksReady = false;
+    rows.clear();
+
+    auto files = SeparationJob::stemsIn (dir);   // A-Z
+    std::stable_sort (files.begin(), files.end(), [] (const juce::File& a, const juce::File& b) { return stemRank (a) < stemRank (b); });
+    for (int i = 0; i < files.size(); ++i)
+    {
+        auto* row = rows.add (new StemRow (files[i], files[i].getFileNameWithoutExtension().toLowerCase()));
+        row->setTheme (theme);
+        row->setCompact (files.size() > 4);
+        row->onPlayPause = [this, i] { if (onPlayPause != nullptr) onPlayPause (i); };
+        row->onSeek = [this, i] (double f) { seek (i, f); };
+        addAndMakeVisible (row);
+    }
+    positions.assign ((size_t) rows.size(), 0.0);
+    resized();
+    repaint();
+
+    // One job reads every row's peaks in order; a newer setStems (or the destructor) stops it and drops its result.
+    const int gen = generation, bars = rows.isEmpty() ? 0 : rows[0]->barCount();
+    pool.addJob ([safe = juce::Component::SafePointer<StemsScreen> (this), files, gen, bars]
+    {
+        const std::function<bool()> shouldExit = [] { return juce::ThreadPoolJob::getCurrentThreadPoolJob()->shouldExit(); };
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+        std::vector<std::vector<float>> peaks;
+        double seconds = 0.0;
+        for (const auto& f : files)
+        {
+            if (shouldExit()) return;
+            std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (f));
+            peaks.push_back (reader != nullptr ? readPeaks (*reader, bars, shouldExit) : std::vector<float>());
+            if (reader != nullptr && seconds == 0.0) seconds = lengthSeconds (*reader);
+        }
+        if (shouldExit()) return;
+        juce::MessageManager::callAsync ([safe, gen, peaks = std::move (peaks), seconds]() mutable
+        {
+            if (safe == nullptr || safe->generation != gen) return;
+            for (int i = 0; i < juce::jmin ((int) peaks.size(), safe->rows.size()); ++i)
+                safe->rows[i]->setPeaks (std::move (peaks[(size_t) i]));
+            safe->length = seconds;
+            safe->peaksReady = true;
+            safe->updateRows();                  // row times use the length
+            safe->repaint();
+        });
+    });
+}
+
+void StemsScreen::setPlayback (int row, bool playing, double fraction, double len)
+{
+    activeRow = juce::isPositiveAndBelow (row, rows.size()) ? row : -1;
+    activePlaying = playing && activeRow >= 0;
+    if (activeRow >= 0)
+    {
+        positions[(size_t) activeRow] = fraction;
+        activeLength = len;
+    }
+    updateRows();
+}
+
+void StemsScreen::updateRows()
+{
+    for (int i = 0; i < rows.size(); ++i)
+        rows[i]->setPlayback (i == activeRow && activePlaying, positions[(size_t) i], lengthOf (i));
+}
+
+double StemsScreen::lengthOf (int row) const
+{
+    return row == activeRow && activeLength > 0.0 ? activeLength : length;
+}
+
+void StemsScreen::seek (int row, double f)
+{
+    if (! juce::isPositiveAndBelow (row, rows.size())) return;
+    positions[(size_t) row] = f;
+    rows[row]->setPlayback (row == activeRow && activePlaying, f, lengthOf (row));
+    if (onSeek != nullptr) onSeek (row, f);
+}
+
+int StemsScreen::rowOf (const juce::File& f) const
+{
+    for (int i = 0; i < rows.size(); ++i)
+        if (f != juce::File() && rows[i]->getFile() == f)
+            return i;
+    return -1;
+}
+
+juce::File StemsScreen::fileOf (int row) const
+{
+    return juce::isPositiveAndBelow (row, rows.size()) ? rows[row]->getFile() : juce::File();
+}
+
+double StemsScreen::positionOf (int row) const
+{
+    return juce::isPositiveAndBelow (row, rows.size()) ? positions[(size_t) row] : 0.0;
+}
+
+void StemsScreen::resized()
+{
+    const auto w = newSong.preferredWidth();
+    newSong.setBounds (19 + 674 - w, 18, w, newSong.height);
+    auto y = 74;
+    for (auto* r : rows)
+    {
+        r->setBounds (19, y, 674, r->getHeight());
+        y += r->getHeight() + (rows.size() > 4 ? 5 : 10);
+    }
+}
+
+void StemsScreen::paint (juce::Graphics& g)
+{
+    const juce::Rectangle<float> iconBox (19.0f, 17.0f, 36.0f, 36.0f);
+    g.setColour (Theme::cream.withAlpha (0.1f));
+    g.fillRoundedRectangle (iconBox, 10.0f);
+    g.setColour (Theme::cream);
+    strokeIcon (g, Icons::file, iconBox.withSizeKeepingCentre (18.0f, 18.0f), 1.8f);
+
+    // Song name (Bold 15) over the summary (12, cream 0.64): line-height 1.2, 2 px apart, centred in the 36 px row.
+    const auto x = iconBox.getRight() + 12.0f, w = (float) newSong.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
+    text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
+    const auto summary = (length > 0.0 ? mmss (length) + dot : juce::String()) + "split into " + juce::String (rows.size()) + " stems";
+    text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f), summary, { x, y + 20.0f, w, 14.4f }, juce::Justification::centredLeft);
+
+    g.setColour (Theme::cream.withAlpha (0.12f));
+    g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
+
+    g.setColour (Theme::cream.withAlpha (0.62f));
+    g.fillPath (iconPath (Icons::play, { 19.0f, footerY + 1.0f, 14.0f, 14.0f }));
+    text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.62f), "Play a stem to hear it, then drag it onto any track.",
+          { 19.0f + 14.0f + 8.0f, footerY, 600.0f, 16.0f }, juce::Justification::centredLeft);
+}
+
+//==============================================================================
+// A 520 px column centred in the panel (x 96), 16 px gaps: icon + title (44), body, code box, 4 px, buttons (38).
+ErrorScreen::ErrorScreen()
+    : copy ("Copy", LisnButton::Style::Soft), retry ("Try again", LisnButton::Style::Primary),
+      findPython (juce::String (juce::CharPointer_UTF8 ("Already installed? Find python.exe\xe2\x80\xa6")), LisnButton::Style::Ghost)
+{
+    copy.icon = Icons::copy;
+    copy.iconSize = 14.0f;
+    copy.height = 32;
+    copy.padLeft = 10.0f;
+    copy.padRight = 12.0f;
+    copy.fontSize = 12.0f;
+    retry.height = findPython.height = 38;
+    retry.padLeft = retry.padRight = 18.0f;
+    findPython.borderAlpha = 0.3f;
+
+    copy.onClick = [this] { juce::SystemClipboard::copyTextToClipboard (copyText); };
+    retry.onClick = [this] { if (onRetry != nullptr) onRetry(); };
+    findPython.onClick = [this] { if (onFindPython != nullptr) onFindPython(); };
+    for (auto* b : { &copy, &retry, &findPython })
+        addAndMakeVisible (b);
+    setError (ErrorKind::PythonMissing, {}, {});
+}
+
+void ErrorScreen::setTheme (const Theme& t)
+{
+    theme = t;
+    repaint();
+}
+
+void ErrorScreen::setError (ErrorKind k, const juce::String& text, const juce::String& pythonExe)
+{
+    kind = k == ErrorKind::PythonMissing || k == ErrorKind::DemucsMissing ? k : ErrorKind::Failed;
+    const juce::String pip ("python -m pip install demucs");
+    lines.clear();
+    if (kind == ErrorKind::PythonMissing)
+    {
+        title = "Python isn't set up yet";
+        body = "StemSplitter splits songs with Demucs, a free AI tool that runs on Python. "
+               "Install Python 3.11 from python.org, then run this once in a terminal:";
+        command = copyText = pip;
+    }
+    else if (kind == ErrorKind::DemucsMissing)
+    {
+        title = "Demucs isn't installed";
+        body = "Python is installed, but Demucs isn't. Run this once in a terminal, then try again:";
+        copyText = pythonExe.isEmpty() ? pip : pipFor (pythonExe);
+        command = pythonExe.isEmpty() ? pip : shortCommand (pythonExe, 484.0f - (float) copy.preferredWidth());   // box text width
+    }
+    else
+    {
+        title = "The split didn't finish";
+        body = "Demucs stopped with this message:";
+        copyText = text;
+        lines = juce::StringArray::fromLines (text.fromFirstOccurrenceOf ("\n", false, false).replaceCharacter ('\r', '\n'));
+        lines.removeEmptyStrings();
+        for (int i = lines.size(); --i >= 0;)
+            if (lines[i].contains ("%|"))        // tqdm progress bars
+                lines.remove (i);
+        lines.removeRange (0, lines.size() - 6);
+        if (lines.isEmpty())
+            lines.add (text.upToFirstOccurrenceOf ("\n", false, false));
+    }
+    resized();
+    repaint();
+}
+
+void ErrorScreen::resized()
+{
+    const bool failed = kind == ErrorKind::Failed;
+    bodyHeight = (float) lineCount (Fonts::body (14.0f), body, 520.0f) * 14.0f * 1.55f;
+    const auto boxH = failed ? 20.0f + 18.0f * (float) lines.size() : 46.0f;
+    top = 1.0f + (398.0f - (44.0f + 16.0f + bodyHeight + 16.0f + boxH + 16.0f + 4.0f + 38.0f)) / 2.0f;
+    box = { 96.0f, top + 44.0f + 16.0f + bodyHeight + 16.0f, 520.0f, boxH };
+
+    const auto copyW = copy.preferredWidth();   // 1 px border + 6 px padding from the box edge
+    copy.setBounds (juce::roundToInt (box.getRight() - 7.0f) - copyW,
+                    juce::roundToInt (failed ? box.getY() + 7.0f : box.getCentreY() - 16.0f), copyW, copy.height);
+    const auto y = juce::roundToInt (box.getBottom() + 20.0f);
+    retry.setBounds (96, y, retry.preferredWidth(), retry.height);
+    findPython.setBounds (retry.getRight() + 10, y, findPython.preferredWidth(), findPython.height);
+    findPython.setVisible (! failed);
+}
+
+void ErrorScreen::paint (juce::Graphics& g)
+{
+    const juce::Rectangle<float> circle (96.0f, top, 44.0f, 44.0f);
+    g.setColour (theme.drums.withAlpha (0.18f));
+    g.fillEllipse (circle);
+    g.setColour (theme.drums);
+    strokeIcon (g, Icons::alert, circle.withSizeKeepingCentre (22.0f, 22.0f), 2.0f);
+    text (g, Fonts::display (20.0f), Theme::cream, title, { circle.getRight() + 14.0f, top, 520.0f - 58.0f, 44.0f },
+          juce::Justification::centredLeft);
+    paragraph (g, Fonts::body (14.0f), Theme::cream.withAlpha (0.8f), body, { 96.0f, top + 60.0f, 520.0f, bodyHeight }, 14.0f * 1.55f,
+               juce::Justification::left);
+
+    g.setColour (juce::Colour (0xff0C060A).withAlpha (0.55f));
+    g.fillRoundedRectangle (box, 12.0f);
+    g.setColour (Theme::cream.withAlpha (0.12f));
+    g.drawRoundedRectangle (box.reduced (0.5f), 11.5f, 1.0f);
+
+    const auto x = box.getX() + 17.0f, w = (float) copy.getX() - 12.0f - x;
+    if (kind == ErrorKind::Failed)
+        for (int i = 0; i < lines.size(); ++i)
+            text (g, Fonts::mono (14.0f), Theme::cream, lines[i], { x, box.getY() + 10.0f + 18.0f * (float) i, w, 18.0f },
+                  juce::Justification::centredLeft);
+    else
+        text (g, Fonts::mono (14.0f), Theme::cream, command, { x, box.getY(), w, box.getHeight() }, juce::Justification::centredLeft);
+}

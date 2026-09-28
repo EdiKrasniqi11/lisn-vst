@@ -1,50 +1,51 @@
 #pragma once
 #include "PluginProcessor.h"
-#include <juce_gui_basics/juce_gui_basics.h>
+#include "Screens.h"
+#include "UiState.h"
+#include "WaveBackground.h"
+#include <optional>
 
-// One draggable stem file; drag it onto a DAW track.
-class StemTile : public juce::Component
-{
-public:
-    explicit StemTile (juce::File f) : file (f) { setMouseCursor (juce::MouseCursor::DraggingHandCursor); }
-    void paint (juce::Graphics& g) override
-    {
-        g.setColour (juce::Colour (0xff3a3a48));
-        g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (2), 6.0f);
-        g.setColour (juce::Colours::white);
-        g.drawText (file.getFileNameWithoutExtension(), getLocalBounds(), juce::Justification::centred);
-    }
-    void mouseDrag (const juce::MouseEvent&) override
-    {
-        juce::DragAndDropContainer::performExternalDragDropOfFiles ({ file.getFullPathName() }, false, this);
-    }
-private:
-    juce::File file;
-};
-
+// Fixed 760 x 500: wave background, header and one screen per UiState::Screen. A 30 Hz timer maps the processor to a
+// UiState, updates the stem rows from the preview and moves the waves while a preview plays.
 class StemSplitterEditor : public juce::AudioProcessorEditor,
                            public juce::FileDragAndDropTarget,
                            private juce::Timer
 {
 public:
     explicit StemSplitterEditor (StemSplitterProcessor&);
-    void paint (juce::Graphics&) override;
+    ~StemSplitterEditor() override;                  // pauses the preview
     void resized() override;
 
-    bool isInterestedInFileDrag (const juce::StringArray&) override;
+    bool isInterestedInFileDrag (const juce::StringArray&) override;   // one audio file
+    void fileDragEnter (const juce::StringArray&, int, int) override;
+    void fileDragExit (const juce::StringArray&) override;
     void filesDropped (const juce::StringArray&, int, int) override;
 
+    // test hooks
+    void forceState (const UiState& s) { forced = s; }   // the timer then shows this instead of uiStateFor (proc)
+    void tick();                                     // one timer step
+    WaveBackground& background() { return waves; }
+    StemsScreen& stemsScreen() { return stems; }
+
 private:
-    void timerCallback() override;
-    void showStems (juce::File dir);
+    void timerCallback() override { tick(); }
+    void show (const UiState&);
+    void applyTheme (const Theme&);
+    void playPause (int row);
+    void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
     StemSplitterProcessor& proc;
-    juce::ComboBox modelBox;
-    juce::TextEditor pythonField;
-    juce::TextButton cancelButton { "Cancel" };
-    double progressValue = 0.0;
-    juce::ProgressBar progressBar { progressValue };
-    juce::Label status;
-    juce::OwnedArray<StemTile> tiles;
-    JobState lastState = JobState::Idle;
+    WaveBackground waves;
+    Header header;
+    DropScreen drop;
+    SplittingScreen splitting;
+    StemsScreen stems;
+    ErrorScreen error;
+    std::optional<UiState> forced, shown;
+    juce::String appliedThemeId;
+    std::unique_ptr<juce::FileChooser> chooser;
+    float flow = 0.0f, pulse = 0.0f;                 // wave motion
+    double lastTick = 0.0;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemSplitterEditor)
 };

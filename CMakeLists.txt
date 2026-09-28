@@ -25,7 +25,9 @@ set(LISN_SOURCES
     Source/Frost.cpp
     Source/WaveBackground.cpp
     Source/Controls.cpp
-    Source/StemRow.cpp)
+    Source/StemRow.cpp
+    Source/UiState.cpp
+    Source/Screens.cpp)
 
 juce_add_plugin(StemSplitter
     COMPANY_NAME "LISN"
@@ -61,7 +63,8 @@ target_sources(lisn_tests PRIVATE
     tests/WaveGeometryTests.cpp
     tests/FrostTests.cpp
     tests/WaveBackgroundTests.cpp
-    tests/StemRowTests.cpp)
+    tests/StemRowTests.cpp
+    tests/UiStateTests.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1

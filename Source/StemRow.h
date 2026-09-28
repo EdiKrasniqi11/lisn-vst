@@ -2,6 +2,8 @@
 #include "Controls.h"
 #include <vector>
 
+juce::String mmss (double seconds);   // m:ss, rounded down
+
 // The waveform of a stem row: 330 x waveH bars inside a 5 px vertical margin (for the playhead). Click or drag to seek.
 class WaveformView : public juce::Component
 {

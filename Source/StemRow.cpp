@@ -10,13 +10,13 @@ namespace
     constexpr int timeX = waveX + waveW + gap;          // 538
     constexpr int chipX = timeX + timeW + gap;          // 584
 
-    juce::String clock (double seconds)                 // m:ss, rounded down
-    {
-        const auto s = juce::jmax (0, (int) seconds);
-        return juce::String (s / 60) + ":" + juce::String (s % 60).paddedLeft ('0', 2);
-    }
-
     juce::Font chipFont() { return Fonts::body (12.0f, 700); }
+}
+
+juce::String mmss (double seconds)
+{
+    const auto s = juce::jmax (0, (int) seconds);
+    return juce::String (s / 60) + ":" + juce::String (s % 60).paddedLeft ('0', 2);
 }
 
 WaveformView::WaveformView()
@@ -131,7 +131,7 @@ void StemRow::setPlayback (bool isPlaying, double fraction, double lengthSeconds
     fraction = juce::jlimit (0.0, 1.0, fraction);
     wave.setFraction (fraction);
     const auto newHead = juce::roundToInt (fraction * waveW);
-    const auto newTime = clock (fraction * lengthSeconds);
+    const auto newTime = mmss (fraction * lengthSeconds);
     if (isPlaying == playing && newHead == head && newTime == time)
         return;
 
