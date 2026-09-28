@@ -64,7 +64,8 @@ target_sources(lisn_tests PRIVATE
     tests/FrostTests.cpp
     tests/WaveBackgroundTests.cpp
     tests/StemRowTests.cpp
-    tests/UiStateTests.cpp)
+    tests/UiStateTests.cpp
+    tests/Snapshots.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1

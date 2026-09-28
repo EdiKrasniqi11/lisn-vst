@@ -24,6 +24,7 @@ SegmentedPill::SegmentedPill (juce::StringArray itemTexts) : items (std::move (i
 
     setWantsKeyboardFocus (false);
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    setBufferedToImage (true);   // the header repaints with every motion frame; the pill itself rarely changes
 }
 
 void SegmentedPill::setSelected (int index)

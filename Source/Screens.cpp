@@ -257,7 +257,7 @@ void SplittingScreen::setSong (const juce::String& name, bool six)
 
 void SplittingScreen::setProgress (double p)
 {
-    const auto pc = juce::jlimit (0, 100, (int) (p * 100.0));
+    const auto pc = juce::jlimit (0, 100, (int) (p * 100.0 + 1e-6));   // rounded down, but 0.58 is 58, not 57.999...
     if (pc != percent) { percent = pc; repaint(); }
 }
 
@@ -456,25 +456,32 @@ void StemsScreen::resized()
 
 void StemsScreen::paint (juce::Graphics& g)
 {
-    const juce::Rectangle<float> iconBox (19.0f, 17.0f, 36.0f, 36.0f);
-    g.setColour (Theme::cream.withAlpha (0.1f));
-    g.fillRoundedRectangle (iconBox, 10.0f);
-    g.setColour (Theme::cream);
-    strokeIcon (g, Icons::file, iconBox.withSizeKeepingCentre (18.0f, 18.0f), 1.8f);
+    // Playhead repaints only touch the rows: skip the path work outside the clip.
+    if (g.clipRegionIntersects ({ 19, 17, 674, 36 }))
+    {
+        const juce::Rectangle<float> iconBox (19.0f, 17.0f, 36.0f, 36.0f);
+        g.setColour (Theme::cream.withAlpha (0.1f));
+        g.fillRoundedRectangle (iconBox, 10.0f);
+        g.setColour (Theme::cream);
+        strokeIcon (g, Icons::file, iconBox.withSizeKeepingCentre (18.0f, 18.0f), 1.8f);
 
-    // Song name (Bold 15) over the summary (12, cream 0.64): line-height 1.2, 2 px apart, centred in the 36 px row.
-    const auto x = iconBox.getRight() + 12.0f, w = (float) newSong.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
-    text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
-    const auto summary = (length > 0.0 ? mmss (length) + dot : juce::String()) + "split into " + juce::String (rows.size()) + " stems";
-    text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f), summary, { x, y + 20.0f, w, 14.4f }, juce::Justification::centredLeft);
+        // Song name (Bold 15) over the summary (12, cream 0.64): line-height 1.2, 2 px apart, centred in the 36 px row.
+        const auto x = iconBox.getRight() + 12.0f, w = (float) newSong.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
+        text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
+        const auto summary = (length > 0.0 ? mmss (length) + dot : juce::String()) + "split into " + juce::String (rows.size()) + " stems";
+        text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f), summary, { x, y + 20.0f, w, 14.4f }, juce::Justification::centredLeft);
+    }
 
     g.setColour (Theme::cream.withAlpha (0.12f));
     g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
 
-    g.setColour (Theme::cream.withAlpha (0.62f));
-    g.fillPath (iconPath (Icons::play, { 19.0f, footerY + 1.0f, 14.0f, 14.0f }));
-    text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.62f), "Play a stem to hear it, then drag it onto any track.",
-          { 19.0f + 14.0f + 8.0f, footerY, 600.0f, 16.0f }, juce::Justification::centredLeft);
+    if (g.clipRegionIntersects ({ 19, (int) footerY, 674, 16 }))
+    {
+        g.setColour (Theme::cream.withAlpha (0.62f));
+        g.fillPath (iconPath (Icons::play, { 19.0f, footerY + 1.0f, 14.0f, 14.0f }));
+        text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.62f), "Play a stem to hear it, then drag it onto any track.",
+              { 19.0f + 14.0f + 8.0f, footerY, 600.0f, 16.0f }, juce::Justification::centredLeft);
+    }
 }
 
 //==============================================================================

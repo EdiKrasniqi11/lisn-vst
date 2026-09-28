@@ -182,10 +182,13 @@ void StemRow::paint (juce::Graphics& g)
 
     // Badge: 32 x 32, radius 10, stem colour at 0.16, icon 18 px with stroke 2.
     const juce::Rectangle<float> badge ((float) padX, (h - 32.0f) / 2.0f, 32.0f, 32.0f);
-    g.setColour (colour.withAlpha (0.16f));
-    g.fillRoundedRectangle (badge, 10.0f);
-    g.setColour (colour);
-    strokeIcon (g, stemIcon (stemKey), badge.withSizeKeepingCentre (18.0f, 18.0f), 2.0f);
+    if (g.clipRegionIntersects (badge.getSmallestIntegerContainer()))   // the playhead repaints skip the path work
+    {
+        g.setColour (colour.withAlpha (0.16f));
+        g.fillRoundedRectangle (badge, 10.0f);
+        g.setColour (colour);
+        strokeIcon (g, stemIcon (stemKey), badge.withSizeKeepingCentre (18.0f, 18.0f), 2.0f);
+    }
 
     // Name (Bold 14) over the file name (11, cream 0.6), line-height 1.2, 1 px apart, centred as one column, 10 px after the badge.
     const auto nameH = 14.0f * 1.2f, fileH = 11.0f * 1.2f, top = (h - (nameH + 1.0f + fileH)) / 2.0f;
@@ -202,6 +205,8 @@ void StemRow::paint (juce::Graphics& g)
     g.drawText (time, timeBounds().toFloat(), juce::Justification::centredRight, false);
 
     // Drag chip: 1 px dashed border (dash 3, gap 3) at cream 0.3, radius 10; grip 16 px stroke 3, 6 px, "Drag" Bold 12 at cream 0.82.
+    if (! g.clipRegionIntersects ({ chipX, 0, getWidth() - chipX, getHeight() }))
+        return;
     const auto chip = chipBounds().toFloat();
     drawDashedRoundedRect (g, chip.reduced (0.5f), 9.5f, 1.0f, 3.0f, 3.0f, Theme::cream.withAlpha (0.3f));
     const juce::Rectangle<float> grip (chip.getX() + 9.0f, chip.getCentreY() - 8.0f, 16.0f, 16.0f);

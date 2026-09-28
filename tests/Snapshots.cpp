@@ -1,0 +1,251 @@
+#include "../Source/PluginEditor.h"
+#include <cstdio>
+
+// lisn_tests --snapshots <dir>: every screen rendered to PNG from synthetic stems.
+// lisn_tests --bench: motion frame, full paint and processBlock timings; fails when a motion frame averages over 4 ms.
+
+namespace
+{
+    double sine (double hz, double t) { return std::sin (juce::MathConstants<double>::twoPi * hz * t); }
+
+    // A 30 s, 44.1 kHz, 16-bit stereo stem; sample (seconds, fraction of the length, noise source).
+    void writeStem (const juce::File& f, const std::function<double (double, double, juce::Random&)>& sample)
+    {
+        constexpr int rate = 44100, n = rate * 30;
+        juce::AudioBuffer<float> b (2, n);
+        juce::Random noise (1);
+        for (int i = 0; i < n; ++i)
+        {
+            const auto v = (float) sample ((double) i / rate, (double) i / n, noise);
+            b.setSample (0, i, v);
+            b.setSample (1, i, v);
+        }
+        f.deleteFile();
+        auto out = f.createOutputStream();
+        std::unique_ptr<juce::AudioFormatWriter> w (juce::WavAudioFormat().createWriterFor (out.get(), rate, 2, 16, {}, 0));
+        if (w == nullptr) return;
+        out.release();   // the writer owns the stream now
+        w->writeFromAudioSampleBuffer (b, 0, n);
+    }
+
+    juce::File makeStems (const juce::File& dir, bool six)
+    {
+        dir.createDirectory();
+        const auto signed1 = [] (juce::Random& r) { return r.nextDouble() * 2.0 - 1.0; };
+        writeStem (dir.getChildFile ("vocals.wav"), [] (double t, double f, juce::Random&)
+        {
+            const bool on = (f > 0.05 && f < 0.3) || (f > 0.35 && f < 0.6) || (f > 0.66 && f < 0.95);
+            return on ? 0.6 * sine (300.0, t) : 0.0;
+        });
+        writeStem (dir.getChildFile ("drums.wav"), [&] (double t, double, juce::Random& r)
+        {
+            const auto hit = (int) (t / 0.5);
+            const auto since = t - hit * 0.5;
+            return since < 0.06 ? (hit % 2 == 0 ? 0.9 : 0.6) * std::exp (-since / 0.02) * signed1 (r) : 0.0;
+        });
+        writeStem (dir.getChildFile ("bass.wav"), [] (double t, double f, juce::Random&)
+        {
+            return f > 0.47 && f < 0.52 ? 0.0 : 0.55 * sine (55.0, t);
+        });
+        writeStem (dir.getChildFile ("other.wav"), [&] (double, double f, juce::Random& r) { return (0.2 + 0.4 * f) * signed1 (r); });
+        if (six)
+        {
+            writeStem (dir.getChildFile ("guitar.wav"), [] (double t, double, juce::Random&)
+            {
+                return 0.5 * sine (220.0, t) * (0.6 + 0.4 * sine (6.0, t));
+            });
+            writeStem (dir.getChildFile ("piano.wav"), [] (double t, double, juce::Random&)
+            {
+                return 0.6 * std::exp (-std::fmod (t, 1.0) / 0.3) * sine (440.0, t);
+            });
+        }
+        return dir;
+    }
+
+    juce::File tempDir() { return juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("lisn-snapshots"); }
+
+    void waitForPeaks (StemSplitterEditor& ed)
+    {
+        for (int i = 0; i < 60 && ! ed.stemsScreen().hasPeaks(); ++i)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+    }
+
+    double now() { return juce::Time::getMillisecondCounterHiRes(); }
+}
+
+int runSnapshots (const juce::File& outDir)
+{
+    outDir.createDirectory();
+    const auto four = makeStems (tempDir().getChildFile ("four"), false);
+    const auto six = makeStems (tempDir().getChildFile ("six"), true);
+
+    auto state = [&] (Screen screen, bool sixStems)
+    {
+        UiState s;
+        s.screen = screen;
+        s.sixStems = sixStems;
+        s.songName = "Travis Snippet.mp3";
+        if (screen == Screen::Stems)
+            s.stemDir = sixStems ? six : four;
+        return s;
+    };
+    auto withProgress = [] (UiState s, double p) { s.progress = p; return s; };
+    auto withError = [] (UiState s, ErrorKind k, const juce::String& text, const juce::String& exe)
+    {
+        s.error = k;
+        s.errorText = text;
+        s.pythonExe = exe;
+        return s;
+    };
+
+    using Setup = std::function<void (StemSplitterProcessor&, StemSplitterEditor&)>;
+    struct Shot { juce::String name, theme; UiState state; float scale = 1.0f; Setup before; };
+    const auto playing = [] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        p.preview.load (ed.stemsScreen().fileOf (0));
+        p.preview.setPositionFraction (0.38);
+        p.preview.play();                            // no audio callback: the position stays put
+        ed.tick();
+        ed.background().setMotion (0.0f, 0.0f);      // tick() advanced the flow by wall-clock time; keep snapshots repeatable
+    };
+    const auto moving = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
+    const juce::String failedText = "demucs failed:\nTraceback (most recent call last):\n  File \"demucs/separate.py\", line 180, in main\n"
+                                    "    100%|##########| 5.85/5.85 [00:14<00:00]\n  File \"demucs/apply.py\", line 214, in apply_model\n"
+                                    "    out = model(mix)\nRuntimeError: CUDA out of memory. Tried to allocate 1.20 GiB (GPU 0; 4.00 GiB total capacity)\n"
+                                    "Could not separate the song.";
+
+    const std::vector<Shot> shots {
+        { "drop-dusk", "dusk", state (Screen::Drop, false) },
+        { "drop-midnight-6", "midnight", state (Screen::Drop, true) },
+        { "splitting-dusk", "dusk", withProgress (state (Screen::Splitting, false), 0.58) },
+        { "splitting-midnight", "midnight", withProgress (state (Screen::Splitting, true), 0.58) },
+        { "stems4-dusk-playing", "dusk", state (Screen::Stems, false), 1.0f, playing },
+        { "stems6-midnight", "midnight", state (Screen::Stems, true) },
+        { "error-python-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::PythonMissing, {}, {}) },
+        { "error-demucs-midnight", "midnight", withError (state (Screen::Error, false), ErrorKind::DemucsMissing, {}, "C:\\Python311\\python.exe") },
+        { "error-failed-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::Failed, failedText, {}) },
+        { "motion-dusk", "dusk", state (Screen::Stems, false), 1.0f, moving },
+        { "drop-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f },
+        { "stems4-dusk@2x", "dusk", state (Screen::Stems, false), 2.0f, playing },
+    };
+
+    int failures = 0;
+    for (const auto& shot : shots)
+    {
+        StemSplitterProcessor proc;
+        proc.prepareToPlay (48000.0, 512);
+        proc.setTheme (shot.theme);
+        proc.setSixStems (shot.state.sixStems);
+        StemSplitterEditor ed (proc);
+        ed.forceState (shot.state);
+        ed.tick();
+        if (shot.state.screen == Screen::Stems)
+            waitForPeaks (ed);
+        if (shot.before != nullptr)
+            shot.before (proc, ed);
+
+        const auto image = ed.createComponentSnapshot (ed.getLocalBounds(), true, shot.scale);
+        const auto file = outDir.getChildFile (shot.name + ".png");
+        file.deleteFile();
+        juce::FileOutputStream out (file);
+        if (out.openedOk() && juce::PNGImageFormat().writeImageToStream (image, out))
+            std::puts (file.getFullPathName().toRawUTF8());
+        else
+            ++failures;
+        proc.preview.unload();
+    }
+    return failures == 0 ? 0 : 1;
+}
+
+int runBench()
+{
+    const auto four = makeStems (tempDir().getChildFile ("four"), false);
+    StemSplitterProcessor proc;
+    proc.prepareToPlay (48000.0, 512);
+    StemSplitterEditor ed (proc);
+    UiState s;
+    s.screen = Screen::Stems;
+    s.stemDir = four;
+    s.songName = "Travis Snippet.mp3";
+    ed.forceState (s);
+    ed.tick();
+    waitForPeaks (ed);
+
+    // A motion frame as the app paints it: the strips around the panel plus the playing row's waveform and time.
+    auto& stems = ed.stemsScreen();
+    proc.preview.load (stems.fileOf (0));
+    proc.preview.play();
+    ed.tick();
+    auto& waves = ed.background();
+    auto& row = *stems.row (0);
+    const auto motion = waves.motionRegion();
+    auto frameRegion = motion;
+    frameRegion.add (ed.getLocalArea (&row.waveform(), row.waveform().getLocalBounds()));
+    frameRegion.add (ed.getLocalArea (&row, row.timeBounds()));
+
+    auto averageMs = [&] (juce::Component& c, const juce::RectangleList<int>& region, int scale, int frames, bool moving)
+    {
+        juce::Image img (juce::Image::ARGB, 760 * scale, 500 * scale, true, juce::SoftwareImageType());
+        float flow = 0.0f;
+        double total = 0.0;
+        for (int i = 0; i < frames + 5; ++i)             // 5 warm-up frames build the caches
+        {
+            if (moving)
+                waves.setMotion (flow += 2.0f, i % 2 == 0 ? 0.2f : 0.9f);
+            const auto t0 = now();
+            {
+                juce::Graphics g (img);
+                g.addTransform (juce::AffineTransform::scale ((float) scale));
+                if (! region.isEmpty())
+                    g.reduceClipRegion (region);
+                c.paintEntireComponent (g, true);
+            }
+            if (i >= 5)
+                total += now() - t0;
+        }
+        return total / frames;
+    };
+
+    const auto motionMs = averageMs (ed, frameRegion, 1, 120, true);
+    std::printf ("motion_frame_ms=%.3f\n", motionMs);
+    std::printf ("motion_frame_ms_2x=%.3f\n", averageMs (ed, frameRegion, 2, 120, true));
+    std::printf ("background_only_ms=%.3f\n", averageMs (waves, motion, 1, 120, true));
+    std::printf ("full_paint_ms=%.3f\n", averageMs (ed, {}, 1, 20, false));
+
+    juce::AudioBuffer<float> buffer (2, 512);
+    juce::MidiBuffer midi;
+    proc.preview.pause();
+    proc.processBlock (buffer, midi);                    // the one faded block after pause()
+    auto t0 = now();
+    for (int i = 0; i < 20000; ++i)
+        proc.processBlock (buffer, midi);
+    std::printf ("process_block_us_idle=%.4f\n", (now() - t0) * 1000.0 / 20000.0);
+
+    // "other" is never silent, so every burst must meter a peak. Bursts of 50 blocks let the read-ahead refill between them.
+    proc.preview.load (stems.fileOf (3));
+    proc.preview.play();
+    juce::Thread::sleep (60);
+    double total = 0.0, worst = 0.0;
+    bool metered = true;
+    for (int burst = 0; burst < 40; ++burst)
+    {
+        for (int i = 0; i < 50; ++i)
+        {
+            buffer.clear();
+            t0 = now();
+            proc.processBlock (buffer, midi);
+            const auto us = (now() - t0) * 1000.0;
+            total += us;
+            worst = juce::jmax (worst, us);
+        }
+        metered = metered && proc.preview.takePeak() > 0.0f;
+        juce::Thread::sleep (60);
+    }
+    proc.preview.unload();
+    std::printf ("process_block_us_preview=%.3f\nprocess_block_us_preview_max=%.3f\n", total / 2000.0, worst);
+    if (! metered)
+        std::puts ("FAIL: a preview burst metered no peak");
+    if (motionMs > 4.0)
+        std::puts ("FAIL: motion_frame_ms is over the 4 ms budget");
+    return metered && motionMs <= 4.0 ? 0 : 1;
+}

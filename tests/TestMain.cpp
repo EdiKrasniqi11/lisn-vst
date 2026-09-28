@@ -1,12 +1,8 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <cstdio>
 
-int runSnapshots (const juce::File& outDir);   // tests/Snapshots.cpp (Task 8); until then stubs below returning 1
+int runSnapshots (const juce::File& outDir);   // tests/Snapshots.cpp
 int runBench();
-
-// Stubs until Task 8 moves these into tests/Snapshots.cpp.
-int runSnapshots (const juce::File&) { std::puts ("--snapshots: not implemented"); return 1; }
-int runBench()                       { std::puts ("--bench: not implemented"); return 1; }
 
 int main (int argc, char* argv[])
 {

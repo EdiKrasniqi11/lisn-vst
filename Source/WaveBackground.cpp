@@ -34,6 +34,26 @@ namespace
         g.drawImageTransformed (m.image, juce::AffineTransform::translation ((m.origin + offset).toFloat()).scaled (1.0f / scale), fillAlpha);
     }
 
+    // Bounds of the pixels of an ARGB image with any alpha.
+    juce::Rectangle<int> visibleBounds (const juce::Image& image)
+    {
+        const juce::Image::BitmapData d (image, juce::Image::BitmapData::readOnly);
+        int x0 = d.width, y0 = d.height, x1 = 0, y1 = 0;
+        for (int y = 0; y < d.height; ++y)
+        {
+            const auto* line = reinterpret_cast<const juce::PixelARGB*> (d.getLinePointer (y));
+            for (int x = 0; x < d.width; ++x)
+                if (line[x].getAlpha() != 0)
+                {
+                    x0 = juce::jmin (x0, x);
+                    x1 = juce::jmax (x1, x + 1);
+                    y0 = juce::jmin (y0, y);
+                    y1 = y + 1;
+                }
+        }
+        return juce::Rectangle<int>::leftTopRightBottom (x0, y0, juce::jmax (x0, x1), juce::jmax (y0, y1));
+    }
+
     std::array<juce::Point<int>, 5> snappedOffsets (float flow, float pulse, float scale)
     {
         std::array<juce::Point<int>, 5> o;
@@ -161,7 +181,8 @@ void WaveBackground::paint (juce::Graphics& g)
                     cg.drawImageAt (shapes[i].image, d.x, d.y, true);
                 }
                 fg.drawImageAt (c, shadow.origin.x, shadow.origin.y);
-                composites[i] = { type.convert (c), shadow.origin };
+                const auto visible = visibleBounds (c);   // a blit then skips the fully transparent margins
+                composites[i] = { type.convert (c.getClippedImage (visible)), shadow.origin + visible.getPosition() };
             }
         }
         frost = frosted (src, 18.0f * scale);
@@ -204,9 +225,17 @@ void WaveBackground::paint (juce::Graphics& g)
 
     // Per frame: only blits at whole physical pixel offsets.
     offsets = snappedOffsets (flow, pulse, scale);
-    g.fillAll (theme.ground);
-    for (size_t i = 0; i < kLayers.size(); ++i)
-        drawMask (g, composites[i], offsets[i], scale, false);
+    {
+        juce::Graphics::ScopedSaveState save (g);
+        if (! panel.isEmpty())   // the panel image is opaque inside its rounded rect: nothing to draw under it but the corners
+        {
+            g.excludeClipRegion (panel.reduced (juce::roundToInt (std::ceil (radius)), 0));
+            g.excludeClipRegion (panel.reduced (0, juce::roundToInt (std::ceil (radius))));
+        }
+        g.fillAll (theme.ground);
+        for (size_t i = 0; i < kLayers.size(); ++i)
+            drawMask (g, composites[i], offsets[i], scale, false);
+    }
     if (! panel.isEmpty())
         drawMask (g, panelImage, {}, scale, false);
 }

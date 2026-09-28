@@ -55,12 +55,11 @@ public:
     CircleButton& playButton() { return button; }
     WaveformView& waveform() { return wave; }
     juce::Rectangle<int> chipBounds() const;
+    juce::Rectangle<int> timeBounds() const;
     juce::String timeText() const { return time; }
     int getRepaintCount() const { return repaintCount; }   // setPlayback calls that repainted
 
 private:
-    juce::Rectangle<int> timeBounds() const;
-
     juce::File file;
     juce::String stemKey, name;
     juce::Colour colour;

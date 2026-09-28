@@ -86,6 +86,7 @@ public:
     juce::File fileOf (int row) const;
     double positionOf (int row) const;             // each row remembers its own position
     bool hasPeaks() const { return peaksReady; }
+    StemRow* row (int i) { return rows[i]; }       // test hook; nullptr when out of range
 
     std::function<void()> onNewSong;
     std::function<void (int)> onPlayPause;
