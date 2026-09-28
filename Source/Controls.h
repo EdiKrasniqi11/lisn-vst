@@ -11,16 +11,16 @@ public:
     void setSelected (int index);                // no callback
     int getSelected() const { return selected; }
     void setTheme (const Theme&);
-    int preferredWidth() const;
+    int preferredWidth() const { return prefWidth; }
     std::function<void (int)> onChange;          // only on a click that changes the selection
 
     void paint (juce::Graphics&) override;
     void mouseUp (const juce::MouseEvent&) override;
 
 private:
-    juce::Rectangle<float> itemBounds (int index) const;
-
     juce::StringArray items;
+    juce::Array<juce::Rectangle<float>> itemRects;   // shaped once in the constructor
+    int prefWidth = 0;
     int selected = 0;
     juce::Colour tint = themeFor ("dusk").pillTint;
 };

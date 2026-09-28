@@ -12,6 +12,16 @@ namespace
 
 SegmentedPill::SegmentedPill (juce::StringArray itemTexts) : items (std::move (itemTexts))
 {
+    // The texts and font never change, so shape them once: the pill repaints on every motion frame.
+    auto x = pillInset;
+    for (const auto& item : items)
+    {
+        const auto w = juce::GlyphArrangement::getStringWidth (pillFont(), item) + 2.0f * pillItemPad;
+        itemRects.add ({ x, pillInset, w, pillItemHeight });
+        x += w + pillGap;
+    }
+    prefWidth = items.isEmpty() ? (int) (2 * pillInset) : (int) std::ceil (itemRects.getLast().getRight() + pillInset);
+
     setWantsKeyboardFocus (false);
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
@@ -31,19 +41,6 @@ void SegmentedPill::setTheme (const Theme& t)
     repaint();
 }
 
-juce::Rectangle<float> SegmentedPill::itemBounds (int index) const
-{
-    auto x = pillInset;
-    for (int i = 0; i < index; ++i)
-        x += juce::GlyphArrangement::getStringWidth (pillFont(), items[i]) + 2.0f * pillItemPad + pillGap;
-    return { x, pillInset, juce::GlyphArrangement::getStringWidth (pillFont(), items[index]) + 2.0f * pillItemPad, pillItemHeight };
-}
-
-int SegmentedPill::preferredWidth() const
-{
-    return items.isEmpty() ? (int) (2 * pillInset) : (int) std::ceil (itemBounds (items.size() - 1).getRight() + pillInset);
-}
-
 void SegmentedPill::paint (juce::Graphics& g)
 {
     const auto r = getLocalBounds().toFloat();
@@ -55,7 +52,7 @@ void SegmentedPill::paint (juce::Graphics& g)
     g.setFont (pillFont());
     for (int i = 0; i < items.size(); ++i)
     {
-        const auto item = itemBounds (i);
+        const auto item = itemRects[i];
         if (i == selected)
         {
             g.setColour (Theme::cream);
@@ -71,7 +68,7 @@ void SegmentedPill::mouseUp (const juce::MouseEvent& e)
     if (! isEnabled() || ! getLocalBounds().contains (e.getPosition()))   // JUCE still sends mouse events to disabled components
         return;
     for (int i = 0; i < items.size(); ++i)
-        if (i != selected && itemBounds (i).contains (e.position))
+        if (i != selected && itemRects[i].contains (e.position))
         {
             setSelected (i);
             if (onChange) onChange (i);
