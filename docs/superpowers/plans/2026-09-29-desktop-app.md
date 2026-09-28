@@ -32,7 +32,11 @@ The VST should be able to get these features later too, so they are **shared cod
    - the shared sources compile in a non-plugin app (as `lisn_tests` does, with a `JucePlugin_Name` define);
    - `PythonFinder` tries the saved-path hint first.
 4. **Licences.** Record the decisions in `lisn-desktop/LICENSES.md`:
-   - **JUCE 8:** AGPLv3 or a JUCE licence tier. A public closed-source app needs the right tier; check the current terms at juce.com and ask the user.
+   - **JUCE 8 (a blocking decision, before anything is published).** JUCE's licence governs giving the built plugin or app to other people. Private builds are fine under any option. Ask the user to choose one of two paths:
+     - **AGPLv3:** distribution (even paid) is allowed only if the complete LISN source is published under AGPLv3. Anyone may then modify it and redistribute it for free. If chosen, add an AGPLv3 `LICENSE` file to both repos.
+     - **JUCE licence:** keeps the code closed. The free Starter tier covers individuals and small companies under a yearly revenue limit (about $50k when this plan was written); Indie and Pro are paid tiers above that. The user registers at juce.com.
+     Check the current tiers and limits on juce.com at execution time, since this plan's figures may be out of date. Record which path was chosen and when in `LICENSES.md`. Don't set up the website, a public repo or a release (Phase 8) until this is decided. This is not legal advice; for a commercial launch, the user should have the terms reviewed.
+   - **Steinberg VST3:** check the VST3 SDK licence and the "VST" logo usage guidelines if the site will show the logo.
    - **Other parts:** Demucs (MIT), PyTorch (BSD-3), CPython (PSF), uv (MIT/Apache-2.0) and the fonts (SIL OFL, texts already in `Resources/fonts`).
 
 ## Phase 1: lisn-vst exposes a `lisn_core` build target (upstream, no behaviour change)
@@ -185,6 +189,7 @@ Public users won't have Python. The app installs a private engine on first run.
   - a nightly schedule;
   - `repository_dispatch` sent by a small lisn-vst workflow on every push to `master` (needs a PAT secret);
   - tags `v*`, which also sign and publish.
+- **Licence gate:** tagging or publishing a release requires the JUCE licence decision recorded in `LICENSES.md` (Phase 0). Without it, stop and ask.
 - **Signing:** signtool with an Authenticode certificate, or Azure Trusted Signing if the user is eligible. **This is the user's cost decision; ask.** Unsigned builds trigger SmartScreen warnings.
 - **Release:** a GitHub Release with the installer, its SHA-256 and the lisn-vst commit it was built from.
 - **Verify:** a test tag produces a signed installer that installs cleanly on the VM.
