@@ -15,7 +15,7 @@ The approved mockup sources are in `docs/design/*.dc.html` and are **the exact v
 ### Screens (760 × 500 window, not resizable)
 Every screen shares the wave background, the header and a frosted panel at (24, 76, 712 × 400) with 22 px corner radius.
 
-1. **Drop** (`docs/design/Empty.dc.html`) is shown with no song loaded. It has a dashed drop zone, a "Browse…" button, the list of formats and "You'll get these stems" chips that follow the 4/6 switch. The dashed border brightens while a file is dragged over the window. Dropping a file anywhere on the window starts a split.
+1. **Drop** (`docs/design/Empty.dc.html`) is shown with no song loaded. It has a dashed drop zone, a "Browse…" button, the list of formats and "You'll get these stems" chips that follow the 4/6 switch. The dashed border brightens while a file is dragged over the window. Dropping a file anywhere on the window starts a split; dropping one of the current stems back onto the window is ignored.
 2. **Splitting** (`docs/design/Separating.dc.html`) shows:
    - the song name and "Splitting into vocals · drums · bass · other" (listing six stems in 6-stem mode);
    - the percentage in large type, with a wavy progress line and a knob;
@@ -98,7 +98,8 @@ The mockup's shape table (xTop, xBottom, amp, wavelength, phase, speed, push) is
   - motion runs at no more than 30 fps and repaints only the strips around the panel plus its four corner squares;
   - wave layers are pre-rendered once per scale (shape and shadow masks, coloured at draw time) and only moved per frame, with no per-frame path fills, shadows or blurs;
   - the frosted panel is a static blurred copy;
-  - bench budget: one motion frame at 1× on the software renderer averages ≤ 4 ms.
+  - nothing is drawn under the opaque panel interior, layer images are cropped to their visible pixels, and the header pills are buffered to images;
+  - bench budget: one motion frame (the strips around the panel plus the playing row's waveform and time) at 1× on the software renderer averages ≤ 4 ms in a Release build.
 - **State:** `theme`, `model`, `python`, `input` and `stems` are saved and restored, and old projects still load.
 - **Stability:** pluginval `--strictness-level 5` passes for Debug and Release.
 
