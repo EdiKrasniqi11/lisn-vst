@@ -1,0 +1,118 @@
+#include "../Source/StemRow.h"
+#include "../Source/Icons.h"
+
+struct StemRowTests : juce::UnitTest
+{
+    StemRowTests() : juce::UnitTest ("StemRow") {}
+
+    static juce::Image render (juce::Component& c)
+    {
+        juce::Image img (juce::Image::ARGB, c.getWidth(), c.getHeight(), true, juce::SoftwareImageType());
+        juce::Graphics g (img);
+        c.paintEntireComponent (g, true);
+        return img;
+    }
+
+    static void click (juce::Component& c, float x, float y)
+    {
+        const juce::Point<float> p (x, y);
+        const auto now = juce::Time::getCurrentTime();
+        c.mouseUp (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                     &c, &c, now, p, now, 1, false));
+    }
+
+    void runTest() override
+    {
+        beginTest ("icons");
+        expect (iconPath (Icons::plus, { 10.0f, 10.0f, 48.0f, 48.0f }).getBounds() == juce::Rectangle<float> (20.0f, 20.0f, 28.0f, 28.0f));
+        for (auto* d : { Icons::file, Icons::plus, Icons::upload, Icons::alert, Icons::copy, Icons::grip, Icons::play, Icons::pause,
+                         Icons::vocals, Icons::drums, Icons::bass, Icons::guitar, Icons::piano, Icons::other })
+        {
+            const auto p = iconPath (d, { 24.0f, 24.0f });
+            expect (! p.isEmpty() && juce::Rectangle<float> (-2.0f, -2.0f, 28.0f, 28.0f).contains (p.getBounds()), d);
+        }
+        expect (stemIcon ("drums") == Icons::drums);
+        expect (stemIcon ("kazoo") == Icons::other);
+
+        beginTest ("pill");
+        SegmentedPill pill ({ "4 stems", "6 stems" });
+        pill.setSize (pill.preferredWidth(), 38);
+        int changed = -1;
+        pill.onChange = [&] (int i) { changed = i; };
+        expectGreaterThan (pill.preferredWidth(), 2 * (4 + 28 + 40));
+        click (pill, (float) pill.getWidth() - 10.0f, 19.0f);
+        expectEquals (changed, 1);
+        expectEquals (pill.getSelected(), 1);
+        changed = -1;
+        click (pill, (float) pill.getWidth() - 10.0f, 19.0f);   // already selected
+        pill.setEnabled (false);
+        click (pill, 10.0f, 19.0f);
+        expectEquals (changed, -1);
+        expectEquals (pill.getSelected(), 1);
+
+        beginTest ("layout");
+        StemRow row (juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("vocals.wav"), "vocals");
+        row.setSize (674, 62);
+        expectEquals (row.playButton().getX(), 142);
+        expectEquals (row.playButton().getWidth(), 38);
+        expectEquals (row.waveform().getX(), 194);
+        expectEquals (row.waveform().getWidth(), 330);
+        expectEquals (row.waveform().getHeight(), 40 + 10);
+        expectLessOrEqual (row.chipBounds().getRight(), 664);
+        expectEquals (row.chipBounds().getHeight(), 34);
+        expectEquals (row.barCount(), 104);
+
+        beginTest ("no keyboard focus");
+        expect (! row.getWantsKeyboardFocus() && ! row.waveform().getWantsKeyboardFocus() && ! row.playButton().getWantsKeyboardFocus());
+        expect (! row.playButton().getMouseClickGrabsKeyboardFocus());
+        expect (! pill.getWantsKeyboardFocus());
+        LisnButton button ("New song", LisnButton::Style::Ghost);
+        expect (! button.getWantsKeyboardFocus() && ! button.getMouseClickGrabsKeyboardFocus());
+
+        beginTest ("compact");
+        row.setCompact (true);
+        expectEquals (row.getHeight(), 42);
+        expectEquals (row.waveform().getHeight(), 26 + 10);
+        expectEquals (row.barCount(), 96);
+        row.setCompact (false);
+        expectEquals (row.getHeight(), 62);
+        expectEquals (row.waveform().getHeight(), 40 + 10);
+
+        beginTest ("wrong peak count");
+        row.setPeaks ({ 0.5f });
+        row.setPeaks (std::vector<float> (500, 2.0f));
+        row.setPeaks ({});
+        render (row);
+
+        beginTest ("repaint only on change");
+        row.setPlayback (true, 0.5, 30.0);
+        const auto count = row.getRepaintCount();
+        row.setPlayback (true, 0.5, 30.0);
+        row.setPlayback (true, 0.5001, 30.0);   // same playhead pixel and time
+        expectEquals (row.getRepaintCount(), count);
+        row.setPlayback (true, 0.6, 30.0);
+        expectEquals (row.getRepaintCount(), count + 1);
+
+        beginTest ("playhead position");
+        row.setPeaks (std::vector<float> (104, 1.0f));
+        row.setPlayback (false, 0.5, 30.0);
+        expectEquals (row.timeText(), juce::String ("0:15"));
+        const auto wave = render (row.waveform());
+        const auto alphaAt = [&] (int x, int y) { return (int) wave.getPixelAt (x, y).getAlpha(); };
+        // The playhead is 2 px wide centred on x = 165 and reaches into the 5 px margin; the bars do not.
+        expectGreaterThan (alphaAt (164, 1), 240);
+        expectGreaterThan (alphaAt (165, 1), 240);
+        expectEquals (alphaAt (163, 1), 0);
+        expectEquals (alphaAt (166, 1), 0);
+        // Bar 10 (x 31.7 .. 33.6) is played, bar 80 (x 253.8 .. 255.7) is dim (stem colour at 0.3).
+        expectGreaterThan (alphaAt (32, 25), 240);
+        expectWithinAbsoluteError (alphaAt (254, 25), 77, 4);
+
+        beginTest ("playing row paints");
+        row.setPlayback (true, 0.25, 30.0);
+        expect (row.playButton().isPlaying());
+        render (row);
+    }
+};
+
+static StemRowTests stemRowTests;

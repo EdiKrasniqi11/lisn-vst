@@ -1,0 +1,47 @@
+#pragma once
+#include <juce_gui_basics/juce_gui_basics.h>
+
+// SVG path data (24x24 viewBox) copied verbatim from docs/design/*.dc.html.
+namespace Icons
+{
+    inline constexpr const char* file   = "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M10 17.5V11l4-1";
+    inline constexpr const char* plus   = "M12 5v14M5 12h14";
+    inline constexpr const char* upload = "M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3";
+    inline constexpr const char* alert  = "M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z";
+    inline constexpr const char* copy   = "M9 9h10v10H9zM5 15V5h10";
+    inline constexpr const char* grip   = "M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01";
+    inline constexpr const char* play   = "M8 5.5v13l10.5-6.5z";              // filled
+    inline constexpr const char* pause  = "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z";  // filled
+
+    inline constexpr const char* vocals = "M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8";
+    inline constexpr const char* drums  = "M4 9a8 3 0 1 0 16 0a8 3 0 1 0-16 0M4 9v7a8 3 0 0 0 16 0V9M7 3l3.5 5M17 3l-3.5 5";
+    inline constexpr const char* bass   = "M3 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0";
+    inline constexpr const char* guitar = "M20 4l-6.5 6.5M17.5 2.5l4 4M11 10.5a3.6 3.6 0 0 0-5.3 1.2c-.8 1.5-.2 2.5-1.7 3.9a2.8 2.8 0 0 0 4 4c1.4-1.5 2.4-.9 3.9-1.7a3.6 3.6 0 0 0 1.2-5.3z";
+    inline constexpr const char* piano  = "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 5v8M12 5v14M16 5v8";
+    inline constexpr const char* other  = "M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0M21 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0";
+}
+
+// The icon's 24x24 viewBox mapped onto `area`.
+inline juce::Path iconPath (const char* d, juce::Rectangle<float> area)
+{
+    auto p = juce::Drawable::parseSVGPath (d);
+    p.applyTransform (juce::AffineTransform::scale (area.getWidth() / 24.0f, area.getHeight() / 24.0f).translated (area.getPosition()));
+    return p;
+}
+
+// SVG stroke-width is in viewBox units; round caps and joins as in the mockups. Uses the current colour.
+inline void strokeIcon (juce::Graphics& g, const char* d, juce::Rectangle<float> area, float strokeWidth)
+{
+    g.strokePath (iconPath (d, area), juce::PathStrokeType (strokeWidth * area.getWidth() / 24.0f,
+                                                            juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
+inline const char* stemIcon (const juce::String& stem)   // unknown stem -> other
+{
+    if (stem == "vocals") return Icons::vocals;
+    if (stem == "drums")  return Icons::drums;
+    if (stem == "bass")   return Icons::bass;
+    if (stem == "guitar") return Icons::guitar;
+    if (stem == "piano")  return Icons::piano;
+    return Icons::other;
+}
