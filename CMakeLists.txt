@@ -22,7 +22,8 @@ set(LISN_SOURCES
     Source/StemPreview.cpp
     Source/Peaks.cpp
     Source/WaveGeometry.cpp
-    Source/Frost.cpp)
+    Source/Frost.cpp
+    Source/WaveBackground.cpp)
 
 juce_add_plugin(StemSplitter
     COMPANY_NAME "LISN"
@@ -56,7 +57,8 @@ target_sources(lisn_tests PRIVATE
     tests/StemPreviewTests.cpp
     tests/PeaksTests.cpp
     tests/WaveGeometryTests.cpp
-    tests/FrostTests.cpp)
+    tests/FrostTests.cpp
+    tests/WaveBackgroundTests.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1
