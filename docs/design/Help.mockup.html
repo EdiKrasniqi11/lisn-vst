@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Help sheet</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Unbounded:wght@700&display=swap');
+body { margin:24px; background:#1b1418; font-family:'DM Sans',sans-serif; }
+h2 { color:#eee; font-weight:500; margin:0 0 6px; }
+.note { font-size:13px; color:#aaa; margin:6px 0 14px; max-width:760px; line-height:1.45; }
+.lx { --cream:#FFF4EA; --ink:#2B1822; color:var(--cream); margin-bottom:26px; }
+.lx .win { position:relative; width:760px; height:500px; overflow:hidden; border-radius:10px;
+  background:
+    radial-gradient(ellipse 60% 70% at 8% 20%, #7B5467 0 60%, transparent 61%),
+    radial-gradient(ellipse 50% 60% at 60% 0%, #F4A76F 0 55%, transparent 56%),
+    radial-gradient(ellipse 45% 55% at 95% 10%, #6F7679 0 70%, transparent 71%),
+    radial-gradient(ellipse 60% 60% at 0% 100%, #D95F6B 0 55%, transparent 56%),
+    radial-gradient(ellipse 70% 60% at 100% 100%, #F08A7C 0 50%, transparent 51%), #D9775F; }
+.lx .hdr { position:absolute; left:24px; top:16px; width:712px; height:44px; display:flex; align-items:center; justify-content:space-between; }
+.lx .logo { font-family:'Unbounded'; font-size:22px; letter-spacing:.08em; }
+.lx .logo small { font-family:'DM Sans'; font-weight:500; font-size:14px; letter-spacing:0; margin-left:10px; }
+.lx .pills { display:flex; gap:8px; align-items:center; }
+.lx .pill { display:flex; gap:2px; padding:3px; border-radius:999px; border:1px solid rgba(255,244,234,.14); background:rgba(32,18,27,.72); }
+.lx .pill span { height:30px; line-height:30px; padding:0 14px; border-radius:999px; font-size:13px; font-weight:700; }
+.lx .pill .on { background:var(--cream); color:var(--ink); }
+/* The info button: a 38 px circle in the pill style; lit (cream, ink glyph) while the sheet is open */
+.lx .info { width:38px; height:38px; box-sizing:border-box; border-radius:999px; border:1px solid rgba(255,244,234,.14); background:rgba(32,18,27,.72);
+  display:flex; align-items:center; justify-content:center; }
+.lx .info svg { width:18px; height:18px; fill:none; stroke:var(--cream); stroke-width:2.2; stroke-linecap:round; }
+.lx .info.on { background:var(--cream); border-color:var(--cream); } .lx .info.on svg { stroke:var(--ink); }
+.lx .info.hover { background:rgba(58,36,49,.85); border-color:rgba(255,244,234,.3); }
+.lx .panel { position:absolute; left:24px; top:76px; width:712px; height:400px; box-sizing:border-box; border-radius:22px;
+  border:1px solid rgba(255,244,234,.14); background:rgba(32,18,27,.66); backdrop-filter:blur(18px);
+  padding:16px 18px; display:flex; flex-direction:column; gap:10px; box-shadow:0 26px 50px -22px rgba(20,8,16,.75); }
+.lx .top { height:38px; display:flex; align-items:center; gap:12px; flex-shrink:0; }
+.lx .playbig { width:36px; height:36px; border-radius:999px; background:var(--cream); color:var(--ink); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.lx .tt { flex-grow:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.lx .tt b { font-size:15px; line-height:1.2; } .lx .tt i { font-style:normal; font-size:12px; line-height:1.2; color:rgba(255,244,234,.64); }
+.lx .btn { height:34px; box-sizing:border-box; padding:0 12px; display:flex; align-items:center; gap:6px; border-radius:10px; border:1px solid rgba(255,244,234,.22);
+  background:rgba(255,244,234,.06); font-size:13px; font-weight:700; white-space:nowrap; }
+.lx .btn.sq { width:34px; padding:0; justify-content:center; font-size:16px; font-weight:500; }
+.lx .chip { height:34px; box-sizing:border-box; padding:0 12px 0 8px; display:flex; align-items:center; gap:6px; border-radius:10px; border:1px dashed rgba(255,244,234,.3);
+  color:rgba(255,244,234,.82); font-size:12px; font-weight:700; white-space:nowrap; }
+.lx .div { height:1px; background:rgba(255,244,234,.12); flex-shrink:0; }
+.lx .rows { flex-grow:1; display:flex; flex-direction:column; gap:10px; }
+.lx .row { display:flex; align-items:center; gap:14px; padding:0 10px; height:62px; border-radius:14px; flex-shrink:0; }
+.lx .nm { width:118px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.lx .bar { width:4px; height:30px; border-radius:2px; flex-shrink:0; }
+.lx .nm b { font-size:14px; display:block; } .lx .nm i { font-style:normal; font-size:11px; color:rgba(255,244,234,.6); }
+.lx .led { width:38px; height:38px; border-radius:999px; flex-shrink:0; box-sizing:border-box; background:rgba(255,244,234,.06); border:1px solid rgba(255,244,234,.25); }
+.lx .cur { position:absolute; pointer-events:none; }
+/* The sheet: four full-width tips per tab, sharing the height */
+.lx .tips { flex-grow:1; display:flex; flex-direction:column; gap:8px; }
+.lx .tip { flex:1; display:flex; align-items:center; gap:14px; padding:0 16px 0 14px; border-radius:14px;
+  background:rgba(255,244,234,.05); border:1px solid rgba(255,244,234,.08); }
+.lx .ico { width:40px; height:40px; border-radius:12px; background:rgba(255,244,234,.1); flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+.lx .ico svg { width:20px; height:20px; fill:none; stroke:var(--cream); stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+.lx .tx { flex-grow:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.lx .tx b { font-size:14px; } .lx .tx span { font-size:12.5px; color:rgba(255,244,234,.66); }
+.lx .how { display:flex; align-items:center; gap:6px; flex-shrink:0; font-size:12px; color:rgba(255,244,234,.5); }
+.lx .cap { height:26px; line-height:24px; box-sizing:border-box; padding:0 9px; border-radius:7px; font-size:12px; font-weight:700; color:var(--cream);
+  border:1px solid rgba(255,244,234,.4); background:rgba(255,244,234,.1); box-shadow:0 2px 0 rgba(255,244,234,.12); }
+.lx .ms { height:26px; box-sizing:border-box; padding:0 9px 0 7px; border-radius:7px; font-size:12px; font-weight:700; color:rgba(255,244,234,.86);
+  border:1px dashed rgba(255,244,234,.36); display:flex; align-items:center; gap:5px; }
+.lx .ms svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+</style></head>
+<body>
+
+<h2>Help: the info button and the help sheet</h2>
+<p class="note">A: the info button sits at the right end of the header, 8 px after the stems pill. It's a 38 px circle in the pill style with an "i" glyph, and it's the same on every screen. Here it's hovered.</p>
+<div class="lx"><div class="win" data-state="closed"></div></div>
+
+<p class="note">B: the sheet, opened on the Play tab. It replaces the screen inside the panel, and the info button is lit. The tabs sit in the title row. Each tab shows four full-width tips that share the height. Solid keycaps are keys; dashed caps (the Drag chips' style, with a mouse glyph) are mouse actions and buttons. The × or the info button closes the sheet, and the screen comes back as it was.</p>
+<div class="lx"><div class="win" data-state="play"></div></div>
+<p class="note">C: the Stems tab.</p>
+<div class="lx"><div class="win" data-state="stems"></div></div>
+<p class="note">D: the Loop tab.</p>
+<div class="lx"><div class="win" data-state="loop"></div></div>
+<p class="note">E: the Export tab.</p>
+<div class="lx"><div class="win" data-state="export"></div></div>
+
+<script>
+(function () {
+  const stems = [ { k:'Vocals', c:'#F4A76F', s:11 }, { k:'Drums', c:'#EF7A7F', s:23 }, { k:'Bass', c:'#C9A0BD', s:37 }, { k:'Other', c:'#A9B8BC', s:67 } ];
+  const rnd = s => () => (s = (s * 16807) % 2147483647) / 2147483647;
+  function wave(st) {
+    const n = 104, W = 376, h = 40, step = W / n, r = rnd(st.s); let bars = '';
+    for (let i = 0; i < n; i++) { const half = Math.max(.75, (.2 + .7 * r()) * (h / 2 - .5));
+      bars += `<rect x="${(i*step).toFixed(1)}" y="${(h/2-half).toFixed(1)}" width="${(step*.6).toFixed(1)}" height="${(2*half).toFixed(1)}" fill="${i < 34 ? st.c : st.c + '4D'}"/>`; }
+    return `<svg width="${W}" height="${h}" style="display:block">${bars}</svg>`;
+  }
+  const svg = d => `<svg viewBox="0 0 24 24">${d.split('|').map(p => `<path d="${p}"/>`).join('')}</svg>`;
+  const iGlyph = '<svg viewBox="0 0 24 24"><path d="M12 11v6"/><path d="M12 7.2v.1" stroke-width="2.8"/></svg>';
+  const header = cls => `<div class="hdr"><div class="logo">LISN<small>StemSplitter</small></div><div class="pills">
+     <div class="pill"><span class="on">Dusk</span><span>Midnight</span></div><div class="pill"><span class="on">4 stems</span><span>6 stems</span></div>
+     <div class="info ${cls}">${iGlyph}</div></div></div>`;
+  const cursor = (x, y) => `<svg class="cur" viewBox="0 0 24 24" style="left:${x}px;top:${y}px;width:20px;height:20px;fill:#FFF4EA;stroke:#2B1822;stroke-width:1.3"><path d="M5 3l12 11h-6l-3 6z"/></svg>`;
+
+  // Icons (24 px, stroked)
+  const I = {
+    play: 'M8 5.5v13l10.5-6.5z', jump: 'M4 12h11|M11 7l5 5-5 5|M20 5v14', scrub: 'M3 12h18|M7 8l-4 4 4 4|M17 8l4 4-4 4',
+    home: 'M6 5v14|M19 5.5v13L9 12z', zoom: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14|M20 20l-4-4|M11 8v6|M8 11h6',
+    split: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z|M14 3v5h5|M10 17.5V11l4-1',
+    mute: 'M11 5 6 9H3v6h3l5 4z|m16 9.5 5 5|M21 9.5l-5 5', solo: 'M11 5 6 9H3v6h3l5 4z|M15.5 8.5a5 5 0 0 1 0 7|M18.5 5.5a9 9 0 0 1 0 13',
+    plus: 'M12 5v14|M5 12h14', loop: 'M17 2l3 3-3 3|M4 11V9a4 4 0 0 1 4-4h12|M7 22l-3-3 3-3|M20 13v2a4 4 0 0 1-4 4H4',
+    trim: 'M7 4v16|M17 4v16|M4 8h3|M17 16h3', toggle: 'M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7z|M16 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4',
+    grid: 'M4 4v16|M9 4v16|M14 4v16|M19 4v16', grip: 'M9 6h.01|M15 6h.01|M9 12h.01|M15 12h.01|M9 18h.01|M15 18h.01',
+    mix: 'M12 3l9 5-9 5-9-5z|M3 13l9 5 9-5', mouse: 'M12 3a6 6 0 0 0-6 6v6a6 6 0 0 0 12 0V9a6 6 0 0 0-6-6z|M12 7v3' };
+  const cap = t => `<span class="cap">${t}</span>`;
+  const ms = t => `<span class="ms">${svg(I.mouse)}${t}</span>`;
+  const or = 'or', plus = '+';
+  const tabs = {
+    play: [
+      ['play', 'Play or pause', 'Every stem plays together, in sync', [cap('Space')]],
+      ['jump', 'Jump and scrub', 'Click the waves to jump there, drag to scrub', [ms('Click'), ms('Drag')]],
+      ['home', 'Back to the start', 'Back to 0:00, or to the loop's start while looping', [cap('Home')]],
+      ['zoom', 'Zoom and scroll', 'Zoom around the mouse; the wheel alone scrolls', [cap('Ctrl'), plus, ms('Wheel')]] ],
+    stems: [
+      ['split', 'Split a song', 'Drop it on the panel or click Browse. 6 stems adds guitar and piano', [ms('Drop')]],
+      ['mute', 'Mute a stem', 'Click its light; stems 1 to 6 go top to bottom', [ms('Light'), or, cap('1–6')]],
+      ['solo', 'Solo a stem', 'Only that stem plays; do it again to hear them all', [ms('Right-click'), or, cap('Shift'), plus, cap('1–6')]],
+      ['plus', 'New song', 'Start over with another song', [ms('New song')]] ],
+    loop: [
+      ['loop', 'Make a loop', 'Ctrl+drag across the waves; the edges snap to the beat', [cap('Ctrl'), plus, ms('Drag')]],
+      ['trim', 'Trim it', 'Drag either handle; hold Alt to go off the grid', [ms('Handle'), or, cap('Alt'), plus, ms('Drag')]],
+      ['toggle', 'Loop on or off', 'With no loop yet, you get 4 bars at the playhead', [cap('L'), or, ms('Loop')]],
+      ['grid', 'Finer steps', 'Zoomed in, the grid is quarter beats; zoomed out, bars', [cap('Ctrl'), plus, ms('Wheel')]] ],
+    export: [
+      ['grip', 'Drag a stem', 'Drag its row onto any track in FL', [ms('Drag row')]],
+      ['mix', 'Drag the mix', 'Every stem you hear, as one WAV', [ms('Drag mix')]],
+      ['loop', 'Just the loop', 'While looping, every drag gives only the loop', [cap('L'), plus, ms('Drag')]],
+      ['mute', 'Leave stems out', 'Muted stems stay out of the mix', [cap('1–6'), plus, ms('Drag mix')]] ] };
+  const names = { play:'Play', stems:'Stems', loop:'Loop', export:'Export' };
+  const sheet = tab => `${header('on')}<div class="panel">
+      <div class="top">
+        <div class="tt"><b>How to use</b><i>Click the plugin first so its keys work.</i></div>
+        <div class="pill">${Object.keys(names).map(k => `<span class="${k === tab ? 'on' : ''}">${names[k]}</span>`).join('')}</div>
+        <div class="btn sq">✕</div></div>
+      <div class="div"></div>
+      <div class="tips">${tabs[tab].map(([ic, t, d, how]) => `<div class="tip"><div class="ico">${svg(I[ic])}</div>
+        <div class="tx"><b>${t}</b><span>${d}</span></div><div class="how">${how.join('')}</div></div>`).join('')}</div></div>`;
+  const S = {
+    closed: () => `${header('hover')}${cursor(721, 42)}<div class="panel">
+      <div class="top"><div class="playbig">❚❚</div>
+        <div class="tt"><b>Travis Snippet.mp3</b><i>1:04 / 3:12 · 92 BPM</i></div>
+        <div class="btn">⟲ Loop</div><div class="chip">⠿ Drag mix</div><div class="btn">＋ New song</div></div>
+      <div class="div"></div>
+      <div class="rows">${stems.map(s => `<div class="row"><div class="nm"><div class="bar" style="background:${s.c}"></div><div><b>${s.k}</b><i>${s.k.toLowerCase()}.wav</i></div></div>
+        <div class="led"></div><div>${wave(s)}</div><div class="chip">⠿ Drag</div></div>`).join('')}</div></div>`,
+    play: () => sheet('play'), stems: () => sheet('stems'), loop: () => sheet('loop'), export: () => sheet('export')
+  };
+  document.querySelectorAll('.lx .win').forEach(w => w.innerHTML = S[w.dataset.state]());
+})();
+</script>
+</body></html>
