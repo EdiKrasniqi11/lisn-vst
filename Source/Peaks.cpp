@@ -29,51 +29,60 @@ Tempo detectTempo (juce::AudioFormatReader& reader)
 {
     const double rate = reader.sampleRate;
     if (reader.numChannels == 0 || rate <= 0) return {};
-    const auto hop = (juce::int64) (rate / 100.0);            // a 100 Hz loudness envelope
-    const int frames = (int) (reader.lengthInSamples / juce::jmax ((juce::int64) 1, hop));
+    const auto hop = juce::jmax ((juce::int64) 1, (juce::int64) (rate / 100.0));   // a ~100 Hz loudness envelope
+    const double fps = rate / (double) hop;                                          // its exact frame rate
+    const int frames = (int) (reader.lengthInSamples / hop);
     if (frames < 400) return {};                             // under 4 s: too short to trust
 
     std::vector<juce::Range<float>> ranges ((size_t) juce::jmin ((int) reader.numChannels, 8));
-    std::vector<float> env ((size_t) frames), onset ((size_t) frames, 0.0f);
+    std::vector<float> onset ((size_t) frames, 0.0f);
+    float previous = 0.0f;
     for (int i = 0; i < frames; ++i)
     {
         reader.readMaxLevels ((juce::int64) i * hop, hop, ranges.data(), (int) ranges.size());
         float level = 0.0f;
         for (auto r : ranges) level = juce::jmax (level, std::abs (r.getStart()), std::abs (r.getEnd()));
-        env[(size_t) i] = level;
-        if (i > 0) onset[(size_t) i] = juce::jmax (0.0f, level - env[(size_t) i - 1]);   // where it gets louder
+        if (i > 0) onset[(size_t) i] = juce::jmax (0.0f, level - previous);   // where it gets louder
+        previous = level;
     }
 
+    // Autocorrelation of the mean-removed onsets: a steady beat stands out, a noise floor (whose onsets never go negative,
+    // so they correlate at every lag) does not.
+    double mean = 0;
+    for (auto o : onset) mean += o;
+    mean /= frames;
     auto correlate = [&] (int lag)
     {
         double sum = 0;
-        for (int i = lag; i < frames; ++i) sum += (double) onset[(size_t) i] * onset[(size_t) (i - lag)];
+        for (int i = lag; i < frames; ++i) sum += (onset[(size_t) i] - mean) * (onset[(size_t) (i - lag)] - mean);
         return sum;
     };
     const double energy = correlate (0);
-    const int minLag = 6000 / 180, maxLag = 6000 / 70 + 1;   // frames per beat for 180 .. 70 BPM
-    std::vector<double> ac ((size_t) maxLag + 2);
-    for (int lag = minLag - 1; lag <= maxLag + 1; ++lag) ac[(size_t) lag] = correlate (lag);
+    const int minLag = (int) std::ceil (fps * 60.0 / 180.0), maxLag = (int) std::floor (fps * 60.0 / 70.0);
     int best = minLag;
-    for (int lag = minLag; lag <= maxLag; ++lag)
-        if (ac[(size_t) lag] > ac[(size_t) best]) best = lag;
-    if (energy <= 0 || ac[(size_t) best] < 0.2 * energy) return {};
+    double bestAc = correlate (minLag);
+    for (int lag = minLag + 1; lag <= maxLag; ++lag)
+        if (const auto v = correlate (lag); v > bestAc) { bestAc = v; best = lag; }
+    if (energy <= 0 || bestAc < 0.2 * energy) return {};
 
-    // Parabolic refinement of the best lag, then the phase: the offset whose beats collect the most onset.
-    const double a = ac[(size_t) best - 1], b = ac[(size_t) best], c = ac[(size_t) best + 1];
-    const double bend = a - 2.0 * b + c;
-    const double lag = best + (bend != 0.0 ? juce::jlimit (-0.5, 0.5, 0.5 * (a - c) / bend) : 0.0);
+    // Fine search around the best lag in 0.01-frame steps, scored by the onset a beat grid collects over the whole song:
+    // that pins the tempo (a 0.01-frame lag error is ~10 ms after 2 minutes at 90 BPM). Each beat takes its frame plus half
+    // of its neighbours, so the grid centres on the onset instead of tying with the frames next to it.
+    double bestLag = best, bestScore = -1.0;
     int bestOffset = 0;
-    double bestSum = -1.0;
-    for (int offset = 0; offset < best; ++offset)
+    for (int step = -50; step <= 50; ++step)
     {
-        double sum = 0;
-        for (double t = offset; t < frames - 2; t += lag)   // rounding can reach frames - 2, so i + 1 stays in range
+        const double lag = best + step * 0.01;
+        for (int offset = 0; offset < best; ++offset)
         {
-            const auto i = (size_t) juce::roundToInt (t);
-            sum += juce::jmax (onset[i], onset[i + 1], i > 0 ? onset[i - 1] : 0.0f);   // +-1 frame: beats drift off the grid
+            double sum = 0;
+            for (double t = offset; t < frames - 2; t += lag)   // rounding can reach frames - 2, so i + 1 stays in range
+            {
+                const auto i = (size_t) juce::roundToInt (t);
+                sum += onset[i] + 0.5f * (onset[i + 1] + (i > 0 ? onset[i - 1] : 0.0f));
+            }
+            if (sum > bestScore) { bestScore = sum; bestLag = lag; bestOffset = offset; }
         }
-        if (sum > bestSum) { bestSum = sum; bestOffset = offset; }
     }
-    return { 6000.0 / lag, bestOffset / 100.0 };
+    return { 60.0 * fps / bestLag, bestOffset / fps };
 }
