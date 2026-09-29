@@ -45,6 +45,7 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
     float flow = 0.0f, pulse = 0.0f;                 // wave motion
     double lastTick = 0.0;
+    juce::File unloadableDir;                        // a stem dir the player failed to load (not retried every tick)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemSplitterEditor)
 };

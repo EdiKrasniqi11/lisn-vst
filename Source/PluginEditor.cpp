@@ -62,6 +62,11 @@ void StemSplitterEditor::tick()
     const auto s = forced.has_value() ? *forced : uiStateFor (proc);
     if (! shown.has_value() || ! s.sameScreenAs (*shown))
         show (s);
+    // The player always holds the stems on screen: a reopened window keeps its mix, position and loop (same files), and a
+    // re-split of the same song (same stem dir, so the screen didn't change) reloads what startSplit() unloaded.
+    if (s.screen == Screen::Stems && stems.getDir() != unloadableDir && proc.player.getFiles() != stems.getFiles()
+        && ! stems.getFiles().isEmpty() && ! proc.player.load (stems.getFiles()))
+        unloadableDir = stems.getDir();
     if (s.screen == Screen::Splitting)
         splitting.setProgress (s.progress);
     if (proc.getTheme() != appliedThemeId)           // e.g. the host restored another project
@@ -115,13 +120,12 @@ void StemSplitterEditor::show (const UiState& s)
     error.setError (s.error, s.errorText, s.pythonExe);
 
     if (s.screen != Screen::Stems)
-        proc.player.unload();
-    else if (s.stemDir != stems.getDir())
     {
-        stems.setStems (s.stemDir, s.songName);
-        if (proc.player.getFiles() != stems.getFiles())   // reopening the window keeps the mix, the position and the loop
-            proc.player.load (stems.getFiles());
+        proc.player.unload();
+        unloadableDir = {};
     }
+    else if (s.stemDir != stems.getDir())
+        stems.setStems (s.stemDir, s.songName);
 }
 
 void StemSplitterEditor::applyTheme (const Theme& t)

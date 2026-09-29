@@ -100,6 +100,9 @@ struct UiStateTests : juce::UnitTest
                 order.add (screen.fileOf (i).getFileNameWithoutExtension());
             expectEquals (order.joinIntoString (","), juce::String ("vocals,drums,bass,guitar,piano,other"));
             expect (proc.player.getFiles() == screen.getFiles());
+            proc.player.unload();                        // what startSplit() does before a cached re-split of the same song
+            ed.tick();
+            expect (proc.player.getFiles() == screen.getFiles());
 
             screen.onPlayPause();
             expect (proc.player.isPlaying());
