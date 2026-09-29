@@ -123,7 +123,20 @@ int runSnapshots (const juce::File& outDir)
         p.player.setPositionFraction (0.6);
         ed.tick();
     };
-    const auto moving = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
+    const auto zoomed = [looping] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        looping (p, ed);
+        auto& s = ed.stemsScreen();
+        s.setView ({ 0.28, 0.47 });                          // 5.7 s across: beat and bar lines, a quarter-beat grid
+        s.waveMouse (WaveMouse::move, p.player.getLoop().getEnd(), false);   // hover the end handle
+    };
+    const auto sixLooping = [sixMuted] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        sixMuted (p, ed);
+        p.player.setLoop (0.30, 0.45);
+        ed.tick();
+    };
+    const auto moving =[] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
     const juce::String failedText = "demucs failed:\nTraceback (most recent call last):\n  File \"demucs/separate.py\", line 180, in main\n"
                                     "    100%|##########| 5.85/5.85 [00:14<00:00]\n  File \"demucs/apply.py\", line 214, in apply_model\n"
                                     "    out = model(mix)\nRuntimeError: CUDA out of memory. Tried to allocate 1.20 GiB (GPU 0; 4.00 GiB total capacity)\n"
@@ -136,6 +149,9 @@ int runSnapshots (const juce::File& outDir)
         { "splitting-midnight", "midnight", withProgress (state (Screen::Splitting, true), 0.58) },
         { "stems4-dusk-mix", "dusk", state (Screen::Stems, false), 1.0f, looping },
         { "stems6-midnight-muted", "midnight", state (Screen::Stems, true), 1.0f, sixMuted },
+        { "stems4-dusk-zoom", "dusk", state (Screen::Stems, false), 1.0f, zoomed },
+        { "stems6-midnight-loop", "midnight", state (Screen::Stems, true), 1.0f, sixLooping },
+        { "stems4-dusk-zoom@2x", "dusk", state (Screen::Stems, false), 2.0f, zoomed },
         { "error-python-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::PythonMissing, {}, {}) },
         { "error-demucs-midnight", "midnight", withError (state (Screen::Error, false), ErrorKind::DemucsMissing, {}, "C:\\Python311\\python.exe") },
         { "error-failed-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::Failed, failedText, {}) },
@@ -223,6 +239,14 @@ int runBench()
     std::printf ("motion_frame_ms_2x=%.3f\n", averageMs (ed, frameRegion, 2, 120, true));
     std::printf ("background_only_ms=%.3f\n", averageMs (waves, motion, 1, 120, true));
     std::printf ("full_paint_ms=%.3f\n", averageMs (ed, {}, 1, 20, false));
+
+    // A zoom step: every row rebuilds its bars from its envelope (the repaint is async and not timed here).
+    {
+        const auto z0 = now();
+        for (int i = 0; i < 50; ++i)
+            stems.setView (i % 2 == 0 ? juce::Range<double> (0.2, 0.4) : juce::Range<double> (0.0, 1.0));
+        std::printf ("zoom_rebuild_ms=%.3f\n", (now() - z0) / 50.0);
+    }
 
     juce::AudioBuffer<float> buffer (2, 512);
     juce::MidiBuffer midi;
