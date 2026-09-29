@@ -94,11 +94,12 @@ void LisnButton::paintButton (juce::Graphics& g, bool, bool)
 {
     const auto r = getLocalBounds().toFloat();
     const auto radius = style == Style::Soft ? 8.0f : 10.0f;
-    g.setColour (style == Style::Primary ? Theme::cream : Theme::cream.withAlpha (style == Style::Ghost ? 0.06f : 0.12f));
+    g.setColour (tint.has_value() ? tint->withAlpha (0.22f)
+                                  : style == Style::Primary ? Theme::cream : Theme::cream.withAlpha (style == Style::Ghost ? 0.06f : 0.12f));
     g.fillRoundedRectangle (r, radius);
     if (style == Style::Ghost)
     {
-        g.setColour (Theme::cream.withAlpha (borderAlpha));
+        g.setColour (tint.has_value() ? *tint : Theme::cream.withAlpha (borderAlpha));
         g.drawRoundedRectangle (r.reduced (0.5f), radius - 0.5f, 1.0f);
     }
 
@@ -111,6 +112,44 @@ void LisnButton::paintButton (juce::Graphics& g, bool, bool)
     }
     g.setFont (Fonts::body (fontSize, 700));
     g.drawText (getButtonText(), r.withLeft (x), juce::Justification::centredLeft, false);
+}
+
+namespace { juce::Font chipFont() { return Fonts::body (12.0f, 700); } }
+
+int dragChipWidth (const juce::String& text)
+{
+    return (int) std::ceil (1 + 8 + 16 + 6 + juce::GlyphArrangement::getStringWidth (chipFont(), text) + 12 + 1);
+}
+
+void drawDragChip (juce::Graphics& g, juce::Rectangle<float> chip, const juce::String& text)
+{
+    drawDashedRoundedRect (g, chip.reduced (0.5f), 9.5f, 1.0f, 3.0f, 3.0f, Theme::cream.withAlpha (0.3f));
+    const juce::Rectangle<float> grip (chip.getX() + 9.0f, chip.getCentreY() - 8.0f, 16.0f, 16.0f);
+    g.setColour (Theme::cream.withAlpha (0.82f));
+    strokeIcon (g, Icons::grip, grip, 3.0f);
+    g.setFont (chipFont());
+    g.drawText (text, chip.withLeft (grip.getRight() + 6.0f), juce::Justification::centredLeft, false);
+}
+
+DragChip::DragChip()
+{
+    setWantsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+}
+
+void DragChip::setText (const juce::String& t)
+{
+    if (t != text) { text = t; repaint(); }
+}
+
+void DragChip::mouseDrag (const juce::MouseEvent& e)
+{
+    if (dragStarted || e.getDistanceFromDragStart() <= 4 || fileToDrag == nullptr)
+        return;
+    dragStarted = true;   // once per gesture
+    const auto f = fileToDrag();
+    if (f.existsAsFile())
+        juce::DragAndDropContainer::performExternalDragDropOfFiles ({ f.getFullPathName() }, false, this);
 }
 
 CircleButton::CircleButton() : juce::Button ({})

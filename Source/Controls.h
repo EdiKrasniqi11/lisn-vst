@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include "Theme.h"
 
 // Controls from the mockups. None of them takes keyboard focus, so the host keeps its shortcuts (spacebar etc.).
@@ -37,6 +38,7 @@ public:
     int height = 34;
     float padLeft = 16.0f, padRight = 16.0f, fontSize = 13.0f;
     float borderAlpha = 0.22f;                   // Ghost only (0.3 for Cancel and the error buttons)
+    std::optional<juce::Colour> tint;            // Ghost "on" state: fill tint@0.22, border tint (the Loop button)
 
     int preferredWidth() const;
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
@@ -78,3 +80,25 @@ private:
 };
 
 void drawDashedRoundedRect (juce::Graphics&, juce::Rectangle<float>, float radius, float thickness, float dash, float gap, juce::Colour);
+
+// The dashed "Drag" chip of the mockups: 1 px dashed border (dash 3, gap 3) at cream 0.3, radius 10, grip 16 px stroke 3,
+// 6 px, text Bold 12 at cream 0.82. chipWidth gives the width for `text` (padding 0 12 0 8 plus the border).
+void drawDragChip (juce::Graphics&, juce::Rectangle<float> bounds, const juce::String& text);
+int dragChipWidth (const juce::String& text);
+
+// A standalone drag chip: dragging it drops fileToDrag() (when it exists) onto a DAW track.
+class DragChip : public juce::Component
+{
+public:
+    DragChip();
+    void setText (const juce::String&);          // repaints; size it with dragChipWidth (text) x 34
+    juce::String getText() const { return text; }
+    std::function<juce::File()> fileToDrag;
+    void paint (juce::Graphics& g) override { drawDragChip (g, getLocalBounds().toFloat(), text); }
+    void mouseDown (const juce::MouseEvent&) override { dragStarted = false; }
+    void mouseDrag (const juce::MouseEvent&) override;
+
+private:
+    juce::String text { "Drag mix" };
+    bool dragStarted = false;
+};

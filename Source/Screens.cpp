@@ -322,6 +322,15 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
     newSong.padRight = 14.0f;
     newSong.onClick = [this] { if (onNewSong != nullptr) onNewSong(); };
     playButton.onClick = [this] { if (onPlayPause != nullptr) onPlayPause(); };
+    loopButton.icon = Icons::loop;
+    loopButton.padLeft = 10.0f;
+    loopButton.padRight = 14.0f;
+    loopButton.setEnabled (false);
+    loopButton.setAlpha (0.55f);
+    loopButton.onClick = [this] { if (onToggleLoop != nullptr) onToggleLoop(); };
+    dragChip.fileToDrag = [this] { return mixFile != nullptr ? mixFile() : juce::File(); };
+    addAndMakeVisible (loopButton);
+    addAndMakeVisible (dragChip);
     addAndMakeVisible (newSong);
     addAndMakeVisible (playButton);
 }
@@ -334,6 +343,8 @@ StemsScreen::~StemsScreen()
 void StemsScreen::setTheme (const Theme& t)
 {
     theme = t;
+    loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
+    loopButton.repaint();
     for (auto* r : rows)
         r->setTheme (t);
     repaint();
@@ -348,6 +359,9 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     length = fraction = 0.0;
     playing = peaksReady = false;
     lastHead = -1;
+    loopRange = dragBand = {};
+    loopOn = false;
+    tempo = {};
     playButton.setPlaying (false);
     rows.clear();
 
@@ -361,6 +375,17 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
         row->onToggleMute = [this, i] { if (onToggleMute != nullptr) onToggleMute (i); };
         row->onSolo = [this, i] { if (onSolo != nullptr) onSolo (i); };
         row->onSeek = [this] (double f) { if (onSeek != nullptr) onSeek (f); };
+        row->onLoopDrag = [this] (double a, double b, bool done)
+        {
+            dragBand = { snap (juce::jmin (a, b)), snap (juce::jmax (a, b)) };
+            repaint (waveSpanArea());
+            if (done)
+            {
+                if (! dragBand.isEmpty() && onSetLoop != nullptr) onSetLoop (dragBand.getStart(), dragBand.getEnd());
+                dragBand = {};
+            }
+        };
+        row->dragFile = [this, i] { return stemFile != nullptr ? stemFile (i) : fileOf (i); };
         addAndMakeVisible (row);
     }
     resized();
@@ -382,8 +407,13 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
             peaks.push_back (reader != nullptr ? readPeaks (*reader, bars, shouldExit) : std::vector<float>());
             if (reader != nullptr && seconds == 0.0) seconds = lengthSeconds (*reader);
         }
+        Tempo found;
+        for (const auto& f : files)
+            if (f.getFileNameWithoutExtension().equalsIgnoreCase ("drums"))
+                if (std::unique_ptr<juce::AudioFormatReader> r { formats.createReaderFor (f) })
+                    found = detectTempo (*r);
         if (shouldExit()) return;
-        juce::MessageManager::callAsync ([safe, gen, peaks = std::move (peaks), seconds]() mutable
+        juce::MessageManager::callAsync ([safe, gen, peaks = std::move (peaks), seconds, found]() mutable
         {
             if (safe == nullptr || safe->generation != gen) return;
             for (int i = 0; i < juce::jmin ((int) peaks.size(), safe->rows.size()); ++i)
@@ -391,6 +421,7 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
             safe->length = seconds;
             safe->peaksReady = true;
             safe->timeText = mmss (0.0) + " / " + mmss (seconds);
+            safe->setTempo (found);
             safe->repaint();
         });
     });
@@ -419,6 +450,48 @@ juce::Range<int> StemsScreen::waveSpan() const
 int StemsScreen::headX (double f) const
 {
     return 19 + 194 + juce::roundToInt (f * 376.0);   // rows at x 19, waveform at row x 194, 376 wide
+}
+
+juce::Rectangle<int> StemsScreen::waveSpanArea() const
+{
+    const auto span = waveSpan();
+    return { 19 + 194 - 3, span.getStart(), 376 + 6, span.getLength() };
+}
+
+juce::Rectangle<int> StemsScreen::loopArea (juce::Range<double> r) const
+{
+    const auto span = waveSpan();
+    return juce::Rectangle<int>::leftTopRightBottom (headX (r.getStart()) - 2, span.getStart(), headX (r.getEnd()) + 2, span.getEnd());
+}
+
+void StemsScreen::setTempo (Tempo t)
+{
+    tempo = t;
+    repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle shows the BPM
+}
+
+double StemsScreen::snap (double f) const
+{
+    if (tempo.bpm <= 0.0 || length <= 0.0) return f;
+    const double beat = 60.0 / tempo.bpm;
+    const double t = tempo.firstBeat + std::round ((f * length - tempo.firstBeat) / beat) * beat;
+    return juce::jlimit (0.0, 1.0, t / length);
+}
+
+void StemsScreen::setLoop (juce::Range<double> range, bool on)
+{
+    if (range == loopRange && on == loopOn) return;
+    repaint (loopArea (loopOn ? loopRange : juce::Range<double>()));   // the old band
+    loopRange = range;
+    loopOn = on;
+    repaint (loopArea (loopOn ? loopRange : juce::Range<double>()));   // the new band
+    repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle shows the loop
+    loopButton.setEnabled (! loopRange.isEmpty());
+    loopButton.setAlpha (loopRange.isEmpty() ? 0.55f : 1.0f);
+    loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
+    loopButton.repaint();
+    dragChip.setText (loopOn ? "Drag loop" : "Drag mix");
+    resized();                                       // the chip width follows its text
 }
 
 juce::Rectangle<int> StemsScreen::playheadArea (double f) const
@@ -467,8 +540,19 @@ void StemsScreen::setAudible (juce::uint32 mask)
 
 void StemsScreen::paintOverChildren (juce::Graphics& g)
 {
-    if (rows.isEmpty() || lastHead < 0) return;
+    if (rows.isEmpty()) return;
     const auto span = waveSpan();
+    const auto band = ! dragBand.isEmpty() ? dragBand : loopOn ? loopRange : juce::Range<double>();
+    if (! band.isEmpty())
+    {
+        const auto x0 = (float) headX (band.getStart()), x1 = (float) headX (band.getEnd());
+        g.setColour (Theme::cream.withAlpha (0.10f));
+        g.fillRect (x0, (float) span.getStart(), x1 - x0, (float) span.getLength());
+        g.setColour (Theme::cream);
+        g.fillRect (x0 - 1.0f, (float) span.getStart(), 2.0f, (float) span.getLength());
+        g.fillRect (x1 - 1.0f, (float) span.getStart(), 2.0f, (float) span.getLength());
+    }
+    if (lastHead < 0) return;
     g.setColour (Theme::cream);
     g.fillRoundedRectangle ((float) lastHead - 1.0f, (float) span.getStart(), 2.0f, (float) span.getLength(), 1.0f);
 }
@@ -478,6 +562,9 @@ void StemsScreen::resized()
     playButton.setBounds (19, 17, 36, 36);
     const auto w = newSong.preferredWidth();
     newSong.setBounds (19 + 674 - w, 18, w, newSong.height);
+    const auto chipW = dragChipWidth (dragChip.getText());
+    dragChip.setBounds (newSong.getX() - 8 - chipW, 18, chipW, 34);
+    loopButton.setBounds (dragChip.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
     auto y = 74;
     for (auto* r : rows)
     {
@@ -492,9 +579,14 @@ void StemsScreen::paint (juce::Graphics& g)
     if (g.clipRegionIntersects ({ 19, 17, 674, 36 }))
     {
         // Song name (Bold 15) over the time (12, cream 0.64): line-height 1.2, 2 px apart, centred in the 36 px row.
-        const auto x = 19.0f + 36.0f + 12.0f, w = (float) newSong.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
+        const auto x = 19.0f + 36.0f + 12.0f, w = (float) loopButton.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
         text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
-        text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f), timeText, { x, y + 20.0f, w, 14.4f }, juce::Justification::centredLeft);
+        auto subtitle = timeText;
+        if (tempo.bpm > 0.0) subtitle << dot << juce::roundToInt (tempo.bpm) << " BPM";
+        if (loopOn)
+            subtitle << dot << "loop " << mmss (loopRange.getStart() * length)
+                     << juce::String (juce::CharPointer_UTF8 ("\xe2\x80\x93")) << mmss (loopRange.getEnd() * length);
+        text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f), subtitle, { x, y + 20.0f, w, 14.4f }, juce::Justification::centredLeft);
     }
 
     g.setColour (Theme::cream.withAlpha (0.12f));
@@ -504,7 +596,7 @@ void StemsScreen::paint (juce::Graphics& g)
     {
         g.setColour (Theme::cream.withAlpha (0.62f));
         g.fillPath (iconPath (Icons::play, { 19.0f, footerY + 1.0f, 14.0f, 14.0f }));
-        text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.62f), "Click a light to mute" + dot + "right-click to solo",
+        text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.62f), "Click a light to mute" + dot + "right-click to solo" + dot + "drag across the waves to loop",
               { 19.0f + 14.0f + 8.0f, footerY, 600.0f, 16.0f }, juce::Justification::centredLeft);
     }
 }

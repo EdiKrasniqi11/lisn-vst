@@ -26,7 +26,7 @@ struct StemRowTests : juce::UnitTest
         beginTest ("icons");
         expect (iconPath (Icons::plus, { 10.0f, 10.0f, 48.0f, 48.0f }).getBounds() == juce::Rectangle<float> (20.0f, 20.0f, 28.0f, 28.0f));
         for (auto* d : { Icons::file, Icons::plus, Icons::upload, Icons::alert, Icons::copy, Icons::grip, Icons::play, Icons::pause,
-                         Icons::speaker, Icons::speakerOff,
+                         Icons::speaker, Icons::speakerOff, Icons::loop,
                          Icons::vocals, Icons::drums, Icons::bass, Icons::guitar, Icons::piano, Icons::other })
         {
             const auto p = iconPath (d, { 24.0f, 24.0f });
@@ -108,6 +108,34 @@ struct StemRowTests : juce::UnitTest
         row.setMuted (false);
         expectEquals (row.waveform().getAlpha(), 1.0f);
         render (row);
+
+        beginTest ("waveform drag selects a loop; a click only seeks");
+        {
+            double seekTo = -1.0, a = -1.0, b = -1.0;
+            bool done = false;
+            row.onSeek = [&] (double f) { seekTo = f; };
+            row.onLoopDrag = [&] (double from, double to, bool finished) { a = from; b = to; done = finished; };
+            auto& w = row.waveform();
+            auto event = [&] (float x, juce::Point<float> down)
+            {
+                const auto now = juce::Time::getCurrentTime();
+                return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { x, 20.0f }, {}, 0.0f, 0.0f, 0.0f, 0.0f,
+                                         0.0f, &w, &w, now, down, now, 1, false);
+            };
+            const juce::Point<float> down (94.0f, 20.0f);    // 0.25 of 376
+            w.mouseDown (event (94.0f, down));
+            expectWithinAbsoluteError (seekTo, 0.25, 0.001);
+            w.mouseUp (event (95.0f, down));
+            expectEquals (a, -1.0);                          // under 4 px: no loop
+            w.mouseDown (event (94.0f, down));
+            w.mouseDrag (event (188.0f, down));
+            expect (! done);
+            expectWithinAbsoluteError (b, 0.5, 0.001);
+            w.mouseUp (event (188.0f, down));
+            expect (done);
+            expectWithinAbsoluteError (a, 0.25, 0.001);
+            expectWithinAbsoluteError (b, 0.5, 0.001);
+        }
     }
 };
 

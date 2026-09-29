@@ -1,6 +1,7 @@
 #pragma once
 #include "StemRow.h"
 #include "SeparationJob.h"
+#include "Peaks.h"
 
 // The screens of docs/design. Each screen takes the panel bounds (24, 76, 712, 400) and lays out in panel coordinates;
 // it paints only its own content over the WaveBackground panel. Nothing here takes keyboard focus.
@@ -89,6 +90,15 @@ public:
     StemRow* row (int i) { return rows[i]; }        // test hook; nullptr when out of range
     juce::Rectangle<int> playheadArea (double fraction) const;   // the strip a playhead at `fraction` covers (bench hook)
     int getRepaintCount() const { return repaintCount; }         // setPlayback calls that repainted (test hook)
+    void setLoop (juce::Range<double> range, bool on);   // from the player every tick; repaints only on change
+    void setTempo (Tempo);                           // the peak job sets it; tests may too
+    double snap (double fraction) const;             // to the nearest beat; unchanged without a tempo
+    juce::String chipText() const { return dragChip.getText(); }   // test hook
+    bool loopButtonEnabled() const { return loopButton.isEnabled(); }   // test hook
+    std::function<void (double, double)> onSetLoop;  // a finished waveform drag, snapped
+    std::function<void()> onToggleLoop;
+    std::function<juce::File()> mixFile;             // the Drag mix / Drag loop file
+    std::function<juce::File (int)> stemFile;        // what row i drags
 
     std::function<void()> onNewSong, onPlayPause;
     std::function<void (int)> onToggleMute, onSolo;
@@ -101,6 +111,8 @@ public:
 private:
     int headX (double fraction) const;               // screen x of the playhead
     juce::Range<int> waveSpan() const;               // top..bottom of the waveforms, row 0 to the last row
+    juce::Rectangle<int> waveSpanArea() const;
+    juce::Rectangle<int> loopArea (juce::Range<double>) const;   // the band's pixels, padded by the edge width
 
     Theme theme = themeFor ("dusk");
     juce::File dir;
@@ -108,8 +120,13 @@ private:
     double length = 0.0, fraction = 0.0;             // the peak job's length until the player reports one
     bool playing = false, peaksReady = false;
     int lastHead = -1, generation = 0, repaintCount = 0;
+    juce::Range<double> loopRange, dragBand;         // the player's loop / the band shown while dragging (empty = none)
+    bool loopOn = false;
+    Tempo tempo;
     juce::OwnedArray<StemRow> rows;
     CircleButton playButton;
+    LisnButton loopButton { "Loop", LisnButton::Style::Ghost };
+    DragChip dragChip;
     LisnButton newSong;
     juce::ThreadPool pool { 1 };                     // last member: its jobs stop before the rows go
 };

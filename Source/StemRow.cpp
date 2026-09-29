@@ -9,8 +9,6 @@ namespace
     constexpr int lightX = padX + nameW + gap;          // 142
     constexpr int waveX = lightX + lightSize + gap;     // 194
     constexpr int chipX = waveX + waveW + gap;          // 584
-
-    juce::Font chipFont() { return Fonts::body (12.0f, 700); }
 }
 
 juce::String mmss (double seconds)
@@ -78,12 +76,24 @@ void WaveformView::paint (juce::Graphics& g)
 
 void WaveformView::mouseDown (const juce::MouseEvent& e)
 {
-    if (onSeek != nullptr && getWidth() > 0)
-        onSeek (juce::jlimit (0.0, 0.999, (double) e.position.x / getWidth()));
+    looping = false;
+    if (getWidth() <= 0) return;
+    downFraction = juce::jlimit (0.0, 0.999, (double) e.position.x / getWidth());
+    if (onSeek != nullptr) onSeek (downFraction);
 }
 
-void WaveformView::mouseDrag (const juce::MouseEvent&)
+void WaveformView::mouseDrag (const juce::MouseEvent& e)
 {
+    if (getWidth() <= 0 || (! looping && e.getDistanceFromDragStart() < 4)) return;
+    looping = true;                                  // 4 px or more: this gesture selects a loop instead of seeking
+    if (onLoopDrag != nullptr) onLoopDrag (downFraction, juce::jlimit (0.0, 1.0, (double) e.position.x / getWidth()), false);
+}
+
+void WaveformView::mouseUp (const juce::MouseEvent& e)
+{
+    if (looping && onLoopDrag != nullptr && getWidth() > 0)
+        onLoopDrag (downFraction, juce::jlimit (0.0, 1.0, (double) e.position.x / getWidth()), true);
+    looping = false;
 }
 
 StemRow::StemRow (juce::File wav, juce::String key)
@@ -94,6 +104,7 @@ StemRow::StemRow (juce::File wav, juce::String key)
     lightButton.onToggle = [this] { if (onToggleMute != nullptr) onToggleMute(); };
     lightButton.onSolo = [this] { if (onSolo != nullptr) onSolo(); };
     wave.onSeek = [this] (double f) { if (onSeek != nullptr) onSeek (f); };
+    wave.onLoopDrag = [this] (double a, double b, bool done) { if (onLoopDrag != nullptr) onLoopDrag (a, b, done); };
     addAndMakeVisible (lightButton);
     addAndMakeVisible (wave);
     setTheme (themeFor ("dusk"));
@@ -139,9 +150,7 @@ void StemRow::setPosition (double fraction)
 
 juce::Rectangle<int> StemRow::chipBounds() const
 {
-    // border 1 + padding 8, grip 16, gap 6, "Drag", padding 12 + border 1
-    const auto w = (int) std::ceil (1 + 8 + 16 + 6 + juce::GlyphArrangement::getStringWidth (chipFont(), "Drag") + 12 + 1);
-    return { chipX, (getHeight() - chipH) / 2, w, chipH };
+    return { chipX, (getHeight() - chipH) / 2, dragChipWidth ("Drag"), chipH };
 }
 
 void StemRow::resized()
@@ -176,16 +185,8 @@ void StemRow::paint (juce::Graphics& g)
     g.setFont (Fonts::body (11.0f));
     g.drawText (file.getFileName(), juce::Rectangle<float> (textX, top + nameH + 1.0f, textW, fileH), juce::Justification::centredLeft, true);
 
-    // Drag chip: 1 px dashed border (dash 3, gap 3) at cream 0.3, radius 10; grip 16 px stroke 3, 6 px, "Drag" Bold 12 at cream 0.82.
-    if (! g.clipRegionIntersects ({ chipX, 0, getWidth() - chipX, getHeight() }))
-        return;
-    const auto chip = chipBounds().toFloat();
-    drawDashedRoundedRect (g, chip.reduced (0.5f), 9.5f, 1.0f, 3.0f, 3.0f, Theme::cream.withAlpha (0.3f));
-    const juce::Rectangle<float> grip (chip.getX() + 9.0f, chip.getCentreY() - 8.0f, 16.0f, 16.0f);
-    g.setColour (Theme::cream.withAlpha (0.82f));
-    strokeIcon (g, Icons::grip, grip, 3.0f);
-    g.setFont (chipFont());
-    g.drawText ("Drag", chip.withLeft (grip.getRight() + 6.0f), juce::Justification::centredLeft, false);
+    if (g.clipRegionIntersects ({ chipX, 0, getWidth() - chipX, getHeight() }))
+        drawDragChip (g, chipBounds().toFloat(), "Drag");
 }
 
 void StemRow::mouseDown (const juce::MouseEvent&)

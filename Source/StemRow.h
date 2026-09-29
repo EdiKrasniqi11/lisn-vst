@@ -18,6 +18,8 @@ public:
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    std::function<void (double, double, bool)> onLoopDrag;   // from, to (fractions), finished
 
     static constexpr int margin = 5;
 
@@ -27,7 +29,8 @@ private:
     std::vector<float> levels;
     juce::Path bars;                                   // cached; rebuilt on setLevels / resized
     juce::Colour colour = Theme::cream;
-    double fraction = 0.0;
+    double fraction = 0.0, downFraction = 0.0;
+    bool looping = false;
 };
 
 // One stem row of the stem player (docs/design/StemPlayer.mockup.html): badge + name, mute light, waveform, drag chip.
@@ -43,6 +46,7 @@ public:
     void setPosition (double fraction);              // the shared playhead; no repaint (the screen repaints the strip)
     std::function<void()> onToggleMute, onSolo;
     std::function<void (double)> onSeek;             // fraction 0..0.999
+    std::function<void (double, double, bool)> onLoopDrag;
     std::function<juce::File()> dragFile;            // what a drag drops; unset = the stem file
     juce::File getFile() const { return file; }
     juce::String getStemKey() const { return stemKey; }

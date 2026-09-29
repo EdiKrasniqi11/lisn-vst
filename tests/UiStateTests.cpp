@@ -127,6 +127,49 @@ struct UiStateTests : juce::UnitTest
             expectEquals (screen.getRepaintCount(), count + 1);
         }
 
+        beginTest ("loop: snapping, button, chip, renders");
+        {
+            StemSplitterProcessor proc;
+            proc.prepareToPlay (48000.0, 512);
+            StemSplitterEditor ed (proc);
+            UiState s;
+            s.screen = Screen::Stems;
+            s.stemDir = four;
+            s.songName = "Song.mp3";
+            ed.forceState (s);
+            ed.tick();
+            auto& screen = ed.stemsScreen();
+            expect (! screen.loopButtonEnabled());
+            expectEquals (screen.chipText(), juce::String ("Drag mix"));
+
+            screen.setTempo ({ 120.0, 0.0 });                // 0.5 s stems: beats every 0.5 s = the whole song
+            expectEquals (screen.snap (0.3), 0.0);
+            expectEquals (screen.snap (0.8), 1.0);
+            screen.setTempo ({});
+            expectEquals (screen.snap (0.3), 0.3);           // no tempo: no snapping
+
+            screen.onSetLoop (0.2, 0.6);
+            ed.tick();
+            expect (proc.player.isLooping());
+            expect (screen.loopButtonEnabled());
+            expectEquals (screen.chipText(), juce::String ("Drag loop"));
+            screen.onToggleLoop();
+            ed.tick();
+            expect (! proc.player.isLooping());
+            expectEquals (screen.chipText(), juce::String ("Drag mix"));
+
+            proc.player.setMuted (2, true);
+            const auto mix = screen.mixFile();
+            expect (mix.existsAsFile(), mix.getFullPathName());
+            expect (mix.getFileName().contains ("vocals+drums+other"), mix.getFileName());
+            expect (mix.isAChildOf (four.getChildFile ("renders")));
+            expect (screen.stemFile (1) == screen.fileOf (1));    // no loop: the stem file itself
+            screen.onToggleLoop();
+            const auto drumsLoop = screen.stemFile (1);
+            expect (drumsLoop.existsAsFile() && drumsLoop.getFileName().contains ("drums ("), drumsLoop.getFileName());
+            four.getChildFile ("renders").deleteRecursively();
+        }
+
         beginTest ("switching 6 to 4 stems drops the old rows, player files and peaks");
         {
             StemSplitterProcessor proc;

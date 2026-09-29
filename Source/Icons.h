@@ -10,6 +10,7 @@ namespace Icons
     inline constexpr const char* alert  = "M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z";
     inline constexpr const char* copy   = "M9 9h10v10H9zM5 15V5h10";
     inline constexpr const char* grip   = "M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01";
+    inline constexpr const char* loop = "M17 2l4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3";   // stroked
     inline constexpr const char* play   = "M8 5.5v13l10.5-6.5z";              // filled
     inline constexpr const char* pause  = "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z";  // filled
     inline constexpr const char* speaker    = "M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13";   // stroked

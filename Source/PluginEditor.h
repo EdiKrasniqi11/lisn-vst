@@ -31,6 +31,7 @@ private:
     void timerCallback() override { tick(); }
     void show (const UiState&);
     void applyTheme (const Theme&);
+    juce::File renderFile (juce::uint32 mask);   // the audible stems over the loop (or the song) as a cached WAV
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
     StemSplitterProcessor& proc;

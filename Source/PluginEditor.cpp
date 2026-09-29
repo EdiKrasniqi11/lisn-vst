@@ -28,6 +28,10 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.onToggleMute = [this] (int i) { proc.player.setMuted (i, ! proc.player.isMuted (i)); };
     stems.onSolo = [this] (int i) { proc.player.solo (i); };
     stems.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
+    stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
+    stems.onToggleLoop = [this] { proc.player.setLooping (! proc.player.isLooping()); };
+    stems.mixFile = [this] { return renderFile (proc.player.audibleMask()); };
+    stems.stemFile = [this] (int i) { return proc.player.isLooping() ? renderFile (1u << i) : stems.fileOf (i); };
     error.onRetry = [this] { proc.startSplit (proc.getLastInput()); };
     error.onFindPython = [this]
     {
@@ -77,6 +81,7 @@ void StemSplitterEditor::tick()
         player.setPositionFraction (0.0);
     stems.setPlayback (player.isPlaying(), player.getPositionFraction(), player.getLengthSeconds());
     stems.setAudible (player.audibleMask());
+    stems.setLoop (player.getLoop(), player.isLooping());
 
     // Beat motion: fast attack, slow release; after the player stops the waves settle and stop.
     const auto now = juce::Time::getMillisecondCounterHiRes();
@@ -171,4 +176,24 @@ void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
 {
     drop.setHighlighted (false);
     proc.startSplit (juce::File (files[0]));
+}
+
+juce::File StemSplitterEditor::renderFile (juce::uint32 mask)
+{
+    auto& p = proc.player;
+    const auto files = p.getFiles();
+    juce::StringArray names;
+    for (int i = 0; i < files.size(); ++i)
+        if ((mask >> i) & 1u) names.add (files[i].getFileNameWithoutExtension());
+    if (names.isEmpty() || ! shown.has_value()) return {};
+
+    const auto len = p.getLengthSeconds();
+    const auto from = p.isLooping() ? p.getLoop().getStart() * len : 0.0, to = p.isLooping() ? p.getLoop().getEnd() * len : len;
+    auto clock = [] (double sec) { const auto s = juce::jmax (0, (int) sec); return juce::String (s / 60) + "." + juce::String (s % 60).paddedLeft ('0', 2); };
+    auto name = shown->songName.upToLastOccurrenceOf (".", false, false) + " - " + names.joinIntoString ("+");
+    if (p.isLooping()) name << " (" << clock (from) << "-" << clock (to) << ")";
+    const auto dest = stems.getDir().getChildFile ("renders").getChildFile (juce::File::createLegalFileName (name + ".wav"));
+    // ponytail: renders on the drag gesture (a loop takes milliseconds, a whole song under a second). Upgrade path: render
+    // in the background whenever the mutes or the loop change.
+    return StemPlayer::render (files, mask, from, to, dest) ? dest : juce::File();
 }
