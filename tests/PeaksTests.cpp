@@ -4,6 +4,29 @@ struct PeaksTests : juce::UnitTest
 {
     PeaksTests() : juce::UnitTest ("Peaks") {}
 
+    // 10 s mono 44.1 kHz WAV in memory: 60 ms decaying noise bursts every 60/bpm seconds from `offset`, alternately 0.9 and 0.6.
+    static std::unique_ptr<juce::AudioFormatReader> clicks (juce::MemoryBlock& wav, double bpm, double offset)
+    {
+        const int n = 441000;
+        juce::AudioBuffer<float> b (1, n);
+        b.clear();
+        juce::Random noise (1);
+        if (bpm > 0)
+            for (int k = 0;; ++k)
+            {
+                const int at = (int) std::round ((offset + k * 60.0 / bpm) * 44100.0);
+                if (at >= n) break;
+                for (int i = 0; i < 2646 && at + i < n; ++i)
+                    b.setSample (0, at + i, (k % 2 == 0 ? 0.9f : 0.6f) * std::exp (-i / 882.0f) * (noise.nextFloat() * 2.0f - 1.0f));
+            }
+        {
+            std::unique_ptr<juce::AudioFormatWriter> w (juce::WavAudioFormat().createWriterFor (
+                new juce::MemoryOutputStream (wav, false), 44100.0, 1, 24, {}, 0));   // the writer owns the stream
+            w->writeFromAudioSampleBuffer (b, 0, n);
+        }
+        return std::unique_ptr<juce::AudioFormatReader> (juce::WavAudioFormat().createReaderFor (new juce::MemoryInputStream (wav, false), true));
+    }
+
     void runTest() override
     {
         // Mono 44.1 kHz, 4 equal segments: silence, a 0.5 sine, silence, a 1.0 sine (441 Hz, so each cycle hits its peak).
@@ -46,6 +69,31 @@ struct PeaksTests : juce::UnitTest
 
         beginTest ("length");
         expectWithinAbsoluteError (lengthSeconds (*reader), 1.0, 1e-9);
+
+        beginTest ("tempo 120 on the beat");
+        {
+            juce::MemoryBlock wav;
+            auto r = clicks (wav, 120.0, 0.0);
+            const auto t = detectTempo (*r);
+            expectWithinAbsoluteError (t.bpm, 120.0, 1.0);
+            expectWithinAbsoluteError (t.firstBeat, 0.0, 0.02);
+        }
+
+        beginTest ("tempo 92 from 0.1 s");
+        {
+            juce::MemoryBlock wav;
+            auto r = clicks (wav, 92.0, 0.1);
+            const auto t = detectTempo (*r);
+            expectWithinAbsoluteError (t.bpm, 92.0, 1.5);
+            expectWithinAbsoluteError (t.firstBeat, 0.1, 0.02);
+        }
+
+        beginTest ("no tempo in silence");
+        {
+            juce::MemoryBlock wav;
+            auto r = clicks (wav, 0.0, 0.0);
+            expectEquals (detectTempo (*r).bpm, 0.0);
+        }
     }
 };
 
