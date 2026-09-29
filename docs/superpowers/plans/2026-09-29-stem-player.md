@@ -342,7 +342,7 @@ struct StemPlayerTests : juce::UnitTest
         expect (falls.size() >= 3, "wraps: " + juce::String ((int) falls.size()));
         if (falls.size() >= 2)
         {
-            expectWithinAbsoluteError (falls[0], 2205 + 4410, 8);   // 0.1 s at 0.25, then 0.1 s at 0.75
+            expectWithinAbsoluteError (falls[0], 4410 + 4410, 8);   // 0.1 s at 0.25, then 0.1 s at 0.75
             expectWithinAbsoluteError (falls[1] - falls[0], 8820, 2);
         }
         expect (p.isPlaying());
