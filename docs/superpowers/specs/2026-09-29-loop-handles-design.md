@@ -62,6 +62,11 @@ The waveform is 376 px wide. On a 3-minute song at 92 BPM one pixel is about 0.8
   | Home | jump to the start, or to the loop start while looping |
 
 - **Every other key returns false.** JUCE's Windows peer then posts it to the host window (`juce_Windowing_windows.cpp`, `forwardMessageToParent`), so FL shortcuts still work while the plugin has focus.
+- **Claiming the key-down too:**
+  - Windows delivers Space, letters and digits as a key-down followed by a character.
+  - JUCE turns only the character into `keyPressed`. It forwards the key-down to the host unless `keyStateChanged` uses it.
+  - So `keyStateChanged (true)` returns true while one of Space, L or 1–6 is down, and Ctrl or Alt isn't. Otherwise FL would also start its own transport on the same Space.
+  - This is a `ponytail:` corner-cut: while one of those keys is held, any other key-down is claimed as well.
 
 ## Risks, checked early in FL
 
@@ -74,7 +79,7 @@ The waveform is 376 px wide. On a 3-minute song at 92 BPM one pixel is about 0.8
   - **Step choice:** at a given zoom and BPM the step is ¼ beat, 1 beat or 1 bar; there is no snapping without a BPM; Alt gives the raw position.
   - **Handles:** the hit zone is 6 px; an edge can't cross the other; a handle drag sends one `onSetLoop` on release, and a drag in the middle creates a new loop.
   - **View:** zooming keeps the fraction under the cursor still, and the clamps work (2 s minimum, never past the whole song, stays inside 0..1). Scrolling works only while zoomed. `headX` and the seek fraction map through the view.
-  - **Envelope bars:** the visible bars are the max over their slice, and whole-song bars equal the old 104-bar peaks within 1e-6.
+  - **Envelope bars:** the visible bars are the max over their slice. A 4-segment test file (silence, 0.5, silence, 1.0) reads back per segment at whole-song zoom, and a zoomed view picks the right segment.
   - **Beats text:** `8 beats`, `10.25 beats`, `1 beat`, and nothing without a BPM.
   - **Keys:** each key does what the table says. An unhandled key (for example `A`) returns false.
 - **Snapshots:** a zoomed loop with the hovered handle, the grid and the strip (Dusk, 4 stems); the whole song with handles (Midnight, 6 stems); and 2×. Read each PNG against the mockup.
