@@ -1,109 +1,103 @@
-# Handover: stem player (paused 2026-09-29 mid-plan)
+# Handover: stem player + loop handles (paused 2026-09-29, before the final FL check)
 
-Paste this into the new session as the first message, or point it at this file:
+To resume, paste this into the new session as the first message:
 
-> Resume the stem player work in C:\Projects\lisn-vst. Read `docs/superpowers/HANDOVER-stem-player.md` first, then continue with superpowers:subagent-driven-development from where the handover says. Keep ponytail mode on.
+> Resume the stem player work in C:\Projects\lisn-vst. Read `docs/superpowers/HANDOVER-stem-player.md` first, then continue from "Resume here". Keep ponytail mode on.
 
-## What is being built
+## What's on the branch
 
-The Stems screen of the LISN StemSplitter VST3 becomes an FL-style stem player: one shared playhead, a mute light per stem (right-click solos), a beat-snapped loop, and "Drag mix / Drag loop" renders.
-- **Spec:** `docs/superpowers/specs/2026-09-29-stem-player-design.md`
-- **Mockup** (approved; wins over the text): `docs/design/StemPlayer.mockup.html`
-- **Plan:** `docs/superpowers/plans/2026-09-29-stem-player.md` (7 tasks)
+Branch `feat/stem-player` (from master `546e085`). It is **not pushed and not merged**. Don't push or merge without asking the user.
 
-## Where it stands
+Two plans were built on it, both with subagent-driven development (a fresh implementer and a review per task, then a final review):
 
-**Branch:** `feat/stem-player`, based on master `546e085`. It is **not pushed**; don't push without asking the user.
+1. **Stem player** (done; its final review is clean). One shared playhead, mute lights with right-click solo, a beat-snapped loop, and Drag mix / Drag loop renders.
+   - Plan: `docs/superpowers/plans/2026-09-29-stem-player.md`
+   - Spec: `docs/superpowers/specs/2026-09-29-stem-player-design.md`
+   - Mockup: `docs/design/StemPlayer.mockup.html`
+   - The user's FL click-through passed.
+2. **Loop handles, grid, zoom and keys** (built; its final review is done and the fix wave is re-reviewed clean).
+   - Plan: `docs/superpowers/plans/2026-09-29-loop-handles.md`
+   - Spec: `docs/superpowers/specs/2026-09-29-loop-handles-design.md`
+   - Mockup: `docs/design/LoopHandles.mockup.html`. It wins over the text and over the older mockup.
+   - What it adds:
+     - Keyboard: clicking the plugin gives it focus. Space plays and pauses, L toggles the loop (it makes a 4-bar loop when there's none), 1-6 mute, Shift+1-6 solo, Home jumps back. `keyStateChanged` claims the key-downs so FL doesn't also get them.
+     - Colour bars replace the stem icons, and the footer is gone.
+     - A 100 Hz peak envelope per stem, Ctrl+wheel zoom, wheel scroll and a position strip.
+     - Loop edges are handles with grab tabs. They snap to an adaptive grid (¼ beat, beat or bar), Alt drags free, beat and bar lines show, and the subtitle shows the loop length in beats.
 
-| Task | State | Commits |
-|---|---|---|
-| 1. No-rescan FL setup | ✅ done by the controller (no repo change) | none |
-| 2. `StemPlayer` engine | ✅ reviewed, 1 fix round | `2f80b29`, `dbe20dd`, `c2eeddd` |
-| 3. Offline render | ✅ reviewed | `04bc629`, `0268ce0` |
-| 4. `detectTempo` | ✅ reviewed, 1 fix round (user-approved method change) | `aecef90`, `caf87b2` |
-| 5. Wire player into the UI | ⏳ **implemented, NOT yet reviewed** | `61246da`, `ca20537` |
-| 6. Loop, BPM snapping, Drag mix / Drag loop | ⬜ not started | none |
-| 7. Snapshots, bench, pluginval, FL check | ⬜ not started | none |
+| Loop-handles task | Commits |
+|---|---|
+| 1. Keyboard (the FL check passed) | `6e6edb6` |
+| 2. Colour bars, no footer | `d787f17` |
+| 3. Envelope, view, zoom, strip (+1 fix round) | `b421545`, `bd27457` |
+| 4. Handles, grid, beats, Loop button (+1 fix round) | `a8c8ce0`, `f729bdc` |
+| 5. Snapshots and bench | `932a1f6` |
+| Final-review fix wave | `99840cf` |
 
-Doc commits along the way are plan and spec corrections: `3a6033f`, `6289d9f`, `0af9396`.
+The doc commits along the way are `1d92e4d`, `960d5c3`, `17e8e11` and `0ba6263`.
 
 ## Resume here: exact next steps
 
-1. **Task 5 review.** Run the task reviewer (superpowers:subagent-driven-development `task-reviewer-prompt.md`, sonnet) with:
-   - the brief `.superpowers/sdd/2026-09-29-stem-player/task-5-brief.md`;
-   - the report `.superpowers/sdd/2026-09-29-stem-player/task-5-report.md`;
-   - the **diff package (already built)** `.superpowers/sdd/2026-09-29-stem-player/review-0af9396..ca20537.diff` (base `0af9396`, head `ca20537`).
+1. **One open residual. Ask the user whether to fold it in first.** It's a one-line fix, and the final review left it unfixed because there's no second fix wave.
+   - **The problem:** a grab tab whose edge sits within 5-9 px of the view edge hangs outside the waveform's x range. There the row takes the mouse, so the drag-hand cursor shows and a 4 px drag starts a stem-file drag. This happens, for example, with a loop over the whole song at whole-song zoom.
+   - **The fix:** in `StemRow::hitTest` (`Source/StemRow.cpp` ~200), open the x range to `[wave.getX() - 9, wave.getRight() + 9)`. That's safe: the light ends at x 180 and the chip starts at 584.
+   - **If the user says yes:** dispatch a cheap implementer with a test, then a scoped re-review. Otherwise park it.
+2. **Build Release for FL.** Ask the user to close FL, check with `Get-Process | Where-Object { $_.ProcessName -match 'FL' }`, then run `cmake --build build --config Release`. FL loads that build through the junction, so no copy and no rescan are needed.
+3. **The user's FL click-through** (loop-handles plan, Task 5, Step 7). Ask them to check:
+   - the look: colour bars, and no footer;
+   - Ctrl+wheel zooms around the mouse, the wheel scrolls while zoomed, and the strip shows where the view is;
+   - a drag makes a loop, and dragging either tab trims it on the grid (quarter beats zoomed in, bars zoomed out). Try the **top** of a tab too;
+   - Alt+drag goes off the grid; an edge can't cross the other; a plain click on a handle changes nothing;
+   - with no loop yet, Loop and L make a 4-bar loop at the playhead; after that they toggle it;
+   - the keys still work (Space, L, 1-6, Shift+1-6, Home), FL's shortcuts still work, and Space goes back to FL after clicking FL;
+   - Drag loop, and a row drag with a loop on, still deliver the trimmed loop.
 
-   Tell the reviewer about two deliberate deviations and have it judge them on their merits:
-   - The StemRow alpha test uses `expectWithinAbsoluteError (…, 0.38f, 0.005f)`, because `Component::setAlpha` stores alpha in 1/255 steps.
-   - `ca20537` moved the player load from `show()` into `tick()`, so the player always holds the stems on screen. A cached re-split of the same song keeps the same stem dir, so `show()` never ran and the player stayed unloaded. A failed load is remembered in `unloadableDir` so it isn't retried every tick.
-
-   Also hand the reviewer the plan's Global Constraints: no ComboBox/TextEditor/PopupMenu/ProgressBar; no keyboard focus; idle `processBlock` does no work; the mockup layout (light 38 at x 142, waveform 376 at x 194, muted rows at alpha 0.38, one shared playhead); click toggles mute and right-click solos.
-2. **Tasks 6 and 7** go through the normal loop: `scripts/task-brief` → implementer → review → fixes → ledger.
-   - Use sonnet implementers for 6 (multi-file UI); 7 is mostly verification.
-   - Task 6's brief quotes code as the plan expected it. Task 5's implementer changed some details (see its report), so implementers must match against the current files.
-3. **Final whole-branch review** on the most capable model. Base: `git merge-base master HEAD` = `546e085`. Point it at the "minor (deferred)" lines in the ledger (copied below).
-4. Then run **superpowers:finishing-a-development-branch**: merge to master or open a PR. **Ask the user**, and don't push unasked.
-5. Then ask the user for the **FL click-through**, the last step of Task 7. Checking that FL's spacebar still works after every click is the key check.
+   **One design call to ask about at the same time.** In the mockup, the 4-stem loop band, grid and playhead run about 31 px past the last row, and the playhead sticks out 6 px above and below the band. The code stops them flush at the last waveform. The reviewers judged the mockup's run-out a flex-layout accident and recommend keeping the code. Ask the user.
+4. **Then run superpowers:finishing-a-development-branch.** Ask the user whether to merge to master or open a PR, and don't push unasked. After that, delete the SDD workspaces (`.superpowers/sdd/2026-09-29-stem-player/` and `.superpowers/sdd/2026-09-29-loop-handles/`).
 
 ## Local files (git-ignored, same machine)
 
-- **SDD workspace:** `.superpowers/sdd/2026-09-29-stem-player/`. It holds `progress.md` (the ledger), the task briefs and reports, the fix files and the review packages. The ledger's first line names the plan. Trust it plus `git log` over memory.
-- **Brainstorm mockups:** `.superpowers/brainstorm/`.
+- **SDD workspaces:**
+  - `.superpowers/sdd/2026-09-29-loop-handles/`: `progress.md` is the ledger (every review result, the fix rounds, the deferred minors with the final review's triage, the pending steps), plus the briefs, reports and review packages.
+  - `.superpowers/sdd/2026-09-29-stem-player/`: the first plan's ledger.
+  - Trust the ledgers and `git log` over memory.
+- **Snapshots:** `snapshots/` (render with `lisn_tests.exe --snapshots snapshots`).
+- **Brainstorm scratch:** `.superpowers/brainstorm/` (for example `stem-badges.html`).
 
 ## Environment and gotchas
 
-- **Tools:** Windows 11, JUCE 8.0.4, MSVC 2022, CMake at `C:\Program Files\CMake\bin`. Prepend it to PATH: in Git Bash, `export PATH="/c/Program Files/CMake/bin:$PATH"`.
-- **Builds and tests** (the build dir `build/` is already configured):
+- **Tools:** Windows 11, JUCE 8.0.4, MSVC 2022. CMake is at `C:\Program Files\CMake\bin`; in Git Bash run `export PATH="/c/Program Files/CMake/bin:$PATH"`.
+- **Build and test** (`build/` is already configured):
   - build: `cmake --build build --config Debug`;
-  - tests: `build/lisn_tests_artefacts/Debug/lisn_tests.exe`, then `ctest --test-dir build -C Debug --output-on-failure`;
-  - snapshots: `lisn_tests.exe --snapshots snapshots` (the output folder is git-ignored; read the PNGs to check them).
-  - **Bench:** `lisn_tests.exe --bench` only means anything in **Release** (budget: motion frame ≤ 4 ms). Debug always "FAILs" it.
-- **FL loads the Release build directly.** `C:\Program Files\Common Files\VST3\LISN StemSplitter.vst3` is a **directory junction** to `build\StemSplitter_artefacts\Release\VST3\LISN StemSplitter.vst3`.
+  - tests: `build/lisn_tests_artefacts/Debug/lisn_tests.exe` (exit 0 means pass), then `ctest --test-dir build -C Debug --output-on-failure`.
+- **Bench:** `lisn_tests.exe --bench` only means anything in **Release** (budget: motion frame ≤ 4 ms). This machine sits at about 3.9 ms median **even on the pre-plan build**, so single runs over 4 ms are noise with zero headroom. Compare A/B against a baseline worktree before calling it a regression.
+- **FL loads the Release build directly.** `C:\Program Files\Common Files\VST3\LISN StemSplitter.vst3` is a directory junction to `build\StemSplitter_artefacts\Release\VST3\…`.
   - Build **Debug only** during tasks.
-  - Build Release only for final checks, and **with FL closed** (FL locks the DLL).
-  - No copy and no rescan are needed. Remove the junction only with `rmdir` **without** `/s`.
-- **Debug VST3 flake:** if a Debug build fails at the post-build step with `juce_vst3_helper … DLL initialization routine failed`, delete `build/StemSplitter_artefacts/Debug/VST3/LISN StemSplitter.vst3/Contents/x86_64-win/LISN StemSplitter.vst3` and rebuild. It's a corrupt incremental link, not a code bug.
-- **pluginval:** `C:\tools\pluginval\pluginval.exe --strictness-level 5 --validate "%USERPROFILE%\VST3\LISN StemSplitter.vst3"`. For the Release check, validate the Common Files path.
-- **Auto-mode outages:** on 2026-09-29 the auto-mode safety checker was down intermittently, so commands and SendMessage failed with "classifier gave no verdict". If that recurs, ask the user to switch the session to manual permission mode.
-- **Commits:** end every message with a blank line plus `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+  - Build Release only with **FL closed**, and never kill FL.
+  - Remove the junction only with `rmdir` without `/s`.
+  - The Release install step overwrites `%USERPROFILE%\VST3\LISN StemSplitter.vst3`; the next Debug build restores it.
+- **Debug VST3 flake:** if the post-build step fails with `juce_vst3_helper … DLL initialization routine failed`, delete `build/StemSplitter_artefacts/Debug/VST3/LISN StemSplitter.vst3/Contents/x86_64-win/LISN StemSplitter.vst3` and rebuild.
+- **pluginval:** `C:\tools\pluginval\pluginval.exe --strictness-level 5 --validate "%USERPROFILE%\VST3\LISN StemSplitter.vst3"`. For Release, validate the Common Files path.
+- **Commit trailer:** end every commit message with a blank line and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Subagents sometimes use their own model's name; tell them to use this one, and fix a wrong one with an amend of the message only, before review.
+- **Line endings:** the C++ files are CRLF. `sed -i` in Git Bash strips the CRs, so edit with the Edit tool or a byte-preserving script.
 
-## Decisions and corrections made during execution (so nobody redoes them)
+## Decisions made with the user (so nobody redoes them)
 
-- **Task 2:**
-  - The plan's loop-test expectation was an arithmetic slip: the first wrap is at 8820 samples. The plan is fixed.
-  - **Design change:** JUCE's `BufferingAudioSource` keeps buffered audio when a seek lands inside its valid range, so loop changes played up to 0.74 s of stale audio. `StemPlayer::seekSource` now jumps to a **fresh linear range** (`base`), and `songPosition()` maps `origin + (linear - base)` (commit `c2eeddd`). Seeks made before `prepare()` are re-applied in `prepare()`.
-- **Task 3:** the render test's empty-range file was renamed to `empty-range.wav`, because an earlier test writes `empty.wav`.
-- **Task 4** (the user chose "fix both"): the tempo method is now **mean-removed autocorrelation plus a 0.01-frame lag sweep over the whole song** (commit `caf87b2`). The plan's Task 4 code is marked superseded, and the spec is updated.
-- **Task 5:** the player load moved into `tick()` (see above).
-
-## Deferred minor findings (the final review triages these)
-
-- **Task 2:**
-  - `seekSource` stores `origin` before `base`, leaving a tiny window where `hasStreamFinished` can fire spuriously. Store `base` first (StemPlayer.cpp ~198).
-  - The 2×readAheadSamples fresh-range margin isn't tied to the real buffer size, `max(2*scaledBlock, 32768)`.
-  - The tests are timing-sensitive (`sleep(1)` pacing; `load<100 ms` includes the prefill).
-  - Coverage gaps: mono stem, solo audibility in the output, seek while playing.
-- **Task 3:**
-  - A stale `<name>.part` is left on late failure paths.
-  - The tests don't cover multi-chunk ranges, the output format, mono stems, an unreadable stem, or the `.part` file being gone after success.
-  - `endSec` isn't clamped (the Task 6 caller must pass clamped ranges).
-  - `readStereo` can't report read errors.
-- **Task 4:**
-  - The 70.0–70.18 BPM edge band can't be reached (fix: `ceil` for `maxLag` and clamp the swept lag).
-  - The 0.2 gate may reject very loose playing (≥15 ms jitter).
-  - Half or double tempo is systematic for accent-alternating patterns (`ponytail:`-noted).
-  - `detectTempo` has no abort callback.
-  - No stereo, non-44.1 kHz or under-4 s tests.
-- **Task 5** (from the implementer):
-  - `timeText` is briefly stale until the peaks arrive.
-  - `CircleButton`'s comment says 38 px but it's used at 36.
+- **Earlier:** zoom is Ctrl+wheel (not auto-zoom). The plugin takes Space when focused, and FL gets Space back when the user clicks FL. Stem marker: colour bar (option A). No footer, not even a Space keycap.
+- **From the keyboard FL check:** the Loop button was disabled with no loop (it was spec'd that way). The user chose: **Loop and L make a 4-bar loop at the bar under the playhead (8 s with no BPM, the song's last 4 bars near the end), and the button is never disabled.**
+- **Slips in the plan's code:** the controller fixed these without asking, since they don't change the design:
+  - Task 3: a stale played colour after a zoomed seek (a new `hasHead` flag), and `setView` float rounding that left the strip showing at whole-song zoom.
+  - Task 4: `defaultLoop` fell off the grid when the playhead was before the first beat.
+- **The final review's fix wave** (`99840cf`):
+  - Tabs are whole handles: `StemRow::hitTest` opens the waveform column, and `StemsScreen` forwards those mouse events to `waveMouse`.
+  - Handle drags have a 4 px threshold, and an unchanged loop isn't re-sent.
+  - The strip is 2 px lower, to match the mockup.
+- **Keyboard corner-cuts, deferred with `ponytail:` notes:** no auto-repeat guard, lone key-ups reach FL, `GetAsyncKeyState` timing, and Tab eaten once the plugin is focused. The full list is in the ledger.
 
 ## User and working preferences
 
 - **The user:** learning VST development, design-focused, uses FL Studio 20 (plus Ableton) on Windows.
-- **Ponytail mode** (lazy, minimal code) is on and should stay on.
-- **Mockups before any UI code** (HTML canvas), approved first. This round's mockup is already approved.
-- **Don't push or merge without asking.** The user does the final FL click-through.
-- **Plan-mandated review findings go to the user** as one short question with a recommendation. Pure arithmetic slips in the plan were fixed directly and noted.
-- **Related plan:** `docs/superpowers/plans/2026-09-29-desktop-app.md` (a future desktop app). Task 7 adds a note to its Phase 4 saying the StemPlayer already exists.
+- **Ponytail mode** (lazy, minimal code) stays on.
+- **Mockups come before any UI code** (an HTML canvas), approved first.
+- **Review findings the plan mandates go to the user** as one short question with a recommendation. Pure slips in the plan's code are fixed and noted.
+- **Don't push or merge without asking.** The user does the FL click-throughs.
