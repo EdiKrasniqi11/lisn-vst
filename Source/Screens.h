@@ -117,7 +117,7 @@ private:
     Theme theme = themeFor ("dusk");
     juce::File dir;
     juce::String song, timeText { "0:00 / 0:00" };
-    double length = 0.0, fraction = 0.0;             // the peak job's length until the player reports one
+    double length = 0.0;             // the peak job's length until the player reports one
     bool playing = false, peaksReady = false;
     int lastHead = -1, generation = 0, repaintCount = 0;
     juce::Range<double> loopRange, dragBand;         // the player's loop / the band shown while dragging (empty = none)

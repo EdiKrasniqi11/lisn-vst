@@ -60,7 +60,7 @@ Right side, 8 px apart, before **New song**:
 - **Song-row chip:** drags a render of the **audible** stems (mutes applied), over the loop range while looping, otherwise over the whole song.
 - **Renders:**
   - they go to `<stemDir>/renders/` and are kept, because FL references dragged files by path;
-  - names are `<song> - vocals+drums (0.58-1.26).wav` (m.ss, no colons), or `<song> - vocals+drums.wav` for the whole song;
+  - names are `<song> - vocals+drums (0.58.30-1.26.10).wav` (m.ss.cc, no colons), or `<song> - vocals+drums.wav` for the whole song;
   - an existing file with that name is reused.
   Rendering happens when the drag starts. A loop renders in milliseconds, a whole song in under a second.
 

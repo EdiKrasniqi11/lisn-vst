@@ -48,7 +48,7 @@ private:
     Style style;
 };
 
-// The 38 px round play/pause button of a stem row, with a filled 16 px icon in ink.
+// The 36 px round play/pause button of the song row, with a filled 16 px icon in ink.
 class CircleButton : public juce::Button
 {
 public:

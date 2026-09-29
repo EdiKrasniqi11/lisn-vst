@@ -181,7 +181,7 @@ bool StemPlayer::wraps() const
 
 juce::int64 StemPlayer::linearPosition() const
 {
-    return hostRate > 0 ? (juce::int64) ((double) readPos.load() * sourceRate / hostRate) : 0;
+    return hostRate > 0 ? juce::jmax (base.load(), (juce::int64) ((double) readPos.load() * sourceRate / hostRate)) : 0;
 }
 
 double StemPlayer::getPositionFraction() const
@@ -193,10 +193,10 @@ void StemPlayer::seekSource (juce::int64 songSample, bool loopOn)
 {
     // BufferingAudioSource keeps its buffered audio when a seek lands inside it, and that audio was mapped with the old loop
     // setting. So every seek jumps to a fresh linear range past anything it can have buffered; songPosition() maps it back.
-    // origin and base are published before `looping`, so getTotalLength() never falls behind the playing position.
+    // base and origin are published before `looping`, so getTotalLength() never falls behind the playing position.
     const auto fresh = juce::jmax (base.load(), linearPosition()) + 2 * readAheadSamples;
-    origin = songSample;
     base = fresh;
+    origin = songSample;
     looping = loopOn;
     transport.setPosition ((double) fresh / sourceRate);   // a no-op until prepare(), which repeats the seek
     readPos = (juce::int64) ((double) fresh * hostRate / sourceRate);

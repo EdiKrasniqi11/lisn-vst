@@ -167,6 +167,9 @@ struct UiStateTests : juce::UnitTest
             screen.onToggleLoop();
             const auto drumsLoop = screen.stemFile (1);
             expect (drumsLoop.existsAsFile() && drumsLoop.getFileName().contains ("drums ("), drumsLoop.getFileName());
+            screen.onSetLoop (0.4, 0.8);                          // a beat away: same whole seconds, so it must not reuse the file
+            ed.tick();
+            expect (screen.stemFile (1) != drumsLoop, screen.stemFile (1).getFileName());
             four.getChildFile ("renders").deleteRecursively();
         }
 

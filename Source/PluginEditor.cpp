@@ -189,7 +189,7 @@ juce::File StemSplitterEditor::renderFile (juce::uint32 mask)
 
     const auto len = p.getLengthSeconds();
     const auto from = p.isLooping() ? p.getLoop().getStart() * len : 0.0, to = p.isLooping() ? p.getLoop().getEnd() * len : len;
-    auto clock = [] (double sec) { const auto s = juce::jmax (0, (int) sec); return juce::String (s / 60) + "." + juce::String (s % 60).paddedLeft ('0', 2); };
+    auto clock = [] (double sec) { const auto cs = juce::jmax (0, (int) (sec * 100)); return juce::String (cs / 6000) + "." + juce::String (cs / 100 % 60).paddedLeft ('0', 2) + "." + juce::String (cs % 100).paddedLeft ('0', 2); };
     auto name = shown->songName.upToLastOccurrenceOf (".", false, false) + " - " + names.joinIntoString ("+");
     if (p.isLooping()) name << " (" << clock (from) << "-" << clock (to) << ")";
     const auto dest = stems.getDir().getChildFile ("renders").getChildFile (juce::File::createLegalFileName (name + ".wav"));

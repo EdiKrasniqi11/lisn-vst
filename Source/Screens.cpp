@@ -356,7 +356,7 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     pool.removeAllJobs (true, 2000);
     dir = newDir;
     song = songName;
-    length = fraction = 0.0;
+    length = 0.0;
     playing = peaksReady = false;
     lastHead = -1;
     loopRange = dragBand = {};
@@ -528,7 +528,6 @@ void StemsScreen::setPlayback (bool isPlaying, double f, double len)
         playButton.setPlaying (playing);
         changed = true;
     }
-    fraction = f;
     repaintCount += changed ? 1 : 0;
 }
 
