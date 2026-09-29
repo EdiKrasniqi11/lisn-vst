@@ -845,10 +845,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 4: Loop handles, adaptive grid with Alt, grid lines, loop length in beats
+### Task 4: Loop handles, adaptive grid with Alt, grid lines, loop length in beats, a Loop button that makes a loop
 
 **Files:**
-- Modify: `Source/StemRow.h`, `Source/StemRow.cpp`, `Source/Screens.h`, `Source/Screens.cpp`, `tests/StemRowTests.cpp`, `tests/UiStateTests.cpp`
+- Modify: `Source/StemRow.h`, `Source/StemRow.cpp`, `Source/Screens.h`, `Source/Screens.cpp`, `Source/PluginEditor.cpp`, `tests/StemRowTests.cpp`, `tests/UiStateTests.cpp`
 
 **Interfaces:**
 - Consumes: Task 3's `StemsScreen::view`, `headX`, `setView`, `waveLeft`, `waveWidth`, `onSetLoop`, `onSeek`, `loopRange`, `loopOn`, `dragBand` and `tempo`.
@@ -857,6 +857,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `WaveformView::onMouse` and `StemRow::onWaveMouse`, both `std::function<void (WaveMouse, double songFraction, bool alt)>`. These replace `onSeek` and `onLoopDrag` on both classes.
   - `StemsScreen::waveMouse (WaveMouse, double, bool)`, `double gridStep() const` (seconds; 0 = no grid), `double snap (double fraction, bool free = false) const` and `int hotEdge() const`.
   - `juce::String beatsText (double beats)`, a free function in `Screens.h`.
+  - `void StemsScreen::toggleLoop()`: with a loop range it calls `onToggleLoop`; with none it sends `defaultLoop()` to `onSetLoop`.
+  - `juce::Range<double> StemsScreen::defaultLoop() const`: 4 bars from the bar under the playhead, or 8 s without a BPM.
+  - `loopButtonEnabled()` is deleted, because the Loop button is never disabled now.
 
 - [ ] **Step 1: Failing tests.**
 
@@ -901,6 +904,36 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
             // 0.5 s stems at 120 BPM: a quarter beat (0.125 s) is 94 px wide, so edges snap to quarter beats.
             expectWithinAbsoluteError (screen.snap (0.3), 0.25, 1e-9);
             expectWithinAbsoluteError (screen.snap (0.8), 0.75, 1e-9);
+```
+
+  In the same test, delete the two lines `expect (! screen.loopButtonEnabled());` and `expect (screen.loopButtonEnabled());`, because the button is never disabled now.
+
+  **1c-2.** In the keys test from Task 1, replace these lines:
+
+```cpp
+            expect (ed.keyPressed (juce::KeyPress ('L')));          // no loop range yet: nothing to toggle
+            expect (! proc.player.isLooping());
+            screen.onSetLoop (0.2, 0.6);
+            ed.tick();
+            expect (ed.keyPressed (juce::KeyPress ('l')));
+            expect (! proc.player.isLooping());
+            ed.keyPressed (juce::KeyPress ('L'));
+            expect (proc.player.isLooping());
+```
+
+  with:
+
+```cpp
+            expect (ed.keyPressed (juce::KeyPress ('L')));          // no loop yet: L makes one (here the whole 0.5 s song)
+            expect (proc.player.isLooping());
+            screen.onSetLoop (0.2, 0.6);
+            ed.tick();
+            expect (ed.keyPressed (juce::KeyPress ('l')));          // with a loop, L toggles it
+            ed.tick();
+            expect (! proc.player.isLooping());
+            ed.keyPressed (juce::KeyPress ('L'));
+            ed.tick();
+            expect (proc.player.isLooping());
 ```
 
   **1d.** Add these two tests after the zoom test from Task 3:
@@ -993,9 +1026,42 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
             const double k = (sets[3].first * 192.0 - 0.2) / (beat / 4.0);
             expectWithinAbsoluteError (k, std::round (k), 1e-6);
         }
+
+        beginTest ("the Loop button (and L) makes a 4-bar loop at the playhead when there's none, else toggles");
+        {
+            StemsScreen screen;
+            screen.setStems (four, "Song.mp3");
+            screen.setPlayback (false, 70.0 / 192.0, 192.0);        // the playhead at 1:10 of a 3:12 song
+            std::pair<double, double> set { -1.0, -1.0 };
+            screen.onSetLoop = [&] (double a, double b) { set = { a, b }; };
+            int toggles = 0;
+            screen.onToggleLoop = [&] { ++toggles; };
+
+            screen.toggleLoop();                                    // no tempo: 8 s from the playhead
+            expectWithinAbsoluteError (set.first * 192.0, 70.0, 1e-9);
+            expectWithinAbsoluteError (set.second * 192.0, 78.0, 1e-9);
+
+            screen.setTempo ({ 92.0, 0.2 });
+            const double bar = 4.0 * 60.0 / 92.0;
+            screen.toggleLoop();                                    // from the bar under the playhead, 4 bars long
+            const double k = (set.first * 192.0 - 0.2) / bar;
+            expectWithinAbsoluteError (k, std::round (k), 1e-9);
+            expect (set.first * 192.0 <= 70.0 && set.first * 192.0 > 70.0 - bar);
+            expectWithinAbsoluteError ((set.second - set.first) * 192.0, 4.0 * bar, 1e-9);
+
+            screen.setPlayback (false, 191.0 / 192.0, 192.0);       // it would run past the end: the song's last 4 bars
+            screen.toggleLoop();
+            expectWithinAbsoluteError (set.second, 1.0, 1e-12);
+            expectWithinAbsoluteError ((set.second - set.first) * 192.0, 4.0 * bar, 1e-9);
+            expectEquals (toggles, 0);
+
+            screen.setLoop ({ 0.2, 0.3 }, false);                   // with a loop range, it only toggles
+            screen.toggleLoop();
+            expectEquals (toggles, 1);
+        }
 ```
 
-- [ ] **Step 2: Run them and watch them fail.** Run `cmake --build build --config Debug`. Expected: the build fails on `WaveMouse`, `onWaveMouse`, `waveMouse`, `gridStep`, `hotEdge` and `beatsText`. That's the red step.
+- [ ] **Step 2: Run them and watch them fail.** Run `cmake --build build --config Debug`. Expected: the build fails on `WaveMouse`, `onWaveMouse`, `waveMouse`, `gridStep`, `hotEdge`, `beatsText` and `toggleLoop`. That's the red step.
 
 - [ ] **Step 3: WaveMouse events.**
 
@@ -1200,6 +1266,52 @@ juce::Rectangle<int> StemsScreen::loopArea (juce::Range<double> r) const   // th
 
   **4g.** In `StemsScreen::setLoop`, add `if (! on) setHot (-1);` right after `loopOn = on;`.
 
+  **4h.** Make the Loop button always work.
+  - In `Source/Screens.h`, delete `bool loopButtonEnabled() const { return loopButton.isEnabled(); }   // test hook`.
+  - After `void setLoop (…);` add:
+
+```cpp
+    // The Loop button and the L key: with a loop range, onToggleLoop; with none, onSetLoop (defaultLoop()), which turns
+    // looping on.
+    void toggleLoop();
+    juce::Range<double> defaultLoop() const;         // 4 bars from the bar under the playhead (8 s without a tempo)
+```
+
+  - In `Source/Screens.cpp`, in the `StemsScreen` constructor, delete `loopButton.setEnabled (false);` and `loopButton.setAlpha (0.55f);`, and change the Loop button's handler to `loopButton.onClick = [this] { toggleLoop(); };`.
+  - In `StemsScreen::setLoop`, delete the two lines `loopButton.setEnabled (! loopRange.isEmpty());` and `loopButton.setAlpha (loopRange.isEmpty() ? 0.55f : 1.0f);`.
+  - Add after `StemsScreen::setLoop`:
+
+```cpp
+void StemsScreen::toggleLoop()
+{
+    if (! loopRange.isEmpty())
+    {
+        if (onToggleLoop != nullptr) onToggleLoop();
+        return;
+    }
+    const auto r = defaultLoop();
+    if (! r.isEmpty() && onSetLoop != nullptr) onSetLoop (r.getStart(), r.getEnd());
+}
+
+juce::Range<double> StemsScreen::defaultLoop() const
+{
+    if (length <= 0.0) return {};
+    const auto t = position * length;
+    auto start = t, len = 8.0;                                   // no tempo: 8 s from the playhead
+    if (tempo.bpm > 0.0)
+    {
+        const auto bar = 4.0 * 60.0 / tempo.bpm;
+        start = tempo.firstBeat + std::floor ((t - tempo.firstBeat) / bar) * bar;   // the bar under the playhead
+        len = 4.0 * bar;
+    }
+    if (start + len > length) start = length - len;             // past the end: the song's last 4 bars (or 8 s)
+    start = juce::jmax (0.0, start);                             // a shorter song loops whole
+    return { start / length, juce::jmin (length, start + len) / length };
+}
+```
+
+  **4i.** In `Source/PluginEditor.cpp`, in `keyPressed`, replace the `L` branch's body `if (stems.loopButtonEnabled()) stems.onToggleLoop();` with `stems.toggleLoop();`.
+
 - [ ] **Step 5: Draw the grid, the tabs and the loop length.**
 
   **5a.** Replace `StemsScreen::paintOverChildren` with:
@@ -1284,8 +1396,8 @@ void StemsScreen::paintOverChildren (juce::Graphics& g)
 - [ ] **Step 7: Commit.**
 
 ```bash
-git add Source/StemRow.h Source/StemRow.cpp Source/Screens.h Source/Screens.cpp tests/StemRowTests.cpp tests/UiStateTests.cpp
-git commit -m "feat: loop edges are handles on an adaptive beat grid (quarter beat when zoomed), Alt drags free, loop length in beats
+git add Source/StemRow.h Source/StemRow.cpp Source/Screens.h Source/Screens.cpp Source/PluginEditor.cpp tests/StemRowTests.cpp tests/UiStateTests.cpp
+git commit -m "feat: loop edges are handles on an adaptive beat grid (quarter beat when zoomed), Alt drags free, loop length in beats; Loop makes a 4-bar loop when there's none
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -1344,6 +1456,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
     - colour bars instead of icons, and no footer text;
     - zoomed: beat and bar lines across the rows, both tabs with the end one hot (bigger, ringed), the position strip in the old footer's slot with orange loop ticks, and the subtitle ending in `· N beats`;
     - whole song (`stems6-midnight-loop`): the band and tabs, no grid, no strip;
+    - `stems6-midnight-muted` (no loop): the Loop button is off but not dimmed;
     - one playhead; nothing overlaps or clips.
   - Fix any deviation in the source and re-render. List every fix in the report.
 
@@ -1372,5 +1485,6 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - Ctrl+wheel zooms around the mouse, the wheel scrolls while zoomed, and the strip shows where the view is;
   - a drag makes a loop, and dragging either tab trims it on the grid (quarter beats when zoomed in, bars when zoomed out);
   - Alt+drag goes off the grid, and an edge can't cross the other;
+  - with no loop yet, the Loop button and L make a 4-bar loop at the playhead; after that they toggle it;
   - the keys: Space, L, 1–6, Shift+1–6 and Home, with FL's own shortcuts still working and FL's Space back after clicking FL;
   - Drag loop and a row drag with a loop on still deliver the trimmed loop.

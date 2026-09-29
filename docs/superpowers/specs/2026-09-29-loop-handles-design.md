@@ -45,6 +45,12 @@ The waveform is 376 px wide. On a 3-minute song at 92 BPM one pixel is about 0.8
 - **Dragging anywhere else** (4 px or more) creates a new loop, as today, with edges snapped to the current step. It replaces the old loop and turns looping on.
 - **Moving the whole loop** by dragging its middle is not included. A drag inside the band makes a new loop.
 
+## Loop button and L
+
+- **With a loop range:** they toggle looping on and off, as before.
+- **With no loop yet:** they create a loop and turn it on. The loop starts at the bar under the playhead (`firstBeat + k·bar`, 1 bar = 4 beats) and is 4 bars long. Without a BPM it's 8 seconds from the playhead. If it would run past the song's end, it's the song's last 4 bars (or 8 s) instead. A song shorter than that loops whole.
+- **The Loop button is never disabled.** Off, it's the plain Ghost button. This replaces the old spec's "disabled (alpha 0.55) until a loop range exists"; found in the FL check on 2026-09-29.
+
 ## Keyboard
 
 - **Focus:**
