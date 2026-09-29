@@ -848,6 +848,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ### Task 4: `detectTempo` (BPM from the drums stem)
 
+> **Superseded in review (2026-09-29, user-approved):** the method below was replaced by mean-removed autocorrelation plus a 0.01-frame lag sweep over the whole song, and three more tests (noise floors, clicks over noise, a 2-minute grid check). See commit `caf87b2` and the spec's BPM section.
+
 **Files:**
 - Modify: `Source/Peaks.h`, `Source/Peaks.cpp`, `tests/PeaksTests.cpp`
 

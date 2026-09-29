@@ -90,7 +90,7 @@ Right side, 8 px apart, before **New song**:
 - **Method:**
   1. Build a loudness envelope from 10 ms `readMaxLevels` hops.
   2. Take the onset strength: the positive envelope difference.
-  3. Autocorrelate over lags covering 70–180 BPM and refine the best lag parabolically.
+  3. Autocorrelate the mean-removed onsets over lags covering 70–180 BPM (a noise floor then scores low at every lag), then refine with a 0.01-frame lag sweep scored over the whole song, so the grid stays within ~10 ms after 2 minutes.
   4. Find the phase: the offset whose beat positions collect the most onset strength.
   5. If the autocorrelation peak is under 0.2 of the zero-lag energy, return `bpm = 0`.
 - **Limits:** `// ponytail:` a steady tempo is assumed, and half or double tempo can be reported. Upgrade path: a ×2/÷2 toggle, or tracking tempo changes.
