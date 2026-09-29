@@ -20,6 +20,7 @@ set(LISN_SOURCES
     Source/PythonFinder.cpp
     Source/Theme.cpp
     Source/StemPreview.cpp
+    Source/StemPlayer.cpp
     Source/Peaks.cpp
     Source/WaveGeometry.cpp
     Source/Frost.cpp
@@ -59,6 +60,7 @@ target_sources(lisn_tests PRIVATE
     tests/PythonFinderTests.cpp
     tests/ProcessorStateTests.cpp
     tests/StemPreviewTests.cpp
+    tests/StemPlayerTests.cpp
     tests/PeaksTests.cpp
     tests/WaveGeometryTests.cpp
     tests/FrostTests.cpp
