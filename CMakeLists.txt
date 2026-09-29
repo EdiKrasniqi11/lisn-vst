@@ -19,7 +19,6 @@ set(LISN_SOURCES
     Source/SeparationJob.cpp
     Source/PythonFinder.cpp
     Source/Theme.cpp
-    Source/StemPreview.cpp
     Source/StemPlayer.cpp
     Source/Peaks.cpp
     Source/WaveGeometry.cpp
@@ -59,7 +58,6 @@ target_sources(lisn_tests PRIVATE
     tests/ThemeTests.cpp
     tests/PythonFinderTests.cpp
     tests/ProcessorStateTests.cpp
-    tests/StemPreviewTests.cpp
     tests/StemPlayerTests.cpp
     tests/PeaksTests.cpp
     tests/WaveGeometryTests.cpp

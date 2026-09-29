@@ -26,6 +26,7 @@ struct StemRowTests : juce::UnitTest
         beginTest ("icons");
         expect (iconPath (Icons::plus, { 10.0f, 10.0f, 48.0f, 48.0f }).getBounds() == juce::Rectangle<float> (20.0f, 20.0f, 28.0f, 28.0f));
         for (auto* d : { Icons::file, Icons::plus, Icons::upload, Icons::alert, Icons::copy, Icons::grip, Icons::play, Icons::pause,
+                         Icons::speaker, Icons::speakerOff,
                          Icons::vocals, Icons::drums, Icons::bass, Icons::guitar, Icons::piano, Icons::other })
         {
             const auto p = iconPath (d, { 24.0f, 24.0f });
@@ -53,18 +54,18 @@ struct StemRowTests : juce::UnitTest
         beginTest ("layout");
         StemRow row (juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("vocals.wav"), "vocals");
         row.setSize (674, 62);
-        expectEquals (row.playButton().getX(), 142);
-        expectEquals (row.playButton().getWidth(), 38);
+        expectEquals (row.light().getX(), 142);
+        expectEquals (row.light().getWidth(), 38);
         expectEquals (row.waveform().getX(), 194);
-        expectEquals (row.waveform().getWidth(), 330);
+        expectEquals (row.waveform().getWidth(), 376);
         expectEquals (row.waveform().getHeight(), 40 + 10);
         expectLessOrEqual (row.chipBounds().getRight(), 664);
         expectEquals (row.chipBounds().getHeight(), 34);
         expectEquals (row.barCount(), 104);
 
         beginTest ("no keyboard focus");
-        expect (! row.getWantsKeyboardFocus() && ! row.waveform().getWantsKeyboardFocus() && ! row.playButton().getWantsKeyboardFocus());
-        expect (! row.playButton().getMouseClickGrabsKeyboardFocus());
+        expect (! row.getWantsKeyboardFocus() && ! row.waveform().getWantsKeyboardFocus() && ! row.light().getWantsKeyboardFocus());
+        expect (! row.light().getMouseClickGrabsKeyboardFocus());
         expect (! pill.getWantsKeyboardFocus());
         LisnButton button ("New song", LisnButton::Style::Ghost);
         expect (! button.getWantsKeyboardFocus() && ! button.getMouseClickGrabsKeyboardFocus());
@@ -76,7 +77,6 @@ struct StemRowTests : juce::UnitTest
         expectEquals (row.barCount(), 96);
         row.setCompact (false);
         expectEquals (row.getHeight(), 62);
-        expectEquals (row.waveform().getHeight(), 40 + 10);
 
         beginTest ("wrong peak count");
         row.setPeaks ({ 0.5f });
@@ -84,33 +84,29 @@ struct StemRowTests : juce::UnitTest
         row.setPeaks ({});
         render (row);
 
-        beginTest ("repaint only on change");
-        row.setPlayback (true, 0.5, 30.0);
-        const auto count = row.getRepaintCount();
-        row.setPlayback (true, 0.5, 30.0);
-        row.setPlayback (true, 0.5001, 30.0);   // same playhead pixel and time
-        expectEquals (row.getRepaintCount(), count);
-        row.setPlayback (true, 0.6, 30.0);
-        expectEquals (row.getRepaintCount(), count + 1);
-
-        beginTest ("playhead position");
+        beginTest ("played part");
         row.setPeaks (std::vector<float> (104, 1.0f));
-        row.setPlayback (false, 0.5, 30.0);
-        expectEquals (row.timeText(), juce::String ("0:15"));
+        row.setPosition (0.5);
         const auto wave = render (row.waveform());
         const auto alphaAt = [&] (int x, int y) { return (int) wave.getPixelAt (x, y).getAlpha(); };
-        // The playhead is 2 px wide centred on x = 165 and reaches into the 5 px margin; the bars do not.
-        expectGreaterThan (alphaAt (164, 1), 240);
-        expectGreaterThan (alphaAt (165, 1), 240);
-        expectEquals (alphaAt (163, 1), 0);
-        expectEquals (alphaAt (166, 1), 0);
-        // Bar 10 (x 31.7 .. 33.6) is played, bar 80 (x 253.8 .. 255.7) is dim (stem colour at 0.3).
-        expectGreaterThan (alphaAt (32, 25), 240);
-        expectWithinAbsoluteError (alphaAt (254, 25), 77, 4);
+        // Bar 10 (x 36.2 .. 38.3) is played; bar 80 (x 289.2 .. 291.4) is dim (stem colour at 0.3). No playhead line here.
+        expectGreaterThan (alphaAt (37, 25), 240);
+        expectWithinAbsoluteError (alphaAt (290, 25), 77, 4);
+        expectEquals (alphaAt (188, 1), 0);
 
-        beginTest ("playing row paints");
-        row.setPlayback (true, 0.25, 30.0);
-        expect (row.playButton().isPlaying());
+        beginTest ("mute light");
+        int toggles = 0, solos = 0;
+        row.onToggleMute = [&] { ++toggles; };
+        row.onSolo = [&] { ++solos; };
+        row.light().clicked (juce::ModifierKeys());
+        row.light().clicked (juce::ModifierKeys (juce::ModifierKeys::rightButtonModifier));
+        expectEquals (toggles, 1);
+        expectEquals (solos, 1);
+        row.setMuted (true);
+        expect (row.light().isMuted());
+        expectWithinAbsoluteError (row.waveform().getAlpha(), 0.38f, 0.005f);   // Component alpha is stored in 1/255 steps
+        row.setMuted (false);
+        expectEquals (row.waveform().getAlpha(), 1.0f);
         render (row);
     }
 };

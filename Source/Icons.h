@@ -12,6 +12,8 @@ namespace Icons
     inline constexpr const char* grip   = "M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01";
     inline constexpr const char* play   = "M8 5.5v13l10.5-6.5z";              // filled
     inline constexpr const char* pause  = "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z";  // filled
+    inline constexpr const char* speaker    = "M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13";   // stroked
+    inline constexpr const char* speakerOff = "M11 5 6 9H3v6h3l5 4zM16 9.5l5 5M21 9.5l-5 5";                          // stroked
 
     inline constexpr const char* vocals = "M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8";
     inline constexpr const char* drums  = "M4 9a8 3 0 1 0 16 0a8 3 0 1 0-16 0M4 9v7a8 3 0 0 0 16 0V9M7 3l3.5 5M17 3l-3.5 5";

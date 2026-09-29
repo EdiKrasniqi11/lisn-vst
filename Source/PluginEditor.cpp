@@ -20,12 +20,14 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     drop.onBrowse = browse;
     stems.onNewSong = browse;
     splitting.onCancel = [this] { proc.job.cancel(); };
-    stems.onPlayPause = [this] (int row) { playPause (row); };
-    stems.onSeek = [this] (int row, double f)
+    stems.onPlayPause = [this]
     {
-        if (row == stems.rowOf (proc.preview.getFile()))
-            proc.preview.setPositionFraction (f);
+        if (proc.player.isPlaying()) proc.player.pause();
+        else                         proc.player.play();
     };
+    stems.onToggleMute = [this] (int i) { proc.player.setMuted (i, ! proc.player.isMuted (i)); };
+    stems.onSolo = [this] (int i) { proc.player.solo (i); };
+    stems.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
     error.onRetry = [this] { proc.startSplit (proc.getLastInput()); };
     error.onFindPython = [this]
     {
@@ -43,7 +45,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
 
 StemSplitterEditor::~StemSplitterEditor()
 {
-    proc.preview.pause();
+    proc.player.pause();
 }
 
 void StemSplitterEditor::resized()
@@ -65,18 +67,19 @@ void StemSplitterEditor::tick()
     if (proc.getTheme() != appliedThemeId)           // e.g. the host restored another project
         applyTheme (themeFor (proc.getTheme()));
 
-    auto& preview = proc.preview;
-    if (preview.takeReachedEnd())                    // a stem that played to its end goes back to 0:00
-        preview.setPositionFraction (0.0);
-    stems.setPlayback (stems.rowOf (preview.getFile()), preview.isPlaying(), preview.getPositionFraction(), preview.getLengthSeconds());
+    auto& player = proc.player;
+    if (player.takeReachedEnd())                     // the song played to its end: back to 0:00
+        player.setPositionFraction (0.0);
+    stems.setPlayback (player.isPlaying(), player.getPositionFraction(), player.getLengthSeconds());
+    stems.setAudible (player.audibleMask());
 
-    // Beat motion: fast attack, slow release; after the preview stops the waves settle and stop.
+    // Beat motion: fast attack, slow release; after the player stops the waves settle and stop.
     const auto now = juce::Time::getMillisecondCounterHiRes();
     const auto dt = (float) juce::jlimit (0.0, 0.1, (now - lastTick) / 1000.0);
     lastTick = now;
-    if (preview.isPlaying())
+    if (player.isPlaying())
     {
-        const auto peak = preview.takePeak();
+        const auto peak = player.takePeak();
         pulse = peak > pulse ? peak : pulse + (peak - pulse) * juce::jmin (1.0f, dt * 5.0f);
         flow += dt * (8.0f + 60.0f * pulse);
         waves.setMotion (flow, pulse);
@@ -112,12 +115,12 @@ void StemSplitterEditor::show (const UiState& s)
     error.setError (s.error, s.errorText, s.pythonExe);
 
     if (s.screen != Screen::Stems)
-        proc.preview.unload();
+        proc.player.unload();
     else if (s.stemDir != stems.getDir())
     {
-        if (! proc.preview.getFile().isAChildOf (s.stemDir))   // keeps a paused preview when the editor reopens
-            proc.preview.unload();
         stems.setStems (s.stemDir, s.songName);
+        if (proc.player.getFiles() != stems.getFiles())   // reopening the window keeps the mix, the position and the loop
+            proc.player.load (stems.getFiles());
     }
 }
 
@@ -130,21 +133,6 @@ void StemSplitterEditor::applyTheme (const Theme& t)
     splitting.setTheme (t);
     stems.setTheme (t);
     error.setTheme (t);
-}
-
-void StemSplitterEditor::playPause (int row)
-{
-    auto& preview = proc.preview;
-    if (row == stems.rowOf (preview.getFile()))
-    {
-        if (preview.isPlaying()) preview.pause();
-        else                     preview.play();
-    }
-    else if (preview.load (stems.fileOf (row)))
-    {
-        preview.setPositionFraction (stems.positionOf (row));
-        preview.play();
-    }
 }
 
 void StemSplitterEditor::choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then)

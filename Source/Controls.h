@@ -61,4 +61,20 @@ private:
     bool playing = false;
 };
 
+// The 38 px mute light of a stem row: a neutral ring with a white speaker, or the speaker with an x when muted.
+// Left click toggles, right click solos (FL's channel rack).
+class MuteLight : public juce::Button
+{
+public:
+    MuteLight();
+    void setMuted (bool);
+    bool isMuted() const { return muted; }
+    std::function<void()> onToggle, onSolo;
+    void clicked (const juce::ModifierKeys&) override;   // public for tests
+    void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
+
+private:
+    bool muted = false;
+};
+
 void drawDashedRoundedRect (juce::Graphics&, juce::Rectangle<float>, float radius, float thickness, float dash, float gap, juce::Colour);

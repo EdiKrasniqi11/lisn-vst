@@ -68,7 +68,7 @@ private:
     LisnButton cancel;
 };
 
-// Main.dc.html panel: song row, one StemRow per stem file, footer hint.
+// StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, footer hint.
 class StemsScreen : public juce::Component
 {
 public:
@@ -79,37 +79,39 @@ public:
     // and reads their peaks and the song length on a background thread.
     void setStems (const juce::File& dir, const juce::String& songName);
     juce::File getDir() const { return dir; }
-    void setPlayback (int activeRow, bool playing, double activeFraction, double activeLength);   // activeRow -1: none
+    juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
+    void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
+    void setAudible (juce::uint32 mask);            // bit i set = row i audible
 
     int numRows() const { return rows.size(); }
-    int rowOf (const juce::File&) const;           // -1 if no row has that file
     juce::File fileOf (int row) const;
-    double positionOf (int row) const;             // each row remembers its own position
     bool hasPeaks() const { return peaksReady; }
-    StemRow* row (int i) { return rows[i]; }       // test hook; nullptr when out of range
+    StemRow* row (int i) { return rows[i]; }        // test hook; nullptr when out of range
+    juce::Rectangle<int> playheadArea (double fraction) const;   // the strip a playhead at `fraction` covers (bench hook)
+    int getRepaintCount() const { return repaintCount; }         // setPlayback calls that repainted (test hook)
 
-    std::function<void()> onNewSong;
-    std::function<void (int)> onPlayPause;
-    std::function<void (int, double)> onSeek;      // row, fraction; the row already shows it
+    std::function<void()> onNewSong, onPlayPause;
+    std::function<void (int)> onToggleMute, onSolo;
+    std::function<void (double)> onSeek;             // fraction 0..0.999
 
     void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;   // the shared playhead across every row
     void resized() override;
 
 private:
-    void seek (int row, double fraction);
-    void updateRows();
-    double lengthOf (int row) const;
+    int headX (double fraction) const;               // screen x of the playhead
+    juce::Range<int> waveSpan() const;               // top..bottom of the waveforms, row 0 to the last row
 
     Theme theme = themeFor ("dusk");
     juce::File dir;
-    juce::String song;
-    double length = 0.0, activeLength = 0.0;       // first stem (from the peak job) / the preview's
+    juce::String song, timeText { "0:00 / 0:00" };
+    double length = 0.0, fraction = 0.0;             // the peak job's length until the player reports one
+    bool playing = false, peaksReady = false;
+    int lastHead = -1, generation = 0, repaintCount = 0;
     juce::OwnedArray<StemRow> rows;
-    std::vector<double> positions;
-    int activeRow = -1, generation = 0;
-    bool activePlaying = false, peaksReady = false;
+    CircleButton playButton;
     LisnButton newSong;
-    juce::ThreadPool pool { 1 };                   // last member: its jobs stop before the rows go
+    juce::ThreadPool pool { 1 };                     // last member: its jobs stop before the rows go
 };
 
 // PythonMissing.dc.html in three variants: Python missing, Demucs missing, split failed.

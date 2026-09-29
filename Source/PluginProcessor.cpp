@@ -37,7 +37,7 @@ void StemSplitterProcessor::setSixStems (bool six)
 
 void StemSplitterProcessor::startSplit (const juce::File& input)
 {
-    preview.unload();
+    player.unload();
     const juce::ScopedLock sl (settingsLock);   // also covers job.start(), which resets the strings getStateInformation reads
     lastInput = input;
     stemDir = {};

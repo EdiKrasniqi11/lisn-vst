@@ -4,14 +4,14 @@
 
 juce::String mmss (double seconds);   // m:ss, rounded down
 
-// The waveform of a stem row: 330 x waveH bars inside a 5 px vertical margin (for the playhead). Click or drag to seek.
+// The waveform of a stem row: 376 x waveH bars inside a 5 px vertical margin (for the playhead). Click or drag to seek.
 class WaveformView : public juce::Component
 {
 public:
     WaveformView();
     void setLevels (std::vector<float> levels);        // 0..1 per bar
     void setStemColour (juce::Colour);
-    void setFraction (double);                         // no repaint; the row decides
+    void setFraction (double);                         // no repaint; the screen repaints the strip that changed
     std::function<void (double)> onSeek;               // fraction 0..0.999
 
     void paint (juce::Graphics&) override;
@@ -30,8 +30,8 @@ private:
     double fraction = 0.0;
 };
 
-// One stem row of Main.dc.html: badge + name, play button, waveform, time, drag chip. Drag from the row (outside the
-// button and the waveform) to drop the file onto a DAW track.
+// One stem row of the stem player (docs/design/StemPlayer.mockup.html): badge + name, mute light, waveform, drag chip.
+// Drag from the row (outside the light and the waveform) to drop dragFile() onto a DAW track.
 class StemRow : public juce::Component
 {
 public:
@@ -39,9 +39,11 @@ public:
     void setTheme (const Theme&);
     void setCompact (bool sixStems);                 // rows 42 / waveform 26 when true, 62 / 40 when false (sets the height)
     void setPeaks (std::vector<float> levels);       // bar levels 0..1, padded or cut to barCount()
-    void setPlayback (bool playing, double fraction, double lengthSeconds);
-    std::function<void()> onPlayPause;
-    std::function<void (double)> onSeek;             // fraction 0..1
+    void setMuted (bool);                            // dims the name and waveform, swaps the light's icon
+    void setPosition (double fraction);              // the shared playhead; no repaint (the screen repaints the strip)
+    std::function<void()> onToggleMute, onSolo;
+    std::function<void (double)> onSeek;             // fraction 0..0.999
+    std::function<juce::File()> dragFile;            // what a drag drops; unset = the stem file
     juce::File getFile() const { return file; }
     juce::String getStemKey() const { return stemKey; }
     int barCount() const { return compact ? 96 : 104; }
@@ -52,21 +54,16 @@ public:
     void mouseDrag (const juce::MouseEvent&) override;
 
     // test hooks
-    CircleButton& playButton() { return button; }
+    MuteLight& light() { return lightButton; }
     WaveformView& waveform() { return wave; }
     juce::Rectangle<int> chipBounds() const;
-    juce::Rectangle<int> timeBounds() const;
-    juce::String timeText() const { return time; }
-    int getRepaintCount() const { return repaintCount; }   // setPlayback calls that repainted
 
 private:
     juce::File file;
     juce::String stemKey, name;
     juce::Colour colour;
-    bool compact = false, playing = false, dragStarted = false;
-    int head = 0, repaintCount = 0;                  // playhead pixel
-    juce::String time { "0:00" };
+    bool compact = false, muted = false, dragStarted = false;
     std::vector<float> levels;
-    CircleButton button;
+    MuteLight lightButton;
     WaveformView wave;
 };

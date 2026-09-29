@@ -84,9 +84,10 @@ struct UiStateTests : juce::UnitTest
             }
         }
 
-        beginTest ("stem rows: order, play/pause, switching rows");
+        beginTest ("stem player: order, play/pause, mutes, solo, repaint only on change");
         {
             StemSplitterProcessor proc;
+            proc.prepareToPlay (48000.0, 512);
             StemSplitterEditor ed (proc);
             UiState s;
             s.screen = Screen::Stems;
@@ -98,19 +99,32 @@ struct UiStateTests : juce::UnitTest
             for (int i = 0; i < screen.numRows(); ++i)
                 order.add (screen.fileOf (i).getFileNameWithoutExtension());
             expectEquals (order.joinIntoString (","), juce::String ("vocals,drums,bass,guitar,piano,other"));
+            expect (proc.player.getFiles() == screen.getFiles());
 
-            screen.onPlayPause (1);
-            expect (proc.preview.getFile() == screen.fileOf (1) && proc.preview.isPlaying());
-            screen.onPlayPause (1);
-            expect (proc.preview.getFile() == screen.fileOf (1) && ! proc.preview.isPlaying());
-            screen.onPlayPause (1);
-            expect (proc.preview.isPlaying());
-            screen.onPlayPause (0);
-            expect (proc.preview.getFile() == screen.fileOf (0) && proc.preview.isPlaying());
-            proc.preview.pause();
+            screen.onPlayPause();
+            expect (proc.player.isPlaying());
+            screen.onPlayPause();
+            expect (! proc.player.isPlaying());
+
+            screen.onToggleMute (1);
+            expect (proc.player.isMuted (1));
+            ed.tick();
+            expect (screen.row (1)->light().isMuted() && ! screen.row (0)->light().isMuted());
+            screen.onSolo (0);
+            expectEquals ((int) proc.player.audibleMask(), 0b000001);
+            screen.onSolo (0);
+            expectEquals ((int) proc.player.audibleMask(), 0b111111);
+
+            screen.setPlayback (false, 0.25, 30.0);
+            const auto count = screen.getRepaintCount();
+            screen.setPlayback (false, 0.25, 30.0);
+            screen.setPlayback (false, 0.2501, 30.0);    // same pixel, same time text
+            expectEquals (screen.getRepaintCount(), count);
+            screen.setPlayback (false, 0.5, 30.0);
+            expectEquals (screen.getRepaintCount(), count + 1);
         }
 
-        beginTest ("switching 6 to 4 stems drops the old rows, preview and peaks");
+        beginTest ("switching 6 to 4 stems drops the old rows, player files and peaks");
         {
             StemSplitterProcessor proc;
             StemSplitterEditor ed (proc);
@@ -121,14 +135,14 @@ struct UiStateTests : juce::UnitTest
             ed.tick();
             auto& screen = ed.stemsScreen();
             expect (screen.numRows() == 6);
-            screen.onPlayPause (5);
+            proc.player.play();
             ed.tick();
-            expect (proc.preview.getFile() == screen.fileOf (5));
+            expectEquals (proc.player.getFiles().size(), 6);
 
             s.stemDir = four;
             ed.forceState (s);
             ed.tick();
-            expect (screen.numRows() == 4 && proc.preview.getFile() == juce::File());
+            expect (screen.numRows() == 4 && proc.player.getFiles() == screen.getFiles() && ! proc.player.isPlaying());
             for (int i = 0; i < 60 && ! screen.hasPeaks(); ++i)
                 juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
             ed.tick();

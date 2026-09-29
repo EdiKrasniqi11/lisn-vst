@@ -3,12 +3,12 @@
 
 namespace
 {
-    // Main.dc.html row (CSS px): padding 0 10, gap 14; name block 118, button 38, waveform 330, time 32, then the chip.
-    constexpr int padX = 10, nameW = 118, gap = 14, buttonSize = 38, waveW = 330, timeW = 32, chipH = 34;   // chip: 32 + 1 px border
-    constexpr int buttonX = padX + nameW + gap;         // 142
-    constexpr int waveX = buttonX + buttonSize + gap;   // 194
-    constexpr int timeX = waveX + waveW + gap;          // 538
-    constexpr int chipX = timeX + timeW + gap;          // 584
+    // StemPlayer.mockup.html row (CSS px): padding 0 10, gap 14; name block 118, light 38, waveform 376 (the old 330 plus the
+    // removed time slot), then the chip.
+    constexpr int padX = 10, nameW = 118, gap = 14, lightSize = 38, waveW = 376, chipH = 34;   // chip: 32 + 1 px border
+    constexpr int lightX = padX + nameW + gap;          // 142
+    constexpr int waveX = lightX + lightSize + gap;     // 194
+    constexpr int chipX = waveX + waveW + gap;          // 584
 
     juce::Font chipFont() { return Fonts::body (12.0f, 700); }
 }
@@ -67,15 +67,13 @@ void WaveformView::paint (juce::Graphics& g)
     g.fillPath (bars);
     if (fraction <= 0.0)
         return;
-    const auto head = juce::roundToInt (fraction * getWidth());   // snapped, as StemRow repaints per playhead pixel
+    const auto head = juce::roundToInt (fraction * getWidth());   // snapped, as the screen repaints per playhead pixel
     {
         juce::Graphics::ScopedSaveState state (g);
         g.reduceClipRegion (0, 0, head, getHeight());
         g.setColour (colour);
         g.fillPath (bars);
     }
-    g.setColour (Theme::cream);
-    g.fillRoundedRectangle ((float) head - 1.0f, 0.0f, 2.0f, (float) getHeight(), 1.0f);   // spans the bars' -5 .. h + 5
 }
 
 void WaveformView::mouseDown (const juce::MouseEvent& e)
@@ -84,9 +82,8 @@ void WaveformView::mouseDown (const juce::MouseEvent& e)
         onSeek (juce::jlimit (0.0, 0.999, (double) e.position.x / getWidth()));
 }
 
-void WaveformView::mouseDrag (const juce::MouseEvent& e)
+void WaveformView::mouseDrag (const juce::MouseEvent&)
 {
-    mouseDown (e);
 }
 
 StemRow::StemRow (juce::File wav, juce::String key)
@@ -94,9 +91,10 @@ StemRow::StemRow (juce::File wav, juce::String key)
 {
     setWantsKeyboardFocus (false);
     setMouseCursor (juce::MouseCursor::DraggingHandCursor);
-    button.onClick = [this] { if (onPlayPause != nullptr) onPlayPause(); };
+    lightButton.onToggle = [this] { if (onToggleMute != nullptr) onToggleMute(); };
+    lightButton.onSolo = [this] { if (onSolo != nullptr) onSolo(); };
     wave.onSeek = [this] (double f) { if (onSeek != nullptr) onSeek (f); };
-    addAndMakeVisible (button);
+    addAndMakeVisible (lightButton);
     addAndMakeVisible (wave);
     setTheme (themeFor ("dusk"));
     setSize (674, 62);
@@ -107,7 +105,6 @@ void StemRow::setTheme (const Theme& t)
 {
     colour = t.stemColour (stemKey);
     wave.setStemColour (colour);
-    button.setFill (playing ? colour : Theme::cream);
     repaint();
 }
 
@@ -126,35 +123,18 @@ void StemRow::setPeaks (std::vector<float> l)
     wave.setLevels (levels);
 }
 
-void StemRow::setPlayback (bool isPlaying, double fraction, double lengthSeconds)
+void StemRow::setMuted (bool m)
 {
-    fraction = juce::jlimit (0.0, 1.0, fraction);
-    wave.setFraction (fraction);
-    const auto newHead = juce::roundToInt (fraction * waveW);
-    const auto newTime = mmss (fraction * lengthSeconds);
-    if (isPlaying == playing && newHead == head && newTime == time)
-        return;
-
-    ++repaintCount;
-    head = newHead;
-    time = newTime;
-    if (isPlaying != playing)
-    {
-        playing = isPlaying;
-        button.setPlaying (playing);
-        button.setFill (playing ? colour : Theme::cream);
-        repaint();   // the row background changes
-    }
-    else
-    {
-        wave.repaint();
-        repaint (timeBounds());
-    }
+    if (m == muted) return;
+    muted = m;
+    lightButton.setMuted (m);
+    wave.setAlpha (m ? 0.38f : 1.0f);
+    repaint();
 }
 
-juce::Rectangle<int> StemRow::timeBounds() const
+void StemRow::setPosition (double fraction)
 {
-    return { timeX, 0, timeW, getHeight() };
+    wave.setFraction (juce::jlimit (0.0, 1.0, fraction));
 }
 
 juce::Rectangle<int> StemRow::chipBounds() const
@@ -167,42 +147,34 @@ juce::Rectangle<int> StemRow::chipBounds() const
 void StemRow::resized()
 {
     const int h = getHeight(), waveH = compact ? 26 : 40;
-    button.setBounds (buttonX, (h - buttonSize) / 2, buttonSize, buttonSize);
+    lightButton.setBounds (lightX, (h - lightSize) / 2, lightSize, lightSize);
     wave.setBounds (waveX, (h - waveH) / 2 - WaveformView::margin, waveW, waveH + 2 * WaveformView::margin);
 }
 
 void StemRow::paint (juce::Graphics& g)
 {
     const auto h = (float) getHeight();
-    if (playing)
-    {
-        g.setColour (Theme::cream.withAlpha (0.08f));
-        g.fillRoundedRectangle (getLocalBounds().toFloat(), 14.0f);
-    }
+    const float a = muted ? 0.38f : 1.0f;            // a muted row dims its name block (the waveform dims via its alpha)
 
     // Badge: 32 x 32, radius 10, stem colour at 0.16, icon 18 px with stroke 2.
     const juce::Rectangle<float> badge ((float) padX, (h - 32.0f) / 2.0f, 32.0f, 32.0f);
-    if (g.clipRegionIntersects (badge.getSmallestIntegerContainer()))   // the playhead repaints skip the path work
+    if (g.clipRegionIntersects (badge.getSmallestIntegerContainer()))   // playhead repaints skip the path work
     {
-        g.setColour (colour.withAlpha (0.16f));
+        g.setColour (colour.withAlpha (0.16f * a));
         g.fillRoundedRectangle (badge, 10.0f);
-        g.setColour (colour);
+        g.setColour (colour.withMultipliedAlpha (a));
         strokeIcon (g, stemIcon (stemKey), badge.withSizeKeepingCentre (18.0f, 18.0f), 2.0f);
     }
 
     // Name (Bold 14) over the file name (11, cream 0.6), line-height 1.2, 1 px apart, centred as one column, 10 px after the badge.
     const auto nameH = 14.0f * 1.2f, fileH = 11.0f * 1.2f, top = (h - (nameH + 1.0f + fileH)) / 2.0f;
     const auto textX = badge.getRight() + 10.0f, textW = (float) (padX + nameW) - textX;
-    g.setColour (Theme::cream);
+    g.setColour (Theme::cream.withAlpha (a));
     g.setFont (Fonts::body (14.0f, 700));
     g.drawText (name, juce::Rectangle<float> (textX, top, textW, nameH), juce::Justification::centredLeft, true);
-    g.setColour (Theme::cream.withAlpha (0.6f));
+    g.setColour (Theme::cream.withAlpha (0.6f * a));
     g.setFont (Fonts::body (11.0f));
     g.drawText (file.getFileName(), juce::Rectangle<float> (textX, top + nameH + 1.0f, textW, fileH), juce::Justification::centredLeft, true);
-
-    g.setColour (Theme::cream.withAlpha (0.72f));
-    g.setFont (Fonts::body (12.0f));
-    g.drawText (time, timeBounds().toFloat(), juce::Justification::centredRight, false);
 
     // Drag chip: 1 px dashed border (dash 3, gap 3) at cream 0.3, radius 10; grip 16 px stroke 3, 6 px, "Drag" Bold 12 at cream 0.82.
     if (! g.clipRegionIntersects ({ chipX, 0, getWidth() - chipX, getHeight() }))
@@ -226,5 +198,7 @@ void StemRow::mouseDrag (const juce::MouseEvent& e)
     if (dragStarted || e.getDistanceFromDragStart() <= 4)
         return;
     dragStarted = true;   // once per gesture
-    juce::DragAndDropContainer::performExternalDragDropOfFiles ({ file.getFullPathName() }, false, this);
+    const auto f = dragFile != nullptr ? dragFile() : file;
+    if (f.existsAsFile())
+        juce::DragAndDropContainer::performExternalDragDropOfFiles ({ f.getFullPathName() }, false, this);
 }

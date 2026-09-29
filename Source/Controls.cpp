@@ -141,6 +141,35 @@ void CircleButton::paintButton (juce::Graphics& g, bool, bool)
     g.fillPath (iconPath (playing ? Icons::pause : Icons::play, icon));
 }
 
+MuteLight::MuteLight() : juce::Button ({})
+{
+    setWantsKeyboardFocus (false);
+    setMouseClickGrabsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void MuteLight::setMuted (bool m)
+{
+    if (m != muted) { muted = m; repaint(); }
+}
+
+void MuteLight::clicked (const juce::ModifierKeys& mods)
+{
+    const auto& callback = mods.isPopupMenu() ? onSolo : onToggle;   // Button::onClick would fire for both buttons
+    if (callback != nullptr) callback();
+}
+
+void MuteLight::paintButton (juce::Graphics& g, bool, bool)
+{
+    const auto r = getLocalBounds().toFloat();
+    g.setColour (Theme::cream.withAlpha (0.08f));
+    g.fillEllipse (r);
+    g.setColour (Theme::cream.withAlpha (0.22f));
+    g.drawEllipse (r.reduced (0.5f), 1.0f);
+    g.setColour (muted ? Theme::cream.withAlpha (0.5f) : Theme::cream);
+    strokeIcon (g, muted ? Icons::speakerOff : Icons::speaker, r.withSizeKeepingCentre (18.0f, 18.0f), 2.0f);
+}
+
 void drawDashedRoundedRect (juce::Graphics& g, juce::Rectangle<float> r, float radius, float thickness, float dash, float gap, juce::Colour c)
 {
     juce::Path outline, dashed;

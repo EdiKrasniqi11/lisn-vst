@@ -102,9 +102,9 @@ int runSnapshots (const juce::File& outDir)
     struct Shot { juce::String name, theme; UiState state; float scale = 1.0f; Setup before; };
     const auto playing = [] (StemSplitterProcessor& p, StemSplitterEditor& ed)
     {
-        p.preview.load (ed.stemsScreen().fileOf (0));
-        p.preview.setPositionFraction (0.38);
-        p.preview.play();                            // no audio callback: the position stays put
+        p.player.setPositionFraction (0.38);
+        p.player.setMuted (2, true);                 // bass muted
+        p.player.play();                             // no audio callback: the position stays put
         ed.tick();
         ed.background().setMotion (0.0f, 0.0f);      // tick() advanced the flow by wall-clock time; keep snapshots repeatable
     };
@@ -119,7 +119,7 @@ int runSnapshots (const juce::File& outDir)
         { "drop-midnight-6", "midnight", state (Screen::Drop, true) },
         { "splitting-dusk", "dusk", withProgress (state (Screen::Splitting, false), 0.58) },
         { "splitting-midnight", "midnight", withProgress (state (Screen::Splitting, true), 0.58) },
-        { "stems4-dusk-playing", "dusk", state (Screen::Stems, false), 1.0f, playing },
+        { "stems4-dusk-mix", "dusk", state (Screen::Stems, false), 1.0f, playing },
         { "stems6-midnight", "midnight", state (Screen::Stems, true) },
         { "error-python-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::PythonMissing, {}, {}) },
         { "error-demucs-midnight", "midnight", withError (state (Screen::Error, false), ErrorKind::DemucsMissing, {}, "C:\\Python311\\python.exe") },
@@ -152,7 +152,7 @@ int runSnapshots (const juce::File& outDir)
             std::puts (file.getFullPathName().toRawUTF8());
         else
             ++failures;
-        proc.preview.unload();
+        proc.player.unload();
     }
     return failures == 0 ? 0 : 1;
 }
@@ -173,15 +173,12 @@ int runBench()
 
     // A motion frame as the app paints it: the strips around the panel plus the playing row's waveform and time.
     auto& stems = ed.stemsScreen();
-    proc.preview.load (stems.fileOf (0));
-    proc.preview.play();
+    proc.player.play();
     ed.tick();
     auto& waves = ed.background();
-    auto& row = *stems.row (0);
     const auto motion = waves.motionRegion();
-    auto frameRegion = motion;
-    frameRegion.add (ed.getLocalArea (&row.waveform(), row.waveform().getLocalBounds()));
-    frameRegion.add (ed.getLocalArea (&row, row.timeBounds()));
+    auto frameRegion = motion;                       // plus the strip a moving playhead repaints across all rows
+    frameRegion.add (ed.getLocalArea (&stems, stems.playheadArea (0.38).expanded (1, 0)));
 
     auto averageMs = [&] (juce::Component& c, const juce::RectangleList<int>& region, int scale, int frames, bool moving)
     {
@@ -214,7 +211,7 @@ int runBench()
 
     juce::AudioBuffer<float> buffer (2, 512);
     juce::MidiBuffer midi;
-    proc.preview.pause();
+    proc.player.pause();
     proc.processBlock (buffer, midi);                    // the one faded block after pause()
     auto t0 = now();
     for (int i = 0; i < 20000; ++i)
@@ -222,8 +219,10 @@ int runBench()
     std::printf ("process_block_us_idle=%.4f\n", (now() - t0) * 1000.0 / 20000.0);
 
     // "other" is never silent, so every burst must meter a peak. Bursts of 50 blocks let the read-ahead refill between them.
-    proc.preview.load (stems.fileOf (3));
-    proc.preview.play();
+    for (int i = 0; i < stems.numRows(); ++i)
+        proc.player.setMuted (i, i != 3);            // "other" only: it is never silent, so every burst must meter a peak
+    proc.player.setPositionFraction (0.0);
+    proc.player.play();
     juce::Thread::sleep (60);
     double total = 0.0, worst = 0.0;
     bool metered = true;
@@ -238,13 +237,13 @@ int runBench()
             total += us;
             worst = juce::jmax (worst, us);
         }
-        metered = metered && proc.preview.takePeak() > 0.0f;
+        metered = metered && proc.player.takePeak() > 0.0f;
         juce::Thread::sleep (60);
     }
-    proc.preview.unload();
-    std::printf ("process_block_us_preview=%.3f\nprocess_block_us_preview_max=%.3f\n", total / 2000.0, worst);
+    proc.player.unload();
+    std::printf ("process_block_us_playing=%.3f\nprocess_block_us_playing_max=%.3f\n", total / 2000.0, worst);
     if (! metered)
-        std::puts ("FAIL: a preview burst metered no peak");
+        std::puts ("FAIL: a playing burst metered no peak");
     if (motionMs > 4.0)
         std::puts ("FAIL: motion_frame_ms is over the 4 ms budget");
     return metered && motionMs <= 4.0 ? 0 : 1;

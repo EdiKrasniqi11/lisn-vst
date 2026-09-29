@@ -6,14 +6,14 @@
 #include <optional>
 
 // Fixed 760 x 500: wave background, header and one screen per UiState::Screen. A 30 Hz timer maps the processor to a
-// UiState, updates the stem rows from the preview and moves the waves while a preview plays.
+// UiState, updates the stem rows from the player and moves the waves while it plays.
 class StemSplitterEditor : public juce::AudioProcessorEditor,
                            public juce::FileDragAndDropTarget,
                            private juce::Timer
 {
 public:
     explicit StemSplitterEditor (StemSplitterProcessor&);
-    ~StemSplitterEditor() override;                  // pauses the preview
+    ~StemSplitterEditor() override;                  // pauses the player
     void resized() override;
 
     bool isInterestedInFileDrag (const juce::StringArray&) override;   // one audio file
@@ -31,7 +31,6 @@ private:
     void timerCallback() override { tick(); }
     void show (const UiState&);
     void applyTheme (const Theme&);
-    void playPause (int row);
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
     StemSplitterProcessor& proc;

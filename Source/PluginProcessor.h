@@ -1,7 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SeparationJob.h"
-#include "StemPreview.h"
+#include "StemPlayer.h"
 
 class StemSplitterProcessor : public juce::AudioProcessor
 {
@@ -11,9 +11,9 @@ public:
               .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
               .withOutput ("Output", juce::AudioChannelSet::stereo(), true)) {}
 
-    void prepareToPlay (double sampleRate, int maxBlock) override { preview.prepare (sampleRate, maxBlock); }
-    void releaseResources() override { preview.release(); }
-    void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override { preview.addTo (buffer); }   // pass-through plus preview
+    void prepareToPlay (double sampleRate, int maxBlock) override { player.prepare (sampleRate, maxBlock); }
+    void releaseResources() override { player.release(); }
+    void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override { player.addTo (buffer); }   // pass-through plus the stem player
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
@@ -33,7 +33,7 @@ public:
     void setStateInformation (const void*, int) override;
 
     SeparationJob job;
-    StemPreview preview;
+    StemPlayer player;
 
     // Settings. The host may save state from any thread, so every access goes through settingsLock.
     juce::String getTheme() const      { const juce::ScopedLock sl (settingsLock); return theme; }
