@@ -312,13 +312,14 @@ void SplittingScreen::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (283 tall), position strip at 373.
+// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (4 rows end at 352, 6 at 351),
+// position strip at 375.
 
 namespace
 {
     constexpr int waveLeft = 19 + 194, waveWidth = 376;   // the waveforms: rows at x 19, waveform at row x 194
-    constexpr float stripY = 373.0f;                      // the position strip (4 tall) while zoomed, in the old footer's slot
-    const juce::Rectangle<int> stripArea { waveLeft - 2, 370, waveWidth + 4, 10 };   // with the loop ticks
+    constexpr float stripY = 375.0f;                      // the position strip (4 tall) while zoomed, in the old footer's slot
+    const juce::Rectangle<int> stripArea { waveLeft - 2, 372, waveWidth + 4, 10 };   // with the loop ticks
 }
 
 juce::String beatsText (double beats)
@@ -519,6 +520,7 @@ void StemsScreen::setHot (int edge)
 {
     if (edge == hot) return;
     hot = edge;
+    setMouseCursor (edge >= 0 ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);   // over a tab
     for (auto* r : rows)
         r->waveform().setMouseCursor (edge >= 0 ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::PointingHandCursor);
     repaint (loopArea (loopRange));
@@ -543,17 +545,18 @@ void StemsScreen::waveMouse (WaveMouse m, double f, bool free)
             if (grab < 0 && onSeek != nullptr) onSeek (juce::jmin (f, 0.999));
             break;
         case WaveMouse::drag:
-            if (grab >= 0)
-                dragBand = trimmed (f, free);
-            else if (dragging || std::abs (x - downX) >= 4)   // 4 px or more: a new loop instead of a seek
-            {
-                dragging = true;
-                dragBand = { snap (juce::jmin (downFraction, f), free), snap (juce::jmax (downFraction, f), free) };
-            }
+            // 4 px or more: a trim or a new loop instead of a seek. Less is a click, whatever the mouse jitters (JUCE sends a
+            // drag for any move, sub-pixel at 125-150 % DPI). ponytail: a handle dragged to the view's edge stops there, no
+            // autoscroll. Upgrade path: scroll the view while a handle is held at an edge.
+            if (! dragging && std::abs (x - downX) < 4)
+                break;
+            dragging = true;
+            dragBand = grab >= 0 ? trimmed (f, free)
+                                 : juce::Range<double> { snap (juce::jmin (downFraction, f), free), snap (juce::jmax (downFraction, f), free) };
             repaint (waveSpanArea());
             break;
         case WaveMouse::up:
-            if ((grab >= 0 || dragging) && ! dragBand.isEmpty() && onSetLoop != nullptr)
+            if (dragging && ! dragBand.isEmpty() && (grab < 0 || dragBand != loopRange) && onSetLoop != nullptr)
                 onSetLoop (dragBand.getStart(), dragBand.getEnd());
             dragBand = {};
             grab = -1;
@@ -562,6 +565,27 @@ void StemsScreen::waveMouse (WaveMouse m, double f, bool free)
             break;
     }
 }
+
+// The tabs stick out above the waveforms over the rows' margins, which pass the mouse on: run the same gesture here, x
+// clamped to the waves like WaveformView's. A press that began here owns its drag and release, wherever they go; elsewhere
+// the mouse un-hots.
+void StemsScreen::tabMouse (WaveMouse m, const juce::MouseEvent& e)
+{
+    const auto inside = waveSpanArea().contains (e.getPosition());
+    if (m == WaveMouse::down) tabDown = inside;
+    const auto ours = m == WaveMouse::drag || m == WaveMouse::up ? tabDown : inside;
+    if (m == WaveMouse::up) tabDown = false;
+    if (ours)
+        waveMouse (m, fractionAt ((float) juce::jlimit (waveLeft, waveLeft + waveWidth, e.x)), e.mods.isAltDown());
+    else
+        waveMouse (WaveMouse::exit, 0.0, false);
+}
+
+void StemsScreen::mouseMove (const juce::MouseEvent& e) { tabMouse (WaveMouse::move, e); }
+void StemsScreen::mouseDown (const juce::MouseEvent& e) { tabMouse (WaveMouse::down, e); }
+void StemsScreen::mouseDrag (const juce::MouseEvent& e) { tabMouse (WaveMouse::drag, e); }
+void StemsScreen::mouseUp (const juce::MouseEvent& e)   { tabMouse (WaveMouse::up, e); }
+void StemsScreen::mouseExit (const juce::MouseEvent& e) { tabMouse (WaveMouse::exit, e); }
 
 void StemsScreen::setLoop (juce::Range<double> range, bool on)
 {

@@ -142,7 +142,7 @@ struct UiStateTests : juce::UnitTest
             auto& screen = ed.stemsScreen();
             expectEquals (screen.chipText(), juce::String ("Drag mix"));
 
-            screen.setTempo ({ 120.0, 0.0 });                // 0.5 s stems: beats every 0.5 s = the whole song
+            screen.setTempo ({ 120.0, 0.0 });                // a beat every 0.5 s (the stems are 0.5 s long)
             // 0.5 s stems at 120 BPM: a quarter beat (0.125 s) is 94 px wide, so edges snap to quarter beats.
             expectWithinAbsoluteError (screen.snap (0.3), 0.25, 1e-9);
             expectWithinAbsoluteError (screen.snap (0.8), 0.75, 1e-9);
@@ -348,13 +348,21 @@ struct UiStateTests : juce::UnitTest
             expectWithinAbsoluteError (sets[1].first, b - beat / 4.0 / 192.0, 1e-9);
             expectWithinAbsoluteError (sets[1].second, b, 1e-12);
 
-            // Alt: the end follows the mouse exactly.
-            const double freeAt = b - 0.07 / 192.0;
+            // Alt: the end follows the mouse exactly (8 px here; the grid line beside it is a quarter beat, 4.4 px, further).
+            const double freeAt = b - 0.3 / 192.0;
             screen.waveMouse (WaveMouse::down, b, true);
             screen.waveMouse (WaveMouse::drag, freeAt, true);
             screen.waveMouse (WaveMouse::up, freeAt, true);
             expectEquals ((int) sets.size(), 3);
             expectWithinAbsoluteError (sets[2].second, freeAt, 1e-12);
+
+            // A click on a handle that jitters by a pixel or two changes nothing: no loop is sent, so the player isn't re-seeked.
+            screen.waveMouse (WaveMouse::down, b, false);
+            screen.waveMouse (WaveMouse::drag, b - 1.5 * px, false);
+            screen.waveMouse (WaveMouse::drag, b + 2.0 * px, false);
+            screen.waveMouse (WaveMouse::up, b + 2.0 * px, false);
+            expectEquals ((int) sets.size(), 3);
+            expectEquals (seekTo, -1.0);
 
             // Away from the edges: a click seeks, a drag makes a new snapped loop (here an inner one).
             const double mid = (a + b) / 2.0;
@@ -369,6 +377,86 @@ struct UiStateTests : juce::UnitTest
             expect (sets[3].first > a && sets[3].second < b);
             const double k = (sets[3].first * 192.0 - 0.2) / (beat / 4.0);
             expectWithinAbsoluteError (k, std::round (k), 1e-6);
+        }
+
+        beginTest ("a grab tab's top half is a handle: the rows let the mouse through there and the screen runs the gesture");
+        {
+            StemsScreen screen;
+            screen.setStems (four, "Song.mp3");
+            screen.setPlayback (false, 0.0, 192.0);
+            screen.setTempo ({ 92.0, 0.2 });
+            screen.setView ({ 74.0 / 192.0, 88.0 / 192.0 });
+            const double beat = 60.0 / 92.0, a = (0.2 + 120 * beat) / 192.0, b = (0.2 + 128 * beat) / 192.0;
+            screen.setLoop ({ a, b }, true);
+            std::vector<std::pair<double, double>> sets;
+            screen.onSetLoop = [&] (double from, double to) { sets.push_back ({ from, to }); };
+            auto set = [&] (size_t i) { return i < sets.size() ? sets[i] : std::pair<double, double> { -1.0, -1.0 }; };
+            double seekTo = -1.0;
+            screen.onSeek = [&] (double f) { seekTo = f; };
+
+            auto& row = *screen.row (0);
+            const int wx = row.waveform().getX();
+            expect (! row.hitTest (wx + 100, 2));                              // above the waveform (its 5 px margin lies within the tab)
+            expect (! row.hitTest (wx + 100, row.getHeight() - 2));            // below it
+            expect (row.hitTest (wx + 100, row.getHeight() / 2));              // the waveform itself
+            expect (row.hitTest (40, 2) && row.hitTest (row.chipBounds().getCentreX(), row.getHeight() / 2));   // name, chip: still the row's
+
+            auto at = [&] (int x, int y)
+            {
+                const juce::Point<float> p ((float) x, (float) y);
+                const auto now = juce::Time::getCurrentTime();
+                return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, juce::ModifierKeys(),
+                                         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &screen, &screen, now, p, now, 0, false);
+            };
+            auto xAt = [&] (double f)
+            {
+                return 213 + juce::roundToInt ((f - screen.getView().getStart()) / screen.getView().getLength() * 376.0);
+            };
+            const int tabY = 76, xa = xAt (a), xb = xAt (b);                   // y 76 is row 0's top margin, inside the tab (72..90)
+
+            screen.mouseMove (at (xb + 2, tabY));
+            expectEquals (screen.hotEdge(), 1);
+            screen.mouseMove (at (xb + 30, tabY));
+            expectEquals (screen.hotEdge(), -1);
+            screen.mouseMove (at (xb + 2, tabY));
+            screen.mouseMove (at (xb + 2, 20));                                // up in the song row: not a handle
+            expectEquals (screen.hotEdge(), -1);
+            screen.mouseMove (at (xb + 2, tabY));
+            screen.mouseExit (at (xb + 2, tabY));
+            expectEquals (screen.hotEdge(), -1);
+
+            screen.mouseMove (at (xb + 2, tabY));                              // trim the end two beats in from the tab
+            screen.mouseDown (at (xb, tabY));
+            expectEquals (seekTo, -1.0);
+            screen.mouseDrag (at (xb - 35, tabY));
+            expect (sets.empty());
+            screen.mouseUp (at (xb - 35, 300));                                // released away from the tab: still this gesture
+            expectEquals ((int) sets.size(), 1);
+            expectWithinAbsoluteError (set (0).first, a, 1e-12);
+            expectWithinAbsoluteError (set (0).second, b - 2 * beat / 192.0, 1e-9);
+
+            screen.mouseDown (at (xa, tabY));                                  // the start, dragged far left of the waves: x is clamped
+            screen.mouseDrag (at (5, 300));                                    // ... and the drag goes on outside the tab area
+            screen.mouseUp (at (5, 300));
+            expectEquals ((int) sets.size(), 2);
+            expectWithinAbsoluteError (set (1).first * 192.0, 74.0, beat / 8.0 + 1e-9);   // the view's start (snapped)
+
+            screen.mouseDown (at (xa + 60, 20));                               // a press elsewhere isn't ours, nor is its drag
+            screen.mouseDrag (at (xa + 120, tabY));
+            screen.mouseUp (at (xa + 120, tabY));
+            expectEquals ((int) sets.size(), 2);
+            expectEquals (seekTo, -1.0);
+        }
+
+        beginTest ("new stems reset the zoom");
+        {
+            StemsScreen screen;
+            screen.setStems (four, "Song.mp3");
+            screen.setPlayback (false, 0.0, 192.0);
+            screen.zoom (0.5, 0.5);
+            expect (screen.getView() != juce::Range<double> (0.0, 1.0));
+            screen.setStems (four, "Song.mp3");
+            expect (screen.getView() == juce::Range<double> (0.0, 1.0));
         }
 
         beginTest ("the Loop button (and L) makes a 4-bar loop at the playhead when there's none, else toggles");

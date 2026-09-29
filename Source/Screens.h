@@ -71,7 +71,8 @@ private:
 
 juce::String beatsText (double beats);   // "8 beats", "10.25 beats", "1 beat": rounded to a quarter beat
 
-// StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, footer hint.
+// StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, the loop band with its handles
+// over them, and the position strip while zoomed.
 class StemsScreen : public juce::Component
 {
 public:
@@ -112,7 +113,7 @@ public:
     void waveMouse (WaveMouse, double fraction, bool alt);
     int hotEdge() const { return hot; }              // 0 = loop start, 1 = loop end, -1 = none (test hook)
     juce::String chipText() const { return dragChip.getText(); }   // test hook
-    std::function<void (double, double)> onSetLoop;  // a finished waveform drag, snapped
+    std::function<void (double, double)> onSetLoop;  // a finished loop drag, a handle trim or defaultLoop (snapped unless Alt)
     std::function<void()> onToggleLoop;
     std::function<juce::File()> mixFile;             // the Drag mix / Drag loop file
     std::function<juce::File (int)> stemFile;        // what row i drags
@@ -122,18 +123,25 @@ public:
     std::function<void (double)> onSeek;             // fraction 0..0.999
 
     void paint (juce::Graphics&) override;
-    void paintOverChildren (juce::Graphics&) override;   // the shared playhead across every row
+    void paintOverChildren (juce::Graphics&) override;   // over every row: the grid, the loop band and its tabs, the playhead
     void resized() override;
+    // The grab tabs reach above the waveforms, where the rows pass the mouse on (StemRow::hitTest): same gesture as waveMouse.
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override;
 
 private:
     int headX (double fraction) const;               // panel x of a song fraction (through the view)
     double fractionAt (float x) const;               // the song fraction at panel x (through the view)
     juce::Range<int> waveSpan() const;               // top..bottom of the waveforms, row 0 to the last row
     juce::Rectangle<int> waveSpanArea() const;
-    juce::Rectangle<int> loopArea (juce::Range<double>) const;   // the band's pixels, padded by the edge width
+    juce::Rectangle<int> loopArea (juce::Range<double>) const;   // the band's pixels, padded for the tabs (9 px sideways, 13 up)
     int edgeNear (int x) const;                      // the loop edge within 6 px of panel x: 0 / 1, or -1
     juce::Range<double> trimmed (double fraction, bool free) const;   // the loop with the grabbed edge moved there
     void setHot (int edge);                          // the hovered handle: its tab and the resize cursor
+    void tabMouse (WaveMouse, const juce::MouseEvent&);   // the screen's own mouse over the tabs, as waveMouse
 
     Theme theme = themeFor ("dusk");
     juce::File dir;
@@ -149,7 +157,8 @@ private:
     double position = 0.0;                           // the playhead, as a song fraction
     int hot = -1, grab = -1, downX = 0;              // the hovered / grabbed loop edge (0 start, 1 end, -1 none), the press x
     double downFraction = 0.0;
-    bool dragging = false;                           // a drag away from the handles: a new loop
+    bool dragging = false;                           // a drag of 4 px or more: a trim (grab >= 0) or a new loop
+    bool tabDown = false;                            // the press went to the screen itself, over the waves: it owns the drag
     juce::OwnedArray<StemRow> rows;
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };

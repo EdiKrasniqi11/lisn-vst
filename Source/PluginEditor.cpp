@@ -78,9 +78,7 @@ bool StemSplitterEditor::keyPressed (const juce::KeyPress& key)
     if (code == juce::KeyPress::spaceKey)
         stems.onPlayPause();
     else if (juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) code) == 'L')
-    {
         stems.toggleLoop();
-    }
     else if (code == juce::KeyPress::homeKey)
         p.setPositionFraction (p.isLooping() ? p.getLoop().getStart() : 0.0);
     else if (code >= '1' && code <= '6')
@@ -103,6 +101,8 @@ bool StemSplitterEditor::keyStateChanged (bool isKeyDown)
     // but hands the key-down to the host unless it's used here, so claim the key-downs of the keys keyPressed() takes:
     // otherwise FL would also start its own transport on the same Space. ponytail: while one of these keys is held, any
     // other key-down is claimed too. Upgrade path: remember which key keyPressed() took and claim only that one.
+    // ponytail: isKeyCurrentlyDown reads the live key state (GetAsyncKeyState), so a UI stall longer than a tap can let the
+    // key-down leak to FL. Upgrade path: ::GetKeyState (message-synchronous), or the remembered key above.
     const auto mods = juce::ModifierKeys::currentModifiers;
     if (! isKeyDown || ! shown.has_value() || shown->screen != Screen::Stems || mods.isCtrlDown() || mods.isAltDown())
         return false;

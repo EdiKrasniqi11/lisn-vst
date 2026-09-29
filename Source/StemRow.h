@@ -63,6 +63,7 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    bool hitTest (int x, int y) override;            // the waveform column outside the waveform is the screen's (its grab tabs)
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
 

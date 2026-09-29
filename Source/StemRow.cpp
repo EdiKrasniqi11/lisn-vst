@@ -195,6 +195,13 @@ void StemRow::paint (juce::Graphics& g)
         drawDragChip (g, chipBounds().toFloat(), "Drag");
 }
 
+// The loop's grab tabs stick out above the waveforms, over the rows' margins: the row passes the mouse on there (the screen
+// runs the handle gesture, StemsScreen::tabMouse), so a handle drag can't start a stem-file drag.
+bool StemRow::hitTest (int x, int y)
+{
+    return ! (x >= wave.getX() && x < wave.getRight() && ! wave.getBounds().contains (x, y));
+}
+
 void StemRow::mouseDown (const juce::MouseEvent&)
 {
     dragStarted = false;
