@@ -223,6 +223,51 @@ struct UiStateTests : juce::UnitTest
             expect (! ed.keyPressed (juce::KeyPress (juce::KeyPress::spaceKey)));   // not on the Stems screen
         }
 
+        beginTest ("zoom keeps the point under the mouse and clamps; the wheel zooms with Ctrl and scrolls when zoomed");
+        {
+            StemsScreen screen;
+            screen.setStems (four, "Song.mp3");
+            screen.setPlayback (false, 0.0, 192.0);                   // a 3:12 song, as the player would report it
+            expect (screen.getView() == juce::Range<double> (0.0, 1.0));
+            screen.zoom (0.5, 0.8);
+            expectWithinAbsoluteError (screen.getView().getStart(), 0.1, 1e-9);
+            expectWithinAbsoluteError (screen.getView().getLength(), 0.8, 1e-9);
+            screen.zoom (0.26, 0.8);                                  // 0.26 sits at 0.2 of the view and stays there
+            expectWithinAbsoluteError (screen.getView().getStart(), 0.26 - 0.2 * 0.64, 1e-9);
+            expectWithinAbsoluteError (screen.getView().getLength(), 0.64, 1e-9);
+            for (int i = 0; i < 100; ++i) screen.zoom (0.3, 0.8);
+            expectWithinAbsoluteError (screen.getView().getLength() * 192.0, 2.0, 1e-9);   // 2 s across at most
+            for (int i = 0; i < 100; ++i) screen.zoom (0.3, 1.25);
+            expect (screen.getView() == juce::Range<double> (0.0, 1.0));
+
+            screen.setView ({ 0.25, 0.75 });                          // everything maps through the view
+            expectEquals (screen.playheadArea (0.5).getCentreX(), 213 + 188);
+            expectEquals (screen.playheadArea (0.25).getCentreX(), 213);
+            screen.setView ({ 0.9, 1.3 });                            // kept inside the song
+            expectWithinAbsoluteError (screen.getView().getStart(), 0.6, 1e-9);
+            expectWithinAbsoluteError (screen.getView().getEnd(), 1.0, 1e-9);
+            screen.setView ({ 0.0, 1.0 });
+
+            auto wheel = [&] (float deltaY, bool ctrl)                // over the middle of the first waveform
+            {
+                const juce::Point<float> p (213.0f + 188.0f, (float) screen.row (0)->getBounds().getCentreY());
+                const auto now = juce::Time::getCurrentTime();
+                const juce::MouseEvent e (juce::Desktop::getInstance().getMainMouseSource(), p,
+                                          ctrl ? juce::ModifierKeys (juce::ModifierKeys::ctrlModifier) : juce::ModifierKeys(),
+                                          0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &screen, &screen, now, p, now, 0, false);
+                screen.mouseWheelMove (e, { 0.0f, deltaY, false, false, false });
+            };
+            wheel (-0.14f, false);
+            expect (screen.getView() == juce::Range<double> (0.0, 1.0));   // whole song: the plain wheel does nothing
+            wheel (0.14f, true);                                      // Ctrl + wheel up zooms in around the mouse
+            expectWithinAbsoluteError (screen.getView().getLength(), 0.8, 1e-9);
+            expectWithinAbsoluteError (screen.getView().getStart(), 0.1, 1e-9);
+            wheel (-0.14f, false);                                    // wheel down: later in the song, 10 % of the view
+            expectWithinAbsoluteError (screen.getView().getStart(), 0.18, 1e-9);
+            for (int i = 0; i < 20; ++i) wheel (-0.14f, false);
+            expectWithinAbsoluteError (screen.getView().getEnd(), 1.0, 1e-9);   // stops at the end of the song
+        }
+
         beginTest ("switching 6 to 4 stems drops the old rows, player files and peaks");
         {
             StemSplitterProcessor proc;

@@ -312,7 +312,14 @@ void SplittingScreen::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (283 tall).
+// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (283 tall), position strip at 373.
+
+namespace
+{
+    constexpr int waveLeft = 19 + 194, waveWidth = 376;   // the waveforms: rows at x 19, waveform at row x 194
+    constexpr float stripY = 373.0f;                      // the position strip (4 tall) while zoomed, in the old footer's slot
+    const juce::Rectangle<int> stripArea { waveLeft - 2, 370, waveWidth + 4, 10 };   // with the loop ticks
+}
 
 StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
 {
@@ -358,6 +365,8 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     length = 0.0;
     playing = peaksReady = false;
     lastHead = -1;
+    view = { 0.0, 1.0 };
+    position = 0.0;
     loopRange = dragBand = {};
     loopOn = false;
     tempo = {};
@@ -390,20 +399,20 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     resized();
     repaint();
 
-    // One job reads every row's peaks in order; a newer setStems (or the destructor) stops it and drops its result.
-    const int gen = generation, bars = rows.isEmpty() ? 0 : rows[0]->barCount();
-    pool.addJob ([safe = juce::Component::SafePointer<StemsScreen> (this), files, gen, bars]
+    // One job reads every row's peak envelope in order; a newer setStems (or the destructor) stops it and drops its result.
+    const int gen = generation;
+    pool.addJob ([safe = juce::Component::SafePointer<StemsScreen> (this), files, gen]
     {
         const std::function<bool()> shouldExit = [] { return juce::ThreadPoolJob::getCurrentThreadPoolJob()->shouldExit(); };
         juce::AudioFormatManager formats;
         formats.registerBasicFormats();
-        std::vector<std::vector<float>> peaks;
+        std::vector<std::vector<float>> envelopes;
         double seconds = 0.0;
         for (const auto& f : files)
         {
             if (shouldExit()) return;
             std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (f));
-            peaks.push_back (reader != nullptr ? readPeaks (*reader, bars, shouldExit) : std::vector<float>());
+            envelopes.push_back (reader != nullptr ? readEnvelope (*reader, 100.0, shouldExit) : std::vector<float>());
             if (reader != nullptr && seconds == 0.0) seconds = lengthSeconds (*reader);
         }
         Tempo found;
@@ -412,11 +421,11 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
                 if (std::unique_ptr<juce::AudioFormatReader> r { formats.createReaderFor (f) })
                     found = detectTempo (*r);
         if (shouldExit()) return;
-        juce::MessageManager::callAsync ([safe, gen, peaks = std::move (peaks), seconds, found]() mutable
+        juce::MessageManager::callAsync ([safe, gen, envelopes = std::move (envelopes), seconds, found]() mutable
         {
             if (safe == nullptr || safe->generation != gen) return;
-            for (int i = 0; i < juce::jmin ((int) peaks.size(), safe->rows.size()); ++i)
-                safe->rows[i]->setPeaks (std::move (peaks[(size_t) i]));
+            for (int i = 0; i < juce::jmin ((int) envelopes.size(), safe->rows.size()); ++i)
+                safe->rows[i]->setEnvelope (std::move (envelopes[(size_t) i]));
             safe->length = seconds;
             safe->peaksReady = true;
             safe->timeText = mmss (0.0) + " / " + mmss (seconds);
@@ -448,13 +457,18 @@ juce::Range<int> StemsScreen::waveSpan() const
 
 int StemsScreen::headX (double f) const
 {
-    return 19 + 194 + juce::roundToInt (f * 376.0);   // rows at x 19, waveform at row x 194, 376 wide
+    return waveLeft + juce::roundToInt ((f - view.getStart()) / view.getLength() * waveWidth);
+}
+
+double StemsScreen::fractionAt (float x) const
+{
+    return view.getStart() + (x - (float) waveLeft) / (double) waveWidth * view.getLength();
 }
 
 juce::Rectangle<int> StemsScreen::waveSpanArea() const
 {
     const auto span = waveSpan();
-    return { 19 + 194 - 3, span.getStart(), 376 + 6, span.getLength() };
+    return { waveLeft - 3, span.getStart(), waveWidth + 6, span.getLength() };
 }
 
 juce::Rectangle<int> StemsScreen::loopArea (juce::Range<double> r) const
@@ -485,6 +499,7 @@ void StemsScreen::setLoop (juce::Range<double> range, bool on)
     loopOn = on;
     repaint (loopArea (loopOn ? loopRange : juce::Range<double>()));   // the new band
     repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle shows the loop
+    repaint (stripArea);                             // the strip's loop ticks
     loopButton.setEnabled (! loopRange.isEmpty());
     loopButton.setAlpha (loopRange.isEmpty() ? 0.55f : 1.0f);
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
@@ -502,6 +517,7 @@ juce::Rectangle<int> StemsScreen::playheadArea (double f) const
 void StemsScreen::setPlayback (bool isPlaying, double f, double len)
 {
     f = juce::jlimit (0.0, 1.0, f);
+    position = f;
     if (len > 0.0) length = len;
     bool changed = false;
     for (auto* r : rows) r->setPosition (f);
@@ -536,23 +552,67 @@ void StemsScreen::setAudible (juce::uint32 mask)
         rows[i]->setMuted (((mask >> i) & 1u) == 0);
 }
 
+void StemsScreen::setView (juce::Range<double> v)
+{
+    const auto w = juce::jlimit (1e-9, 1.0, v.getLength());
+    const auto start = juce::jlimit (0.0, 1.0 - w, v.getStart());
+    if (juce::Range<double> (start, start + w) == view) return;
+    view = { start, start + w };
+    for (auto* r : rows) r->setView (view);
+    lastHead = headX (position);
+    repaint();
+}
+
+void StemsScreen::zoom (double at, double factor)
+{
+    const auto minWidth = length > 2.0 ? 2.0 / length : 1.0;   // 2 s across at most
+    const auto w = juce::jlimit (minWidth, 1.0, view.getLength() * factor);
+    const auto rel = (at - view.getStart()) / view.getLength();  // where `at` sits in the view, kept through the zoom
+    setView ({ at - rel * w, at - rel * w + w });
+}
+
+void StemsScreen::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
+{
+    // The rows and waveforms don't handle the wheel, so it reaches the screen. ponytail: one step per wheel event, so a
+    // trackpad's many small events move fast. Upgrade path: scale the step by the delta.
+    const auto p = e.getEventRelativeTo (this).position;
+    const auto span = waveSpan();
+    if (rows.isEmpty() || p.x < (float) waveLeft || p.x > (float) (waveLeft + waveWidth)
+        || p.y < (float) span.getStart() || p.y > (float) span.getEnd())
+        return;
+    if (e.mods.isCtrlDown())
+    {
+        if (wheel.deltaY != 0.0f) zoom (fractionAt (p.x), wheel.deltaY > 0.0f ? 0.8 : 1.25);
+    }
+    else if (view.getLength() < 1.0)
+    {
+        const auto d = wheel.deltaX != 0.0f ? wheel.deltaX : wheel.deltaY;   // down (or a left swipe) = later in the song
+        if (d != 0.0f) setView (view + (d < 0.0f ? 0.1 : -0.1) * view.getLength());
+    }
+}
+
 void StemsScreen::paintOverChildren (juce::Graphics& g)
 {
     if (rows.isEmpty()) return;
     const auto span = waveSpan();
+    const auto top = (float) span.getStart(), h = (float) span.getLength();
+    const int right = waveLeft + waveWidth;
     const auto band = ! dragBand.isEmpty() ? dragBand : loopOn ? loopRange : juce::Range<double>();
     if (! band.isEmpty())
     {
-        const auto x0 = (float) headX (band.getStart()), x1 = (float) headX (band.getEnd());
+        // Clipped to the view: an edge outside it isn't drawn.
+        const auto x0 = headX (band.getStart()), x1 = headX (band.getEnd());
+        const auto a = juce::jlimit (waveLeft, right, x0), b = juce::jlimit (waveLeft, right, x1);
         g.setColour (Theme::cream.withAlpha (0.10f));
-        g.fillRect (x0, (float) span.getStart(), x1 - x0, (float) span.getLength());
+        g.fillRect ((float) a, top, (float) (b - a), h);
         g.setColour (Theme::cream);
-        g.fillRect (x0 - 1.0f, (float) span.getStart(), 2.0f, (float) span.getLength());
-        g.fillRect (x1 - 1.0f, (float) span.getStart(), 2.0f, (float) span.getLength());
+        for (const auto x : { x0, x1 })
+            if (x >= waveLeft && x <= right)
+                g.fillRect ((float) x - 1.0f, top, 2.0f, h);
     }
-    if (lastHead < 0) return;
+    if (lastHead < waveLeft || lastHead > right) return;   // no playhead, or it's outside the view
     g.setColour (Theme::cream);
-    g.fillRoundedRectangle ((float) lastHead - 1.0f, (float) span.getStart(), 2.0f, (float) span.getLength(), 1.0f);
+    g.fillRoundedRectangle ((float) lastHead - 1.0f, top, 2.0f, h, 1.0f);
 }
 
 void StemsScreen::resized()
@@ -589,6 +649,22 @@ void StemsScreen::paint (juce::Graphics& g)
 
     g.setColour (Theme::cream.withAlpha (0.12f));
     g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
+
+    // Position strip (only while zoomed): where the view sits in the song, the loop edges in the accent colour.
+    if (view.getLength() < 1.0 && g.clipRegionIntersects (stripArea))
+    {
+        g.setColour (Theme::cream.withAlpha (0.10f));
+        g.fillRoundedRectangle ((float) waveLeft, stripY, (float) waveWidth, 4.0f, 2.0f);
+        g.setColour (Theme::cream.withAlpha (0.55f));
+        g.fillRoundedRectangle ((float) waveLeft + (float) view.getStart() * waveWidth, stripY,
+                                juce::jmax (2.0f, (float) view.getLength() * waveWidth), 4.0f, 2.0f);
+        if (loopOn)
+        {
+            g.setColour (theme.accent());
+            for (const auto f : { loopRange.getStart(), loopRange.getEnd() })
+                g.fillRect ((float) waveLeft + (float) f * waveWidth - 1.0f, stripY - 2.0f, 2.0f, 8.0f);
+        }
+    }
 }
 
 //==============================================================================

@@ -86,14 +86,14 @@ struct StemRowTests : juce::UnitTest
         row.setCompact (false);
         expectEquals (row.getHeight(), 62);
 
-        beginTest ("wrong peak count");
-        row.setPeaks ({ 0.5f });
-        row.setPeaks (std::vector<float> (500, 2.0f));
-        row.setPeaks ({});
+        beginTest ("any envelope size");
+        row.setEnvelope ({ 0.5f });
+        row.setEnvelope (std::vector<float> (500, 2.0f));
+        row.setEnvelope ({});
         render (row);
 
         beginTest ("played part");
-        row.setPeaks (std::vector<float> (104, 1.0f));
+        row.setEnvelope (std::vector<float> (104, 1.0f));
         row.setPosition (0.5);
         const auto wave = render (row.waveform());
         const auto alphaAt = [&] (int x, int y) { return (int) wave.getPixelAt (x, y).getAlpha(); };
@@ -101,6 +101,32 @@ struct StemRowTests : juce::UnitTest
         expectGreaterThan (alphaAt (37, 25), 240);
         expectWithinAbsoluteError (alphaAt (290, 25), 77, 4);
         expectEquals (alphaAt (188, 1), 0);
+
+        beginTest ("the view picks what's drawn, the played part and the seek position");
+        {
+            std::vector<float> env (1000, 0.0f);
+            std::fill (env.begin() + 500, env.end(), 1.0f);           // silent first half, loud second half
+            row.setEnvelope (env);
+            row.setPosition (0.0);
+            row.setView ({ 0.0, 0.5 });
+            expectEquals ((int) render (row.waveform()).getPixelAt (37, 8).getAlpha(), 0);            // flat bars only
+            row.setView ({ 0.5, 1.0 });
+            expectGreaterThan ((int) render (row.waveform()).getPixelAt (37, 8).getAlpha(), 60);      // full bars
+            row.setPosition (0.75);                                   // the middle of this view
+            const auto img = render (row.waveform());
+            expectGreaterThan ((int) img.getPixelAt (37, 25).getAlpha(), 240);                        // played
+            expectWithinAbsoluteError ((int) img.getPixelAt (290, 25).getAlpha(), 77, 4);             // not yet
+            double seekTo = -1.0;
+            row.onSeek = [&] (double f) { seekTo = f; };
+            const juce::Point<float> p (94.0f, 20.0f);                // 0.25 of the width
+            const auto now = juce::Time::getCurrentTime();
+            row.waveform().mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, {}, 0.0f, 0.0f, 0.0f,
+                                                        0.0f, 0.0f, &row.waveform(), &row.waveform(), now, p, now, 1, false));
+            expectWithinAbsoluteError (seekTo, 0.625, 1e-9);          // 0.5 + 0.25 of the 0.5-wide view
+            row.onSeek = nullptr;
+            row.setView ({ 0.0, 1.0 });
+            row.setPosition (0.5);
+        }
 
         beginTest ("mute light");
         int toggles = 0, solos = 0;

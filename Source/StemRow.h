@@ -4,30 +4,36 @@
 
 juce::String mmss (double seconds);   // m:ss, rounded down
 
-// The waveform of a stem row: 376 x waveH bars inside a 5 px vertical margin (for the playhead). Click or drag to seek.
+// The waveform of a stem row: 376 x waveH bars inside a 5 px vertical margin (for the playhead). It draws `view` (song
+// fractions) of the stem's 100 Hz peak envelope. Click or drag to seek; positions are song fractions.
 class WaveformView : public juce::Component
 {
 public:
     WaveformView();
-    void setLevels (std::vector<float> levels);        // 0..1 per bar
+    void setEnvelope (std::vector<float> envelope);    // peak levels 0..1, one per 10 ms of the stem
+    void setBars (int count);                          // bars across the width: 104, or 96 compact
+    void setView (juce::Range<double> songFractions);  // the part of the song drawn; the whole song by default
     void setStemColour (juce::Colour);
-    void setFraction (double);                         // no repaint; the screen repaints the strip that changed
-    std::function<void (double)> onSeek;               // fraction 0..0.999
+    void setFraction (double);                         // the playhead (song fraction); no repaint, the screen repaints the strip
+    std::function<void (double)> onSeek;               // song fraction 0..0.999
 
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
-    std::function<void (double, double, bool)> onLoopDrag;   // from, to (fractions), finished
+    std::function<void (double, double, bool)> onLoopDrag;   // from, to (song fractions), finished
 
     static constexpr int margin = 5;
 
 private:
     void rebuildBars();
+    double fractionAt (float x) const;                 // the song fraction under x, clamped to the view
 
-    std::vector<float> levels;
-    juce::Path bars;                                   // cached; rebuilt on setLevels / resized
+    std::vector<float> envelope;
+    juce::Range<double> view { 0.0, 1.0 };
+    int count = 104;
+    juce::Path bars;                                   // cached; rebuilt on setEnvelope / setBars / setView / resized
     juce::Colour colour = Theme::cream;
     double fraction = 0.0, downFraction = 0.0;
     bool looping = false;
@@ -41,7 +47,8 @@ public:
     StemRow (juce::File wav, juce::String stemKey);  // stemKey = lower-case file name without extension
     void setTheme (const Theme&);
     void setCompact (bool sixStems);                 // rows 42 / waveform 26 when true, 62 / 40 when false (sets the height)
-    void setPeaks (std::vector<float> levels);       // bar levels 0..1, padded or cut to barCount()
+    void setEnvelope (std::vector<float> envelope);  // the stem's 100 Hz peak envelope (levels 0..1)
+    void setView (juce::Range<double>);              // the song fractions the waveform shows
     void setMuted (bool);                            // dims the name and waveform, swaps the light's icon
     void setPosition (double fraction);              // the shared playhead; no repaint (the screen repaints the strip)
     std::function<void()> onToggleMute, onSolo;
@@ -67,7 +74,6 @@ private:
     juce::String stemKey, name;
     juce::Colour colour;
     bool compact = false, muted = false, dragStarted = false;
-    std::vector<float> levels;
     MuteLight lightButton;
     WaveformView wave;
 };

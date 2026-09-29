@@ -1,4 +1,5 @@
 #include "StemRow.h"
+#include "Peaks.h"
 
 namespace
 {
@@ -22,9 +23,24 @@ WaveformView::WaveformView()
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
-void WaveformView::setLevels (std::vector<float> l)
+void WaveformView::setEnvelope (std::vector<float> e)
 {
-    levels = std::move (l);
+    envelope = std::move (e);
+    rebuildBars();
+    repaint();
+}
+
+void WaveformView::setBars (int n)
+{
+    count = n;
+    rebuildBars();
+    repaint();
+}
+
+void WaveformView::setView (juce::Range<double> v)
+{
+    if (v == view || v.getLength() <= 0.0) return;
+    view = v;
     rebuildBars();
     repaint();
 }
@@ -47,10 +63,11 @@ void WaveformView::resized()
 void WaveformView::rebuildBars()
 {
     bars.clear();
-    if (levels.empty())
+    if (count <= 0)
         return;
+    const auto levels = barsFromEnvelope (envelope, view, count);
     const auto h = (float) (getHeight() - 2 * margin), mid = (float) margin + h / 2.0f;
-    const auto step = (float) getWidth() / (float) levels.size();
+    const auto step = (float) getWidth() / (float) count;
     for (size_t i = 0; i < levels.size(); ++i)
     {
         const auto half = juce::jmax (0.75f, juce::jlimit (0.0f, 1.0f, levels[i]) * (h / 2.0f - 0.5f));
@@ -58,26 +75,30 @@ void WaveformView::rebuildBars()
     }
 }
 
+double WaveformView::fractionAt (float x) const
+{
+    return view.getStart() + juce::jlimit (0.0, 1.0, (double) x / getWidth()) * view.getLength();
+}
+
 void WaveformView::paint (juce::Graphics& g)
 {
     g.setColour (colour.withAlpha (0.3f));
     g.fillPath (bars);
-    if (fraction <= 0.0)
+    // The played part, snapped to whole pixels as the screen repaints per playhead pixel.
+    const auto head = juce::jlimit (0, getWidth(), juce::roundToInt ((fraction - view.getStart()) / view.getLength() * getWidth()));
+    if (head <= 0)
         return;
-    const auto head = juce::roundToInt (fraction * getWidth());   // snapped, as the screen repaints per playhead pixel
-    {
-        juce::Graphics::ScopedSaveState state (g);
-        g.reduceClipRegion (0, 0, head, getHeight());
-        g.setColour (colour);
-        g.fillPath (bars);
-    }
+    juce::Graphics::ScopedSaveState state (g);
+    g.reduceClipRegion (0, 0, head, getHeight());
+    g.setColour (colour);
+    g.fillPath (bars);
 }
 
 void WaveformView::mouseDown (const juce::MouseEvent& e)
 {
     looping = false;
     if (getWidth() <= 0) return;
-    downFraction = juce::jlimit (0.0, 0.999, (double) e.position.x / getWidth());
+    downFraction = juce::jmin (0.999, fractionAt (e.position.x));
     if (onSeek != nullptr) onSeek (downFraction);
 }
 
@@ -85,13 +106,13 @@ void WaveformView::mouseDrag (const juce::MouseEvent& e)
 {
     if (getWidth() <= 0 || (! looping && e.getDistanceFromDragStart() < 4)) return;
     looping = true;                                  // 4 px or more: this gesture selects a loop instead of seeking
-    if (onLoopDrag != nullptr) onLoopDrag (downFraction, juce::jlimit (0.0, 1.0, (double) e.position.x / getWidth()), false);
+    if (onLoopDrag != nullptr) onLoopDrag (downFraction, fractionAt (e.position.x), false);
 }
 
 void WaveformView::mouseUp (const juce::MouseEvent& e)
 {
     if (looping && onLoopDrag != nullptr && getWidth() > 0)
-        onLoopDrag (downFraction, juce::jlimit (0.0, 1.0, (double) e.position.x / getWidth()), true);
+        onLoopDrag (downFraction, fractionAt (e.position.x), true);
     looping = false;
 }
 
@@ -108,7 +129,6 @@ StemRow::StemRow (juce::File wav, juce::String key)
     addAndMakeVisible (wave);
     setTheme (themeFor ("dusk"));
     setSize (674, 62);
-    setPeaks ({});
 }
 
 void StemRow::setTheme (const Theme& t)
@@ -121,16 +141,19 @@ void StemRow::setTheme (const Theme& t)
 void StemRow::setCompact (bool sixStems)
 {
     compact = sixStems;
-    setPeaks (std::move (levels));
+    wave.setBars (barCount());
     setSize (getWidth(), compact ? 42 : 62);
     resized();   // setSize skips it when the height is unchanged, but the waveform height follows `compact`
 }
 
-void StemRow::setPeaks (std::vector<float> l)
+void StemRow::setEnvelope (std::vector<float> e)
 {
-    levels = std::move (l);
-    levels.resize ((size_t) barCount(), 0.0f);
-    wave.setLevels (levels);
+    wave.setEnvelope (std::move (e));
+}
+
+void StemRow::setView (juce::Range<double> v)
+{
+    wave.setView (v);
 }
 
 void StemRow::setMuted (bool m)

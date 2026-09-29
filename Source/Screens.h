@@ -83,6 +83,11 @@ public:
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
     void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
     void setAudible (juce::uint32 mask);            // bit i set = row i audible
+    // The shared view: the song fractions every row shows (the whole song by default; new stems reset it).
+    void setView (juce::Range<double>);             // kept inside 0..1
+    juce::Range<double> getView() const { return view; }
+    void zoom (double atFraction, double factor);    // factor < 1 zooms in; `atFraction` stays under the mouse; 2 s at most
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;   // Ctrl zooms, plain scrolls
 
     int numRows() const { return rows.size(); }
     juce::File fileOf (int row) const;
@@ -109,7 +114,8 @@ public:
     void resized() override;
 
 private:
-    int headX (double fraction) const;               // screen x of the playhead
+    int headX (double fraction) const;               // panel x of a song fraction (through the view)
+    double fractionAt (float x) const;               // the song fraction at panel x (through the view)
     juce::Range<int> waveSpan() const;               // top..bottom of the waveforms, row 0 to the last row
     juce::Rectangle<int> waveSpanArea() const;
     juce::Rectangle<int> loopArea (juce::Range<double>) const;   // the band's pixels, padded by the edge width
@@ -123,6 +129,8 @@ private:
     juce::Range<double> loopRange, dragBand;         // the player's loop / the band shown while dragging (empty = none)
     bool loopOn = false;
     Tempo tempo;
+    juce::Range<double> view { 0.0, 1.0 };
+    double position = 0.0;                           // the playhead, as a song fraction
     juce::OwnedArray<StemRow> rows;
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };

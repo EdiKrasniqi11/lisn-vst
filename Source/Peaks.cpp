@@ -1,23 +1,40 @@
 #include "Peaks.h"
+#include <algorithm>
 
-std::vector<float> readPeaks (juce::AudioFormatReader& reader, int bars, const std::function<bool()>& shouldAbort)
+std::vector<float> readEnvelope (juce::AudioFormatReader& reader, double fps, const std::function<bool()>& shouldAbort)
 {
-    std::vector<float> peaks ((size_t) juce::jmax (0, bars), 0.0f);
     const auto len = reader.lengthInSamples;
-    if (reader.numChannels == 0 || len <= 0 || bars <= 0) return peaks;
+    if (reader.numChannels == 0 || len <= 0 || fps <= 0.0 || reader.sampleRate <= 0.0) return {};
+    const auto hop = juce::jmax ((juce::int64) 1, (juce::int64) std::round (reader.sampleRate / fps));
+    std::vector<float> env ((size_t) ((len + hop - 1) / hop), 0.0f);
 
     // readMaxLevels asserts that the channel count is at most what the file has (juce_AudioFormatReader.cpp:218-221).
     std::vector<juce::Range<float>> ranges ((size_t) juce::jmin ((int) reader.numChannels, 8));
-    for (int i = 0; i < bars; ++i)
+    for (size_t i = 0; i < env.size(); ++i)
     {
         if (shouldAbort && shouldAbort()) break;
-        const auto start = len * i / bars, end = len * (i + 1) / bars;
-        reader.readMaxLevels (start, end - start, ranges.data(), (int) ranges.size());
+        const auto start = (juce::int64) i * hop;
+        reader.readMaxLevels (start, juce::jmin (hop, len - start), ranges.data(), (int) ranges.size());
         float level = 0.0f;
         for (auto r : ranges) level = juce::jmax (level, std::abs (r.getStart()), std::abs (r.getEnd()));
-        peaks[(size_t) i] = juce::jmin (1.0f, level);
+        env[i] = juce::jmin (1.0f, level);
     }
-    return peaks;
+    return env;
+}
+
+std::vector<float> barsFromEnvelope (const std::vector<float>& env, juce::Range<double> view, int bars)
+{
+    std::vector<float> out ((size_t) juce::jmax (0, bars), 0.0f);
+    if (env.empty()) return out;
+    const auto n = (int) env.size();
+    for (int i = 0; i < bars; ++i)
+    {
+        const auto a = view.getStart() + view.getLength() * i / bars, b = view.getStart() + view.getLength() * (i + 1) / bars;
+        const auto from = juce::jlimit (0, n - 1, (int) std::floor (a * n));
+        const auto to = juce::jlimit (from + 1, n, (int) std::ceil (b * n));
+        out[(size_t) i] = *std::max_element (env.begin() + from, env.begin() + to);
+    }
+    return out;
 }
 
 double lengthSeconds (const juce::AudioFormatReader& reader)

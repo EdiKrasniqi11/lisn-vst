@@ -55,21 +55,26 @@ struct PeaksTests : juce::UnitTest
             expect (reader != nullptr);
             if (reader == nullptr) return;
 
-            beginTest ("peaks per slice");
-            const auto peaks = readPeaks (*reader, 4);
-            expectEquals ((int) peaks.size(), 4);
+            beginTest ("envelope and bars");
+            const auto env = readEnvelope (*reader, 100.0);
+            expectEquals ((int) env.size(), 100);                       // 1 s at 100 frames per second (441 samples each)
+            const auto whole = barsFromEnvelope (env, { 0.0, 1.0 }, 4);
             const float want[] = { 0.0f, 0.5f, 0.0f, 1.0f };
-            for (size_t i = 0; i < peaks.size(); ++i)
-                expectWithinAbsoluteError (peaks[i], want[i], 0.02f);
-
-            beginTest ("no bars");
-            expect (readPeaks (*reader, 0).empty());
+            for (size_t i = 0; i < whole.size(); ++i)
+                expectWithinAbsoluteError (whole[i], want[i], 0.02f);
+            const auto zoomed = barsFromEnvelope (env, { 0.45, 0.55 }, 2);   // the end of the 0.5 sine, then silence
+            expectWithinAbsoluteError (zoomed[0], 0.5f, 0.02f);
+            expectWithinAbsoluteError (zoomed[1], 0.0f, 0.02f);
+            for (auto v : barsFromEnvelope (env, { 0.3, 0.3001 }, 10))       // narrower than a frame: that frame
+                expectWithinAbsoluteError (v, 0.5f, 0.02f);
+            expectEquals ((int) barsFromEnvelope ({}, { 0.0, 1.0 }, 104).size(), 104);   // no envelope yet: flat bars
+            expect (barsFromEnvelope (env, { 0.0, 1.0 }, 0).empty());
 
             beginTest ("abort");
             int calls = 0;
-            const auto aborted = readPeaks (*reader, 4, [&] { return ++calls > 1; });
-            expectEquals ((int) aborted.size(), 4);
-            expect (aborted[1] == 0.0f && aborted[3] == 0.0f);   // bar 0 read, then stopped
+            const auto aborted = readEnvelope (*reader, 100.0, [&] { return ++calls > 30; });
+            expectEquals ((int) aborted.size(), 100);
+            expect (aborted[80] == 0.0f && env[80] > 0.9f);             // frames 0-29 read, then stopped
 
             beginTest ("length");
             expectWithinAbsoluteError (lengthSeconds (*reader), 1.0, 1e-9);
