@@ -62,7 +62,7 @@ The waveform is 376 px wide. On a 3-minute song at 92 BPM one pixel is about 0.8
   | Key | Action |
   |---|---|
   | Space | play/pause the stems |
-  | L | loop on/off (only when a loop range exists) |
+  | L | loop on/off; with no loop yet, it makes one (see "Loop button and L") |
   | 1 to 6 | mute/unmute stem N (a stem that doesn't exist is ignored) |
   | Shift+1 to 6 | solo stem N, like right-clicking its light |
   | Home | jump to the start, or to the loop start while looping |
