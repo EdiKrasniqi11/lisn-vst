@@ -125,7 +125,8 @@ private:
     juce::String song, timeText { "0:00 / 0:00" };
     double length = 0.0;             // the peak job's length until the player reports one
     bool playing = false, peaksReady = false;
-    int lastHead = -1, generation = 0, repaintCount = 0;
+    bool hasHead = false;            // setPlayback has run since setStems: lastHead is real (it can be off the panel when zoomed)
+    int lastHead = 0, generation = 0, repaintCount = 0;
     juce::Range<double> loopRange, dragBand;         // the player's loop / the band shown while dragging (empty = none)
     bool loopOn = false;
     Tempo tempo;

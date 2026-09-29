@@ -364,7 +364,7 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     song = songName;
     length = 0.0;
     playing = peaksReady = false;
-    lastHead = -1;
+    hasHead = false;
     view = { 0.0, 1.0 };
     position = 0.0;
     loopRange = dragBand = {};
@@ -522,13 +522,21 @@ void StemsScreen::setPlayback (bool isPlaying, double f, double len)
     bool changed = false;
     for (auto* r : rows) r->setPosition (f);
     const auto x = headX (f);
-    if (x != lastHead)                               // the played colour and the line change only between the two positions
+    if (! hasHead || x != lastHead)                  // the played colour and the line change only between the two positions
     {
+        // Clamped to the waves (the line's 2 px included): a move into the view repaints the whole played part from the
+        // panel's edge, and a playhead outside the view repaints nothing.
         const auto span = waveSpan();
-        const auto from = lastHead < 0 ? x : juce::jmin (lastHead, x), to = lastHead < 0 ? x : juce::jmax (lastHead, x);
-        repaint (juce::Rectangle<int>::leftTopRightBottom (from - 2, span.getStart(), to + 2, span.getEnd()));
+        const auto from = hasHead ? juce::jmin (lastHead, x) : x, to = hasHead ? juce::jmax (lastHead, x) : x;
+        const auto area = juce::Rectangle<int>::leftTopRightBottom (from - 2, span.getStart(), to + 2, span.getEnd())
+                              .getIntersection ({ waveLeft - 2, span.getStart(), waveWidth + 4, span.getLength() });
         lastHead = x;
-        changed = true;
+        hasHead = true;
+        if (! area.isEmpty())
+        {
+            repaint (area);
+            changed = true;
+        }
     }
     const auto t = mmss (f * length) + " / " + mmss (length);
     if (t != timeText)
@@ -556,10 +564,12 @@ void StemsScreen::setView (juce::Range<double> v)
 {
     const auto w = juce::jlimit (1e-9, 1.0, v.getLength());
     const auto start = juce::jlimit (0.0, 1.0 - w, v.getStart());
-    if (juce::Range<double> (start, start + w) == view) return;
-    view = { start, start + w };
+    // A width within rounding of 1 is the whole song: {1e-16, 1} would show the position strip and scroll at full zoom-out.
+    const auto next = w >= 1.0 - 1e-9 ? juce::Range<double> (0.0, 1.0) : juce::Range<double> (start, start + w);
+    if (next == view) return;
+    view = next;
     for (auto* r : rows) r->setView (view);
-    lastHead = headX (position);
+    if (hasHead) lastHead = headX (position);
     repaint();
 }
 
@@ -610,7 +620,7 @@ void StemsScreen::paintOverChildren (juce::Graphics& g)
             if (x >= waveLeft && x <= right)
                 g.fillRect ((float) x - 1.0f, top, 2.0f, h);
     }
-    if (lastHead < waveLeft || lastHead > right) return;   // no playhead, or it's outside the view
+    if (! hasHead || lastHead < waveLeft || lastHead > right) return;   // no playhead yet, or it's outside the view
     g.setColour (Theme::cream);
     g.fillRoundedRectangle ((float) lastHead - 1.0f, top, 2.0f, h, 1.0f);
 }

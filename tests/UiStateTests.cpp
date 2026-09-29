@@ -268,6 +268,45 @@ struct UiStateTests : juce::UnitTest
             expectWithinAbsoluteError (screen.getView().getEnd(), 1.0, 1e-9);   // stops at the end of the song
         }
 
+        beginTest ("zooming fully out lands on exactly the whole song, from any anchor");
+        {
+            StemsScreen screen;
+            screen.setStems (four, "Song.mp3");
+            screen.setPlayback (false, 0.0, 192.0);
+            for (int k = 0; k <= 1000; k += 9)                        // rounding used to leave {1e-16, 1} for some anchors
+            {
+                const auto at = k / 1000.0;
+                screen.setView ({ 0.1, 0.9 });
+                screen.zoom (at, 1.25);                               // 0.8 wide x 1.25: the whole song
+                expect (screen.getView() == juce::Range<double> (0.0, 1.0), "anchor " + juce::String (at));
+            }
+        }
+
+        beginTest ("a seek from an off-screen playhead repaints the whole played part; an off-screen playhead repaints nothing");
+        {
+            StemsScreen screen;
+            screen.setSize (712, 400);
+            screen.setVisible (true);
+            screen.setBufferedToImage (true);                         // keeps what was painted: only repaint() refreshes it
+            screen.setStems (four, "Song.mp3");
+            screen.row (0)->setEnvelope (std::vector<float> (1000, 1.0f));   // full-height bars
+            screen.setPlayback (false, 0.0, 192.0);
+            screen.setView ({ 0.385, 0.458 });                        // the playhead at 0 is far left of it
+            auto snapshot = [&]
+            {
+                juce::Image img (juce::Image::ARGB, 712, 400, true, juce::SoftwareImageType());
+                juce::Graphics g (img);
+                screen.getCachedComponentImage()->paint (g);
+                return img;
+            };
+            snapshot();                                               // everything is valid now
+            const auto count = screen.getRepaintCount();
+            screen.setPlayback (false, 0.002, 192.0);                 // still off-screen, same time text
+            expectEquals (screen.getRepaintCount(), count);
+            screen.setPlayback (false, 0.42, 192.0);                  // a seek into the view: the head lands at x 393
+            expectGreaterThan ((int) snapshot().getPixelAt (250, 105).getAlpha(), 240);   // a bar of row 0 left of it: played
+        }
+
         beginTest ("switching 6 to 4 stems drops the old rows, player files and peaks");
         {
             StemSplitterProcessor proc;
