@@ -396,8 +396,11 @@ struct UiStateTests : juce::UnitTest
 
             auto& row = *screen.row (0);
             const int wx = row.waveform().getX();
+            const int wr = row.waveform().getRight();
             expect (! row.hitTest (wx + 100, 2));                              // above the waveform (its 5 px margin lies within the tab)
             expect (! row.hitTest (wx + 100, row.getHeight() - 2));            // below it
+            expect (! row.hitTest (wx - 5, 2) && ! row.hitTest (wx - 9, 2));   // 5-9 px left of waveform, above it
+            expect (! row.hitTest (wr + 4, 2) && ! row.hitTest (wr + 8, 2));   // 4-8 px right of waveform, above it
             expect (row.hitTest (wx + 100, row.getHeight() / 2));              // the waveform itself
             expect (row.hitTest (40, 2) && row.hitTest (row.chipBounds().getCentreX(), row.getHeight() / 2));   // name, chip: still the row's
 

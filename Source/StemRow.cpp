@@ -199,7 +199,7 @@ void StemRow::paint (juce::Graphics& g)
 // runs the handle gesture, StemsScreen::tabMouse), so a handle drag can't start a stem-file drag.
 bool StemRow::hitTest (int x, int y)
 {
-    return ! (x >= wave.getX() && x < wave.getRight() && ! wave.getBounds().contains (x, y));
+    return ! (x >= wave.getX() - 9 && x < wave.getRight() + 9 && ! wave.getBounds().contains (x, y));
 }
 
 void StemRow::mouseDown (const juce::MouseEvent&)
