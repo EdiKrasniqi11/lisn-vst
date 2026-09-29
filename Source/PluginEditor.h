@@ -16,6 +16,12 @@ public:
     ~StemSplitterEditor() override;                  // pauses the player
     void resized() override;
 
+    // The keyboard (the editor takes it on any click; see the constructor). Space, L, 1-6, Shift+1-6 and Home on the Stems
+    // screen; every other key returns false, and JUCE passes it on to the host.
+    bool keyPressed (const juce::KeyPress&) override;
+    bool keyStateChanged (bool isKeyDown) override;
+    void mouseDown (const juce::MouseEvent&) override;
+
     bool isInterestedInFileDrag (const juce::StringArray&) override;   // one audio file
     void fileDragEnter (const juce::StringArray&, int, int) override;
     void fileDragExit (const juce::StringArray&) override;

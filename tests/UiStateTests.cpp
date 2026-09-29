@@ -66,10 +66,11 @@ struct UiStateTests : juce::UnitTest
                 StemSplitterEditor ed (proc);
                 ed.forceState (s);
                 ed.tick();
+                expect (ed.getWantsKeyboardFocus());
                 bool browseHasEllipsis = false;
                 walk (ed, [&] (juce::Component& c)
                 {
-                    expect (! c.getWantsKeyboardFocus(), c.getName());
+                    expect (&c == &ed || ! c.getWantsKeyboardFocus(), c.getName());   // only the editor takes the keyboard
                     if (auto* b = dynamic_cast<juce::Button*> (&c))
                     {
                         expect (! b->getMouseClickGrabsKeyboardFocus(), b->getButtonText());
@@ -171,6 +172,55 @@ struct UiStateTests : juce::UnitTest
             ed.tick();
             expect (screen.stemFile (1) != drumsLoop, screen.stemFile (1).getFileName());
             four.getChildFile ("renders").deleteRecursively();
+        }
+
+        beginTest ("keys: Space, L, 1-6, Shift+1-6, Home on the Stems screen; everything else goes to the host");
+        {
+            StemSplitterProcessor proc;
+            proc.prepareToPlay (48000.0, 512);
+            StemSplitterEditor ed (proc);
+            UiState s;
+            s.screen = Screen::Stems;
+            s.stemDir = four;
+            ed.forceState (s);
+            ed.tick();
+            auto& screen = ed.stemsScreen();
+
+            expect (ed.keyPressed (juce::KeyPress (juce::KeyPress::spaceKey)));
+            expect (proc.player.isPlaying());
+            ed.keyPressed (juce::KeyPress (juce::KeyPress::spaceKey));
+            expect (! proc.player.isPlaying());
+
+            expect (ed.keyPressed (juce::KeyPress ('2')));
+            expect (proc.player.isMuted (1));
+            expect (ed.keyPressed (juce::KeyPress ('1', juce::ModifierKeys::shiftModifier, '!')));   // Shift+1 solos vocals
+            expectEquals ((int) proc.player.audibleMask(), 0b0001);
+            expect (ed.keyPressed (juce::KeyPress ('6')));          // there's no sixth stem: ignored, but still ours
+
+            expect (ed.keyPressed (juce::KeyPress ('L')));          // no loop range yet: nothing to toggle
+            expect (! proc.player.isLooping());
+            screen.onSetLoop (0.2, 0.6);
+            ed.tick();
+            expect (ed.keyPressed (juce::KeyPress ('l')));
+            expect (! proc.player.isLooping());
+            ed.keyPressed (juce::KeyPress ('L'));
+            expect (proc.player.isLooping());
+
+            proc.player.setPositionFraction (0.9);
+            expect (ed.keyPressed (juce::KeyPress (juce::KeyPress::homeKey)));
+            expectWithinAbsoluteError (proc.player.getPositionFraction(), 0.2, 0.01);   // looping: the loop start
+            proc.player.setLooping (false);
+            ed.keyPressed (juce::KeyPress (juce::KeyPress::homeKey));
+            expectWithinAbsoluteError (proc.player.getPositionFraction(), 0.0, 0.01);
+
+            expect (! ed.keyPressed (juce::KeyPress ('A')));
+            expect (! ed.keyPressed (juce::KeyPress ('S', juce::ModifierKeys::ctrlModifier, 0)));   // FL's Ctrl+S
+            expect (! ed.keyPressed (juce::KeyPress (juce::KeyPress::spaceKey, juce::ModifierKeys::ctrlModifier, 0)));
+
+            UiState dropState;
+            ed.forceState (dropState);
+            ed.tick();
+            expect (! ed.keyPressed (juce::KeyPress (juce::KeyPress::spaceKey)));   // not on the Stems screen
         }
 
         beginTest ("switching 6 to 4 stems drops the old rows, player files and peaks");

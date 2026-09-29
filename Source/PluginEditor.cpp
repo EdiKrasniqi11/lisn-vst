@@ -8,7 +8,10 @@ namespace
 
 StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcessorEditor (p), proc (p)
 {
-    setWantsKeyboardFocus (false);
+    // Only the editor takes the keyboard, when anything in it is clicked; its children never do. The listener sees the
+    // clicks on every child, including buttons, which don't grab focus themselves.
+    setWantsKeyboardFocus (true);
+    addMouseListener (this, true);
     addAndMakeVisible (waves);
     addAndMakeVisible (header);
     for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error })
@@ -58,6 +61,55 @@ void StemSplitterEditor::resized()
     header.setBounds (24, 16, 712, 44);
     for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error })
         s->setBounds (panel);
+}
+
+void StemSplitterEditor::mouseDown (const juce::MouseEvent&)
+{
+    grabKeyboardFocus();
+}
+
+bool StemSplitterEditor::keyPressed (const juce::KeyPress& key)
+{
+    const auto mods = key.getModifiers();
+    if (! shown.has_value() || shown->screen != Screen::Stems || mods.isCtrlDown() || mods.isAltDown())
+        return false;                                // FL's shortcuts stay FL's
+    const auto code = key.getKeyCode();
+    auto& p = proc.player;
+    if (code == juce::KeyPress::spaceKey)
+        stems.onPlayPause();
+    else if (juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) code) == 'L')
+    {
+        if (stems.loopButtonEnabled()) stems.onToggleLoop();
+    }
+    else if (code == juce::KeyPress::homeKey)
+        p.setPositionFraction (p.isLooping() ? p.getLoop().getStart() : 0.0);
+    else if (code >= '1' && code <= '6')
+    {
+        const int i = code - '1';
+        if (i < stems.numRows())
+        {
+            if (mods.isShiftDown()) stems.onSolo (i);
+            else                    stems.onToggleMute (i);
+        }
+    }
+    else
+        return false;
+    return true;
+}
+
+bool StemSplitterEditor::keyStateChanged (bool isKeyDown)
+{
+    // Windows sends Space, letters and digits as a key-down and then a character. JUCE turns the character into keyPressed()
+    // but hands the key-down to the host unless it's used here, so claim the key-downs of the keys keyPressed() takes:
+    // otherwise FL would also start its own transport on the same Space. ponytail: while one of these keys is held, any
+    // other key-down is claimed too. Upgrade path: remember which key keyPressed() took and claim only that one.
+    const auto mods = juce::ModifierKeys::currentModifiers;
+    if (! isKeyDown || ! shown.has_value() || shown->screen != Screen::Stems || mods.isCtrlDown() || mods.isAltDown())
+        return false;
+    for (const int k : { (int) juce::KeyPress::spaceKey, (int) 'L', (int) '1', (int) '2', (int) '3', (int) '4', (int) '5', (int) '6' })
+        if (juce::KeyPress::isKeyCurrentlyDown (k))
+            return true;
+    return false;
 }
 
 void StemSplitterEditor::tick()
