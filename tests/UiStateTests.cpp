@@ -140,19 +140,18 @@ struct UiStateTests : juce::UnitTest
             ed.forceState (s);
             ed.tick();
             auto& screen = ed.stemsScreen();
-            expect (! screen.loopButtonEnabled());
             expectEquals (screen.chipText(), juce::String ("Drag mix"));
 
             screen.setTempo ({ 120.0, 0.0 });                // 0.5 s stems: beats every 0.5 s = the whole song
-            expectEquals (screen.snap (0.3), 0.0);
-            expectEquals (screen.snap (0.8), 1.0);
+            // 0.5 s stems at 120 BPM: a quarter beat (0.125 s) is 94 px wide, so edges snap to quarter beats.
+            expectWithinAbsoluteError (screen.snap (0.3), 0.25, 1e-9);
+            expectWithinAbsoluteError (screen.snap (0.8), 0.75, 1e-9);
             screen.setTempo ({});
             expectEquals (screen.snap (0.3), 0.3);           // no tempo: no snapping
 
             screen.onSetLoop (0.2, 0.6);
             ed.tick();
             expect (proc.player.isLooping());
-            expect (screen.loopButtonEnabled());
             expectEquals (screen.chipText(), juce::String ("Drag loop"));
             screen.onToggleLoop();
             ed.tick();
@@ -197,13 +196,15 @@ struct UiStateTests : juce::UnitTest
             expectEquals ((int) proc.player.audibleMask(), 0b0001);
             expect (ed.keyPressed (juce::KeyPress ('6')));          // there's no sixth stem: ignored, but still ours
 
-            expect (ed.keyPressed (juce::KeyPress ('L')));          // no loop range yet: nothing to toggle
-            expect (! proc.player.isLooping());
+            expect (ed.keyPressed (juce::KeyPress ('L')));          // no loop yet: L makes one (here the whole 0.5 s song)
+            expect (proc.player.isLooping());
             screen.onSetLoop (0.2, 0.6);
             ed.tick();
-            expect (ed.keyPressed (juce::KeyPress ('l')));
+            expect (ed.keyPressed (juce::KeyPress ('l')));          // with a loop, L toggles it
+            ed.tick();
             expect (! proc.player.isLooping());
             ed.keyPressed (juce::KeyPress ('L'));
+            ed.tick();
             expect (proc.player.isLooping());
 
             proc.player.setPositionFraction (0.9);
@@ -280,6 +281,127 @@ struct UiStateTests : juce::UnitTest
                 screen.zoom (at, 1.25);                               // 0.8 wide x 1.25: the whole song
                 expect (screen.getView() == juce::Range<double> (0.0, 1.0), "anchor " + juce::String (at));
             }
+        }
+
+        beginTest ("grid step follows the zoom; Alt and no tempo don't snap; loop length in beats");
+        {
+            StemsScreen screen;
+            screen.setStems (four, "Song.mp3");
+            screen.setPlayback (false, 0.0, 192.0);
+            screen.setTempo ({ 92.0, 0.2 });
+            const double beat = 60.0 / 92.0;
+            expectWithinAbsoluteError (screen.gridStep(), 4.0 * beat, 1e-9);   // whole song: a beat is 1.3 px, so bars
+            screen.setView ({ 60.0 / 192.0, 100.0 / 192.0 });                   // 40 s across: a beat is 6.1 px
+            expectWithinAbsoluteError (screen.gridStep(), beat, 1e-9);
+            screen.setView ({ 74.0 / 192.0, 88.0 / 192.0 });                    // 14 s across: a quarter beat is 4.4 px
+            expectWithinAbsoluteError (screen.gridStep(), beat / 4.0, 1e-9);
+            const double f = 80.0 / 192.0, k = (screen.snap (f) * 192.0 - 0.2) / (beat / 4.0);
+            expectWithinAbsoluteError (k, std::round (k), 1e-6);                // on the quarter-beat grid
+            expectWithinAbsoluteError (screen.snap (f) * 192.0, 80.0, beat / 8.0 + 1e-9);
+            expectEquals (screen.snap (f, true), f);                            // Alt: free
+            screen.setTempo ({});
+            expectEquals (screen.gridStep(), 0.0);
+            expectEquals (screen.snap (f), f);
+
+            expectEquals (beatsText (8.0), juce::String ("8 beats"));
+            expectEquals (beatsText (10.26), juce::String ("10.25 beats"));
+            expectEquals (beatsText (2.5), juce::String ("2.5 beats"));
+            expectEquals (beatsText (1.05), juce::String ("1 beat"));
+        }
+
+        beginTest ("handles: hover, trim with snapping and Alt, never crossing; a drag elsewhere makes a new loop");
+        {
+            StemsScreen screen;
+            screen.setStems (four, "Song.mp3");
+            screen.setPlayback (false, 0.0, 192.0);
+            screen.setTempo ({ 92.0, 0.2 });
+            screen.setView ({ 74.0 / 192.0, 88.0 / 192.0 });                    // quarter-beat grid
+            const double beat = 60.0 / 92.0, a = (0.2 + 120 * beat) / 192.0, b = (0.2 + 128 * beat) / 192.0;
+            screen.setLoop ({ a, b }, true);                                    // 8 beats
+            std::vector<std::pair<double, double>> sets;
+            screen.onSetLoop = [&] (double from, double to) { sets.push_back ({ from, to }); };
+            double seekTo = -1.0;
+            screen.onSeek = [&] (double f) { seekTo = f; };
+            const double px = (14.0 / 192.0) / 376.0;                           // one pixel, as a song fraction
+
+            screen.waveMouse (WaveMouse::move, b + 3 * px, false);
+            expectEquals (screen.hotEdge(), 1);
+            screen.waveMouse (WaveMouse::move, b + 9 * px, false);
+            expectEquals (screen.hotEdge(), -1);
+
+            // Trim the end two beats in: snapped, sent once on release, and grabbing a handle doesn't seek.
+            const double near = b - 2 * beat / 192.0 + 0.05 / 192.0;
+            screen.waveMouse (WaveMouse::down, b + 2 * px, false);
+            expectEquals (seekTo, -1.0);
+            screen.waveMouse (WaveMouse::drag, near, false);
+            expect (sets.empty());
+            screen.waveMouse (WaveMouse::up, near, false);
+            expectEquals ((int) sets.size(), 1);
+            expectWithinAbsoluteError (sets[0].first, a, 1e-12);
+            expectWithinAbsoluteError (sets[0].second, b - 2 * beat / 192.0, 1e-9);
+
+            // The start can't cross the end: it stops one step (a quarter beat) short.
+            screen.waveMouse (WaveMouse::down, a, false);
+            screen.waveMouse (WaveMouse::drag, b + 1.0 / 192.0, false);
+            screen.waveMouse (WaveMouse::up, b + 1.0 / 192.0, false);
+            expectEquals ((int) sets.size(), 2);
+            expectWithinAbsoluteError (sets[1].first, b - beat / 4.0 / 192.0, 1e-9);
+            expectWithinAbsoluteError (sets[1].second, b, 1e-12);
+
+            // Alt: the end follows the mouse exactly.
+            const double freeAt = b - 0.07 / 192.0;
+            screen.waveMouse (WaveMouse::down, b, true);
+            screen.waveMouse (WaveMouse::drag, freeAt, true);
+            screen.waveMouse (WaveMouse::up, freeAt, true);
+            expectEquals ((int) sets.size(), 3);
+            expectWithinAbsoluteError (sets[2].second, freeAt, 1e-12);
+
+            // Away from the edges: a click seeks, a drag makes a new snapped loop (here an inner one).
+            const double mid = (a + b) / 2.0;
+            screen.waveMouse (WaveMouse::down, mid, false);
+            screen.waveMouse (WaveMouse::up, mid, false);
+            expectWithinAbsoluteError (seekTo, mid, 1e-12);
+            expectEquals ((int) sets.size(), 3);
+            screen.waveMouse (WaveMouse::down, mid, false);
+            screen.waveMouse (WaveMouse::drag, mid + 30 * px, false);
+            screen.waveMouse (WaveMouse::up, mid + 30 * px, false);
+            expectEquals ((int) sets.size(), 4);
+            expect (sets[3].first > a && sets[3].second < b);
+            const double k = (sets[3].first * 192.0 - 0.2) / (beat / 4.0);
+            expectWithinAbsoluteError (k, std::round (k), 1e-6);
+        }
+
+        beginTest ("the Loop button (and L) makes a 4-bar loop at the playhead when there's none, else toggles");
+        {
+            StemsScreen screen;
+            screen.setStems (four, "Song.mp3");
+            screen.setPlayback (false, 70.0 / 192.0, 192.0);        // the playhead at 1:10 of a 3:12 song
+            std::pair<double, double> set { -1.0, -1.0 };
+            screen.onSetLoop = [&] (double a, double b) { set = { a, b }; };
+            int toggles = 0;
+            screen.onToggleLoop = [&] { ++toggles; };
+
+            screen.toggleLoop();                                    // no tempo: 8 s from the playhead
+            expectWithinAbsoluteError (set.first * 192.0, 70.0, 1e-9);
+            expectWithinAbsoluteError (set.second * 192.0, 78.0, 1e-9);
+
+            screen.setTempo ({ 92.0, 0.2 });
+            const double bar = 4.0 * 60.0 / 92.0;
+            screen.toggleLoop();                                    // from the bar under the playhead, 4 bars long
+            const double k = (set.first * 192.0 - 0.2) / bar;
+            expectWithinAbsoluteError (k, std::round (k), 1e-9);
+            expect (set.first * 192.0 <= 70.0 && set.first * 192.0 > 70.0 - bar);
+            expectWithinAbsoluteError ((set.second - set.first) * 192.0, 4.0 * bar, 1e-9);
+
+            screen.setPlayback (false, 191.0 / 192.0, 192.0);       // it would run past the end: the song's last 4 bars
+            screen.toggleLoop();
+            expectWithinAbsoluteError (set.second, 1.0, 1e-12);
+            expectWithinAbsoluteError ((set.second - set.first) * 192.0, 4.0 * bar, 1e-9);
+            expectEquals (toggles, 0);
+
+            screen.setLoop ({ 0.2, 0.3 }, false);                   // with a loop range, it only toggles
+            screen.toggleLoop();
+            expectEquals (toggles, 1);
         }
 
         beginTest ("a seek from an off-screen playhead repaints the whole played part; an off-screen playhead repaints nothing");

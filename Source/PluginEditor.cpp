@@ -79,7 +79,7 @@ bool StemSplitterEditor::keyPressed (const juce::KeyPress& key)
         stems.onPlayPause();
     else if (juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) code) == 'L')
     {
-        if (stems.loopButtonEnabled()) stems.onToggleLoop();
+        stems.toggleLoop();
     }
     else if (code == juce::KeyPress::homeKey)
         p.setPositionFraction (p.isLooping() ? p.getLoop().getStart() : 0.0);

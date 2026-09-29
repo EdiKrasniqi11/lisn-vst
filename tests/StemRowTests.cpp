@@ -1,5 +1,6 @@
 #include "../Source/StemRow.h"
 #include "../Source/Icons.h"
+#include <tuple>
 
 struct StemRowTests : juce::UnitTest
 {
@@ -116,14 +117,6 @@ struct StemRowTests : juce::UnitTest
             const auto img = render (row.waveform());
             expectGreaterThan ((int) img.getPixelAt (37, 25).getAlpha(), 240);                        // played
             expectWithinAbsoluteError ((int) img.getPixelAt (290, 25).getAlpha(), 77, 4);             // not yet
-            double seekTo = -1.0;
-            row.onSeek = [&] (double f) { seekTo = f; };
-            const juce::Point<float> p (94.0f, 20.0f);                // 0.25 of the width
-            const auto now = juce::Time::getCurrentTime();
-            row.waveform().mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, {}, 0.0f, 0.0f, 0.0f,
-                                                        0.0f, 0.0f, &row.waveform(), &row.waveform(), now, p, now, 1, false));
-            expectWithinAbsoluteError (seekTo, 0.625, 1e-9);          // 0.5 + 0.25 of the 0.5-wide view
-            row.onSeek = nullptr;
             row.setView ({ 0.0, 1.0 });
             row.setPosition (0.5);
         }
@@ -143,32 +136,33 @@ struct StemRowTests : juce::UnitTest
         expectEquals (row.waveform().getAlpha(), 1.0f);
         render (row);
 
-        beginTest ("waveform drag selects a loop; a click only seeks");
+        beginTest ("the waveform reports the mouse as song fractions through the view, with Alt");
         {
-            double seekTo = -1.0, a = -1.0, b = -1.0;
-            bool done = false;
-            row.onSeek = [&] (double f) { seekTo = f; };
-            row.onLoopDrag = [&] (double from, double to, bool finished) { a = from; b = to; done = finished; };
+            std::vector<std::tuple<WaveMouse, double, bool>> got;
+            row.onWaveMouse = [&] (WaveMouse m, double f, bool alt) { got.push_back ({ m, f, alt }); };
             auto& w = row.waveform();
-            auto event = [&] (float x, juce::Point<float> down)
+            auto event = [&] (float x, juce::ModifierKeys mods)
             {
                 const auto now = juce::Time::getCurrentTime();
-                return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { x, 20.0f }, {}, 0.0f, 0.0f, 0.0f, 0.0f,
-                                         0.0f, &w, &w, now, down, now, 1, false);
+                const juce::Point<float> p (x, 20.0f);
+                return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, mods, 0.0f, 0.0f, 0.0f, 0.0f,
+                                         0.0f, &w, &w, now, p, now, 1, false);
             };
-            const juce::Point<float> down (94.0f, 20.0f);    // 0.25 of 376
-            w.mouseDown (event (94.0f, down));
-            expectWithinAbsoluteError (seekTo, 0.25, 0.001);
-            w.mouseUp (event (95.0f, down));
-            expectEquals (a, -1.0);                          // under 4 px: no loop
-            w.mouseDown (event (94.0f, down));
-            w.mouseDrag (event (188.0f, down));
-            expect (! done);
-            expectWithinAbsoluteError (b, 0.5, 0.001);
-            w.mouseUp (event (188.0f, down));
-            expect (done);
-            expectWithinAbsoluteError (a, 0.25, 0.001);
-            expectWithinAbsoluteError (b, 0.5, 0.001);
+            row.setView ({ 0.5, 1.0 });
+            w.mouseMove (event (94.0f, {}));
+            w.mouseDown (event (94.0f, {}));
+            w.mouseDrag (event (500.0f, juce::ModifierKeys (juce::ModifierKeys::altModifier)));   // past the right edge
+            w.mouseUp (event (188.0f, {}));
+            w.mouseExit (event (188.0f, {}));
+            expectEquals ((int) got.size(), 5);
+            expect (std::get<0> (got[0]) == WaveMouse::move && std::get<0> (got[1]) == WaveMouse::down
+                    && std::get<0> (got[2]) == WaveMouse::drag && std::get<0> (got[3]) == WaveMouse::up
+                    && std::get<0> (got[4]) == WaveMouse::exit);
+            expectWithinAbsoluteError (std::get<1> (got[1]), 0.625, 1e-9);   // x 94 = 0.25 of the 0.5-wide view
+            expectWithinAbsoluteError (std::get<1> (got[2]), 1.0, 1e-9);     // clamped to the view
+            expectWithinAbsoluteError (std::get<1> (got[3]), 0.75, 1e-9);
+            expect (std::get<2> (got[2]) && ! std::get<2> (got[1]));
+            row.setView ({ 0.0, 1.0 });
         }
     }
 };

@@ -69,6 +69,8 @@ private:
     LisnButton cancel;
 };
 
+juce::String beatsText (double beats);   // "8 beats", "10.25 beats", "1 beat": rounded to a quarter beat
+
 // StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, footer hint.
 class StemsScreen : public juce::Component
 {
@@ -96,10 +98,20 @@ public:
     juce::Rectangle<int> playheadArea (double fraction) const;   // the strip a playhead at `fraction` covers (bench hook)
     int getRepaintCount() const { return repaintCount; }         // setPlayback calls that repainted (test hook)
     void setLoop (juce::Range<double> range, bool on);   // from the player every tick; repaints only on change
+    // The Loop button and the L key: with a loop range, onToggleLoop; with none, onSetLoop (defaultLoop()), which turns
+    // looping on.
+    void toggleLoop();
+    juce::Range<double> defaultLoop() const;         // 4 bars from the bar under the playhead (8 s without a tempo)
     void setTempo (Tempo);                           // the peak job sets it; tests may too
-    double snap (double fraction) const;             // to the nearest beat; unchanged without a tempo
+    // The grid: the finest of 1/4 beat, 1 beat and 1 bar (4 beats) that is at least 4 px wide at the current zoom, in
+    // seconds; 0 without a tempo.
+    double gridStep() const;
+    double snap (double fraction, bool free = false) const;   // to the nearest grid line; unchanged when free (Alt) or no grid
+    // A waveform's mouse (song fractions). Within 6 px of a loop edge, while looping, it hovers and drags that edge (a
+    // handle); elsewhere a click seeks and a drag of 4 px or more makes a new loop. Loops go to onSetLoop on release.
+    void waveMouse (WaveMouse, double fraction, bool alt);
+    int hotEdge() const { return hot; }              // 0 = loop start, 1 = loop end, -1 = none (test hook)
     juce::String chipText() const { return dragChip.getText(); }   // test hook
-    bool loopButtonEnabled() const { return loopButton.isEnabled(); }   // test hook
     std::function<void (double, double)> onSetLoop;  // a finished waveform drag, snapped
     std::function<void()> onToggleLoop;
     std::function<juce::File()> mixFile;             // the Drag mix / Drag loop file
@@ -119,6 +131,9 @@ private:
     juce::Range<int> waveSpan() const;               // top..bottom of the waveforms, row 0 to the last row
     juce::Rectangle<int> waveSpanArea() const;
     juce::Rectangle<int> loopArea (juce::Range<double>) const;   // the band's pixels, padded by the edge width
+    int edgeNear (int x) const;                      // the loop edge within 6 px of panel x: 0 / 1, or -1
+    juce::Range<double> trimmed (double fraction, bool free) const;   // the loop with the grabbed edge moved there
+    void setHot (int edge);                          // the hovered handle: its tab and the resize cursor
 
     Theme theme = themeFor ("dusk");
     juce::File dir;
@@ -132,6 +147,9 @@ private:
     Tempo tempo;
     juce::Range<double> view { 0.0, 1.0 };
     double position = 0.0;                           // the playhead, as a song fraction
+    int hot = -1, grab = -1, downX = 0;              // the hovered / grabbed loop edge (0 start, 1 end, -1 none), the press x
+    double downFraction = 0.0;
+    bool dragging = false;                           // a drag away from the handles: a new loop
     juce::OwnedArray<StemRow> rows;
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };

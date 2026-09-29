@@ -94,27 +94,17 @@ void WaveformView::paint (juce::Graphics& g)
     g.fillPath (bars);
 }
 
-void WaveformView::mouseDown (const juce::MouseEvent& e)
+void WaveformView::send (WaveMouse m, const juce::MouseEvent& e)
 {
-    looping = false;
-    if (getWidth() <= 0) return;
-    downFraction = juce::jmin (0.999, fractionAt (e.position.x));
-    if (onSeek != nullptr) onSeek (downFraction);
+    if (onMouse != nullptr && getWidth() > 0)
+        onMouse (m, fractionAt (e.position.x), e.mods.isAltDown());
 }
 
-void WaveformView::mouseDrag (const juce::MouseEvent& e)
-{
-    if (getWidth() <= 0 || (! looping && e.getDistanceFromDragStart() < 4)) return;
-    looping = true;                                  // 4 px or more: this gesture selects a loop instead of seeking
-    if (onLoopDrag != nullptr) onLoopDrag (downFraction, fractionAt (e.position.x), false);
-}
-
-void WaveformView::mouseUp (const juce::MouseEvent& e)
-{
-    if (looping && onLoopDrag != nullptr && getWidth() > 0)
-        onLoopDrag (downFraction, fractionAt (e.position.x), true);
-    looping = false;
-}
+void WaveformView::mouseMove (const juce::MouseEvent& e) { send (WaveMouse::move, e); }
+void WaveformView::mouseDown (const juce::MouseEvent& e) { send (WaveMouse::down, e); }
+void WaveformView::mouseDrag (const juce::MouseEvent& e) { send (WaveMouse::drag, e); }
+void WaveformView::mouseUp (const juce::MouseEvent& e)   { send (WaveMouse::up, e); }
+void WaveformView::mouseExit (const juce::MouseEvent& e) { send (WaveMouse::exit, e); }
 
 StemRow::StemRow (juce::File wav, juce::String key)
     : file (std::move (wav)), stemKey (std::move (key)), name (stemKey.substring (0, 1).toUpperCase() + stemKey.substring (1))
@@ -123,8 +113,7 @@ StemRow::StemRow (juce::File wav, juce::String key)
     setMouseCursor (juce::MouseCursor::DraggingHandCursor);
     lightButton.onToggle = [this] { if (onToggleMute != nullptr) onToggleMute(); };
     lightButton.onSolo = [this] { if (onSolo != nullptr) onSolo(); };
-    wave.onSeek = [this] (double f) { if (onSeek != nullptr) onSeek (f); };
-    wave.onLoopDrag = [this] (double a, double b, bool done) { if (onLoopDrag != nullptr) onLoopDrag (a, b, done); };
+    wave.onMouse = [this] (WaveMouse m, double f, bool alt) { if (onWaveMouse != nullptr) onWaveMouse (m, f, alt); };
     addAndMakeVisible (lightButton);
     addAndMakeVisible (wave);
     setTheme (themeFor ("dusk"));
