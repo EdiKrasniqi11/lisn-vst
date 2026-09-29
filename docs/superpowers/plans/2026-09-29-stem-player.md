@@ -771,8 +771,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
         expect (StemPlayer::render ({ a, b }, 0b11, 0.25, 0.75, both));   // cached by name: not rewritten
         expect (both.getLastModificationTime() == modified);
         expect (! StemPlayer::render ({ a, b }, 0, 0.0, 1.0, dir.getChildFile ("none.wav")));
-        expect (! StemPlayer::render ({ a, b }, 0b01, 0.5, 0.5, dir.getChildFile ("empty.wav")));
-        expect (! dir.getChildFile ("none.wav").exists() && ! dir.getChildFile ("empty.wav").exists());
+        expect (! StemPlayer::render ({ a, b }, 0b01, 0.5, 0.5, dir.getChildFile ("empty-range.wav")));
+        expect (! dir.getChildFile ("none.wav").exists() && ! dir.getChildFile ("empty-range.wav").exists());
 ```
 
 - [ ] **Step 3: Build to see it fail.**
