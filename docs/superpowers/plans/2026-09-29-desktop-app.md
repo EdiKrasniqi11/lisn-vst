@@ -99,6 +99,8 @@ User rule: HTML design-canvas mockups and approval **before** building UI. DAW t
 
 ## Phase 4: Stem player engine (upstream in lisn-vst, shared)
 
+> **Done upstream (2026-09-29):** StemPlayer (lockstep stems, mute/solo, loop wrap, render) and the mute/loop/Drag-mix UI already exist; this phase only adds per-stem volume and speed.
+
 Evolve `Source/StemPreview.h/.cpp` into `StemPlayer`. Keep its proven rules:
 - never call `transport.stop()`;
 - play/pause is an atomic flag;

@@ -108,6 +108,21 @@ int runSnapshots (const juce::File& outDir)
         ed.tick();
         ed.background().setMotion (0.0f, 0.0f);      // tick() advanced the flow by wall-clock time; keep snapshots repeatable
     };
+    const auto looping = [playing] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        playing (p, ed);
+        p.player.setLoop (0.30, 0.45);
+        p.player.setPositionFraction (0.38);
+        ed.tick();
+        ed.background().setMotion (0.0f, 0.0f);
+    };
+    const auto sixMuted = [] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        p.player.setMuted (1, true);
+        p.player.setMuted (4, true);
+        p.player.setPositionFraction (0.6);
+        ed.tick();
+    };
     const auto moving = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
     const juce::String failedText = "demucs failed:\nTraceback (most recent call last):\n  File \"demucs/separate.py\", line 180, in main\n"
                                     "    100%|##########| 5.85/5.85 [00:14<00:00]\n  File \"demucs/apply.py\", line 214, in apply_model\n"
@@ -119,14 +134,14 @@ int runSnapshots (const juce::File& outDir)
         { "drop-midnight-6", "midnight", state (Screen::Drop, true) },
         { "splitting-dusk", "dusk", withProgress (state (Screen::Splitting, false), 0.58) },
         { "splitting-midnight", "midnight", withProgress (state (Screen::Splitting, true), 0.58) },
-        { "stems4-dusk-mix", "dusk", state (Screen::Stems, false), 1.0f, playing },
-        { "stems6-midnight", "midnight", state (Screen::Stems, true) },
+        { "stems4-dusk-mix", "dusk", state (Screen::Stems, false), 1.0f, looping },
+        { "stems6-midnight-muted", "midnight", state (Screen::Stems, true), 1.0f, sixMuted },
         { "error-python-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::PythonMissing, {}, {}) },
         { "error-demucs-midnight", "midnight", withError (state (Screen::Error, false), ErrorKind::DemucsMissing, {}, "C:\\Python311\\python.exe") },
         { "error-failed-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::Failed, failedText, {}) },
         { "motion-dusk", "dusk", state (Screen::Stems, false), 1.0f, moving },
         { "drop-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f },
-        { "stems4-dusk@2x", "dusk", state (Screen::Stems, false), 2.0f, playing },
+        { "stems4-dusk@2x", "dusk", state (Screen::Stems, false), 2.0f, looping },
     };
 
     int failures = 0;
