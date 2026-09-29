@@ -15,6 +15,7 @@ namespace Icons
     inline constexpr const char* pause  = "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z";  // filled
     inline constexpr const char* speaker    = "M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13";   // stroked
     inline constexpr const char* speakerOff = "M11 5 6 9H3v6h3l5 4zM16 9.5l5 5M21 9.5l-5 5";                          // stroked
+    inline constexpr const char* close  = "M6 6l12 12M18 6L6 18";                                       // Help.mockup.html, stroked
 }
 
 // The icon's 24x24 viewBox mapped onto `area`.

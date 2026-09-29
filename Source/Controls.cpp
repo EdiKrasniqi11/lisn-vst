@@ -180,6 +180,40 @@ void CircleButton::paintButton (juce::Graphics& g, bool, bool)
     g.fillPath (iconPath (playing ? Icons::pause : Icons::play, icon));
 }
 
+InfoButton::InfoButton() : juce::Button ("Help")
+{
+    setWantsKeyboardFocus (false);
+    setMouseClickGrabsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void InfoButton::setTheme (const Theme& t)
+{
+    tint = t.pillTint;
+    repaint();
+}
+
+void InfoButton::paintButton (juce::Graphics& g, bool isMouseOver, bool)
+{
+    const auto r = getLocalBounds().toFloat();
+    const auto lit = getToggleState();
+    g.setColour (lit ? Theme::cream : tint);
+    g.fillEllipse (r);
+    if (isMouseOver && ! lit)
+    {
+        g.setColour (Theme::cream.withAlpha (0.08f));   // hover: a faint wash, and the border goes up to 0.3
+        g.fillEllipse (r);
+    }
+    g.setColour (Theme::cream.withAlpha (lit ? 1.0f : isMouseOver ? 0.3f : 0.14f));
+    g.drawEllipse (r.reduced (0.5f), 1.0f);
+
+    // The mockup's "i": M12 11v6 at stroke 2.2 and a 2.8 dot at (12, 7.25), in a 24 px viewBox drawn at 18 px.
+    const auto icon = r.withSizeKeepingCentre (18.0f, 18.0f);
+    g.setColour (lit ? Theme::ink : Theme::cream);
+    strokeIcon (g, "M12 11v6", icon, 2.2f);
+    g.fillEllipse (juce::Rectangle<float> (2.1f, 2.1f).withCentre ({ icon.getX() + 9.0f, icon.getY() + 5.44f }));
+}
+
 MuteLight::MuteLight() : juce::Button ({})
 {
     setWantsKeyboardFocus (false);

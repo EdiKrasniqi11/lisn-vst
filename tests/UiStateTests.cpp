@@ -555,6 +555,49 @@ struct UiStateTests : juce::UnitTest
             expect (screen.hasPeaks() && screen.numRows() == 4);
         }
 
+        beginTest ("the info button opens the help sheet in place of the screen; the x or the info button closes it");
+        {
+            StemSplitterProcessor proc;
+            StemSplitterEditor ed (proc);
+            UiState s;                                               // the Drop screen
+            ed.forceState (s);
+            ed.tick();
+            InfoButton* info = nullptr;
+            DropScreen* dropScreen = nullptr;
+            SplittingScreen* splittingScreen = nullptr;
+            walk (ed, [&] (juce::Component& c)
+            {
+                if (auto* b = dynamic_cast<InfoButton*> (&c)) info = b;
+                if (auto* d = dynamic_cast<DropScreen*> (&c)) dropScreen = d;
+                if (auto* sp = dynamic_cast<SplittingScreen*> (&c)) splittingScreen = sp;
+            });
+            expect (info != nullptr && dropScreen != nullptr && splittingScreen != nullptr);
+            auto& help = ed.helpSheet();
+            expect (! help.isVisible() && dropScreen->isVisible() && ! info->getToggleState());
+
+            info->onClick();
+            expect (help.isVisible() && ! dropScreen->isVisible() && info->getToggleState());
+            ed.tick();                                               // the timer doesn't bring the screen back
+            expect (help.isVisible() && ! dropScreen->isVisible());
+
+            s.screen = Screen::Splitting;                            // a screen change keeps the sheet open
+            ed.forceState (s);
+            ed.tick();
+            expect (help.isVisible() && ! splittingScreen->isVisible());
+
+            help.setTab (2);
+            LisnButton* close = nullptr;
+            walk (help, [&] (juce::Component& c) { if (auto* b = dynamic_cast<LisnButton*> (&c)) close = b; });
+            expect (close != nullptr);
+            close->onClick();
+            expect (! help.isVisible() && splittingScreen->isVisible() && ! info->getToggleState());
+
+            info->onClick();
+            expect (help.isVisible() && help.getTab() == 2);        // closing keeps the tab
+            info->onClick();
+            expect (! help.isVisible() && splittingScreen->isVisible());
+        }
+
         root.deleteRecursively();
     }
 

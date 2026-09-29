@@ -21,6 +21,7 @@ public:
     bool keyPressed (const juce::KeyPress&) override;
     bool keyStateChanged (bool isKeyDown) override;
     void mouseDown (const juce::MouseEvent&) override;
+    void setHelpOpen (bool);                         // the help sheet in the panel in place of the screen, the info button lit
 
     bool isInterestedInFileDrag (const juce::StringArray&) override;   // one audio file
     void fileDragEnter (const juce::StringArray&, int, int) override;
@@ -32,10 +33,12 @@ public:
     void tick();                                     // one timer step
     WaveBackground& background() { return waves; }
     StemsScreen& stemsScreen() { return stems; }
+    HelpSheet& helpSheet() { return help; }
 
 private:
     void timerCallback() override { tick(); }
     void show (const UiState&);
+    void showScreen();                               // the shown screen, or the help sheet in its place
     void applyTheme (const Theme&);
     juce::File renderFile (juce::uint32 mask);   // the audible stems over the loop (or the song) as a cached WAV
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
@@ -47,6 +50,8 @@ private:
     SplittingScreen splitting;
     StemsScreen stems;
     ErrorScreen error;
+    HelpSheet help;
+    bool helpOpen = false;
     std::optional<UiState> forced, shown;
     juce::String appliedThemeId;
     std::unique_ptr<juce::FileChooser> chooser;

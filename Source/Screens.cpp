@@ -91,12 +91,15 @@ Header::Header() : themePill ({ "Dusk", "Midnight" }), stemsPill ({ "4 stems", "
     stemsPill.onChange = [this] (int i) { if (onSixStems != nullptr) onSixStems (i == 1); };
     addAndMakeVisible (themePill);
     addAndMakeVisible (stemsPill);
+    info.onClick = [this] { if (onInfo != nullptr) onInfo(); };
+    addAndMakeVisible (info);
 }
 
 void Header::setTheme (const Theme& t)
 {
     themePill.setTheme (t);
     stemsPill.setTheme (t);
+    info.setTheme (t);
     themePill.setSelected (t.id == "midnight" ? 1 : 0);
 }
 
@@ -114,6 +117,11 @@ void Header::setEnabledSwitches (bool on)
     }
 }
 
+void Header::setInfoOn (bool on)
+{
+    info.setToggleState (on, juce::dontSendNotification);
+}
+
 void Header::paint (juce::Graphics& g)
 {
     g.setColour (Theme::cream);
@@ -122,8 +130,9 @@ void Header::paint (juce::Graphics& g)
 
 void Header::resized()
 {
+    info.setBounds (getWidth() - 38, 3, 38, 38);
     const auto w = stemsPill.preferredWidth();
-    stemsPill.setBounds (getWidth() - w, 3, w, 38);
+    stemsPill.setBounds (info.getX() - 8 - w, 3, w, 38);
     themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);
 }
 
@@ -955,4 +964,44 @@ void ErrorScreen::paint (juce::Graphics& g)
                   juce::Justification::centredLeft);
     else
         text (g, Fonts::mono (14.0f), Theme::cream, command, { x, box.getY(), w, box.getHeight() }, juce::Justification::centredLeft);
+}
+
+//==============================================================================
+HelpSheet::HelpSheet() : tabs ({ "Play", "Stems", "Loop", "Export" }), close ({}, LisnButton::Style::Ghost)
+{
+    tabs.onChange = [this] (int) { repaint(); };
+    close.icon = Icons::close;
+    close.padLeft = 8.0f;                            // the 16 px x centred in 34: border 1 + 8 + 16 + 8 + 1
+    close.onClick = [this] { if (onClose != nullptr) onClose(); };
+    addAndMakeVisible (tabs);
+    addAndMakeVisible (close);
+    setBufferedToImage (true);                       // the waves move behind it every motion frame; the sheet only changes with the tab
+}
+
+void HelpSheet::setTheme (const Theme& t)
+{
+    tabs.setTheme (t);
+}
+
+void HelpSheet::setTab (int i)
+{
+    tabs.setSelected (i);
+    repaint();
+}
+
+void HelpSheet::resized()
+{
+    close.setBounds (659, 18, 34, 34);
+    tabs.setBounds (close.getX() - 12 - tabs.preferredWidth(), 16, tabs.preferredWidth(), 38);
+}
+
+void HelpSheet::paint (juce::Graphics& g)
+{
+    // "How to use" (Bold 15) over the hint (12, cream 0.64), placed like the stems screen's song name and time.
+    const auto y = 17.0f + (36.0f - 34.4f) / 2.0f, w = (float) tabs.getX() - 12.0f - 19.0f;
+    text (g, Fonts::body (15.0f, 700), Theme::cream, "How to use", { 19.0f, y, w, 18.0f }, juce::Justification::centredLeft);
+    text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f), "Click the plugin first so its keys work.",
+          { 19.0f, y + 20.0f, w, 14.4f }, juce::Justification::centredLeft);
+    g.setColour (Theme::cream.withAlpha (0.12f));
+    g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
 }

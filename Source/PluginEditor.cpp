@@ -14,11 +14,13 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     addMouseListener (this, true);
     addAndMakeVisible (waves);
     addAndMakeVisible (header);
-    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error })
+    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error, &help })
         addChildComponent (s);
 
     header.onTheme = [this] (juce::String id) { proc.setTheme (id); applyTheme (themeFor (id)); };
     header.onSixStems = [this] (bool six) { proc.setSixStems (six); };
+    header.onInfo = [this] { setHelpOpen (! helpOpen); };
+    help.onClose = [this] { setHelpOpen (false); };
     const auto browse = [this] { choose ("Choose a song", audioPatterns, [this] (const juce::File& f) { proc.startSplit (f); }); };
     drop.onBrowse = browse;
     stems.onNewSong = browse;
@@ -59,7 +61,7 @@ void StemSplitterEditor::resized()
 {
     waves.setBounds (getLocalBounds());
     header.setBounds (24, 16, 712, 44);
-    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error })
+    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error, &help })
         s->setBounds (panel);
 }
 
@@ -162,10 +164,7 @@ void StemSplitterEditor::tick()
 void StemSplitterEditor::show (const UiState& s)
 {
     shown = s;
-    drop.setVisible (s.screen == Screen::Drop);
-    splitting.setVisible (s.screen == Screen::Splitting);
-    stems.setVisible (s.screen == Screen::Stems);
-    error.setVisible (s.screen == Screen::Error);
+    showScreen();
 
     const float tints[] = { 0.60f, 0.66f, 0.66f, 0.70f };   // Drop, Splitting, Stems, Error
     waves.setPanel (panel, 22.0f, tints[(int) s.screen]);
@@ -185,6 +184,23 @@ void StemSplitterEditor::show (const UiState& s)
         stems.setStems (s.stemDir, s.songName);
 }
 
+void StemSplitterEditor::setHelpOpen (bool open)
+{
+    helpOpen = open;
+    showScreen();
+}
+
+void StemSplitterEditor::showScreen()
+{
+    const auto is = [this] (Screen x) { return ! helpOpen && shown.has_value() && shown->screen == x; };
+    drop.setVisible (is (Screen::Drop));
+    splitting.setVisible (is (Screen::Splitting));
+    stems.setVisible (is (Screen::Stems));
+    error.setVisible (is (Screen::Error));
+    help.setVisible (helpOpen);
+    header.setInfoOn (helpOpen);
+}
+
 void StemSplitterEditor::applyTheme (const Theme& t)
 {
     appliedThemeId = t.id;
@@ -194,6 +210,7 @@ void StemSplitterEditor::applyTheme (const Theme& t)
     splitting.setTheme (t);
     stems.setTheme (t);
     error.setTheme (t);
+    help.setTheme (t);
 }
 
 void StemSplitterEditor::choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then)
