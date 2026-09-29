@@ -6,19 +6,16 @@
 // The screens of docs/design. Each screen takes the panel bounds (24, 76, 712, 400) and lays out in panel coordinates;
 // it paints only its own content over the WaveBackground panel. Nothing here takes keyboard focus.
 
-// Main.dc.html header, bounds (24, 16, 712, 44): "LISN StemSplitter", then [Dusk | Midnight], [4 stems | 6 stems] and the
-// info button (Help.mockup.html).
+// Main.dc.html header, bounds (24, 16, 712, 44): "LISN StemSplitter", then [Dusk | Midnight] and [4 stems | 6 stems].
 class Header : public juce::Component
 {
 public:
     Header();
     void setTheme (const Theme&);                  // pill tints and the theme selection
     void setSixStems (bool);                       // selection only, no callback
-    void setEnabledSwitches (bool);                // disabled pills are drawn at 0.55; the info button stays enabled
-    void setInfoOn (bool);                         // the info button lit while the help sheet is open; no callback
+    void setEnabledSwitches (bool);                // disabled pills are drawn at 0.55
     std::function<void (juce::String)> onTheme;    // "dusk" / "midnight"
     std::function<void (bool)> onSixStems;
-    std::function<void()> onInfo;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -26,7 +23,6 @@ public:
 private:
     juce::GlyphArrangement title;                  // "LISN StemSplitter", shaped once: the header repaints with every motion frame
     SegmentedPill themePill, stemsPill;
-    InfoButton info;
 };
 
 // Empty.dc.html: dashed drop zone, Browse, formats and the stems you'll get.
@@ -196,7 +192,7 @@ private:
 };
 
 // Help.mockup.html: "How to use" with [Play | Stems | Loop | Export] tabs of four tips each. The editor shows it in the
-// panel in place of the current screen, from the header's info button.
+// panel in place of the current screen, from the info button in the window's bottom-right corner.
 class HelpSheet : public juce::Component
 {
 public:

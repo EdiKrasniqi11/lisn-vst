@@ -4,10 +4,10 @@
 
 ## What it is
 
-- An **info button** at the right end of the header, 8 px after the 4/6 stems pill.
-  - It's a 38 px circle in the pill style (theme pill tint, 1 px cream 0.14 border) with an "i" glyph.
+- A small **info button** in the window's bottom-right corner, under the panel. The user asked for it to be low-key rather than a highlighted feature, so it's not in the header.
+  - It's a 16 px ring (1 px cream 0.35) around an "i" (cream 0.55), in a 24 px hit area at (716, 476). The ring is centred under the panel's right edge, in the 24 px bottom margin.
   - It looks the same on every screen and is never disabled.
-  - Hover adds a faint cream wash. While the sheet is open it's lit: a cream fill with an ink "i".
+  - When hovered, or lit while the sheet is open, the ring goes to cream 0.8 and the "i" to full cream.
 - A **help sheet** that the editor shows inside the panel in place of the current screen.
   - A click on the info button opens it. The info button again, or the sheet's × button, closes it.
   - The screen underneath comes back exactly as it was.

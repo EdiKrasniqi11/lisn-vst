@@ -91,15 +91,12 @@ Header::Header() : themePill ({ "Dusk", "Midnight" }), stemsPill ({ "4 stems", "
     stemsPill.onChange = [this] (int i) { if (onSixStems != nullptr) onSixStems (i == 1); };
     addAndMakeVisible (themePill);
     addAndMakeVisible (stemsPill);
-    info.onClick = [this] { if (onInfo != nullptr) onInfo(); };
-    addAndMakeVisible (info);
 }
 
 void Header::setTheme (const Theme& t)
 {
     themePill.setTheme (t);
     stemsPill.setTheme (t);
-    info.setTheme (t);
     themePill.setSelected (t.id == "midnight" ? 1 : 0);
 }
 
@@ -117,11 +114,6 @@ void Header::setEnabledSwitches (bool on)
     }
 }
 
-void Header::setInfoOn (bool on)
-{
-    info.setToggleState (on, juce::dontSendNotification);
-}
-
 void Header::paint (juce::Graphics& g)
 {
     g.setColour (Theme::cream);
@@ -130,9 +122,8 @@ void Header::paint (juce::Graphics& g)
 
 void Header::resized()
 {
-    info.setBounds (getWidth() - 38, 3, 38, 38);
     const auto w = stemsPill.preferredWidth();
-    stemsPill.setBounds (info.getX() - 8 - w, 3, w, 38);
+    stemsPill.setBounds (getWidth() - w, 3, w, 38);
     themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);
 }
 

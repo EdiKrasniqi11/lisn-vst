@@ -16,10 +16,11 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     addAndMakeVisible (header);
     for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error, &help })
         addChildComponent (s);
+    addAndMakeVisible (info);
 
     header.onTheme = [this] (juce::String id) { proc.setTheme (id); applyTheme (themeFor (id)); };
     header.onSixStems = [this] (bool six) { proc.setSixStems (six); };
-    header.onInfo = [this] { setHelpOpen (! helpOpen); };
+    info.onClick = [this] { setHelpOpen (! helpOpen); };
     help.onClose = [this] { setHelpOpen (false); };
     const auto browse = [this] { choose ("Choose a song", audioPatterns, [this] (const juce::File& f) { proc.startSplit (f); }); };
     drop.onBrowse = browse;
@@ -63,6 +64,7 @@ void StemSplitterEditor::resized()
     header.setBounds (24, 16, 712, 44);
     for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error, &help })
         s->setBounds (panel);
+    info.setBounds (716, 476, 24, 24);   // its 16 px ring centred under the panel's right edge, in the 24 px bottom margin
 }
 
 void StemSplitterEditor::mouseDown (const juce::MouseEvent&)
@@ -198,7 +200,7 @@ void StemSplitterEditor::showScreen()
     stems.setVisible (is (Screen::Stems));
     error.setVisible (is (Screen::Error));
     help.setVisible (helpOpen);
-    header.setInfoOn (helpOpen);
+    info.setToggleState (helpOpen, juce::dontSendNotification);
 }
 
 void StemSplitterEditor::applyTheme (const Theme& t)

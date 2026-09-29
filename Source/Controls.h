@@ -63,17 +63,13 @@ private:
     bool playing = false;
 };
 
-// The header's info button (Help.mockup.html): a 38 px circle in the pill style with an "i". Its toggle state is lit
-// (cream, ink "i") while the help sheet is open; the editor sets it.
+// The small info button in the window's bottom-right corner (Help.mockup.html): a dim 16 px ring with an "i" in a 24 px hit
+// area. Its toggle state is lit while the help sheet is open; the editor sets it.
 class InfoButton : public juce::Button
 {
 public:
     InfoButton();
-    void setTheme (const Theme&);
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
-
-private:
-    juce::Colour tint = themeFor ("dusk").pillTint;
 };
 
 // The 38 px mute light of a stem row: a neutral ring with a white speaker, or the speaker with an x when muted.

@@ -20,12 +20,13 @@ h2 { color:#eee; font-weight:500; margin:0 0 6px; }
 .lx .pill { display:flex; gap:2px; padding:3px; border-radius:999px; border:1px solid rgba(255,244,234,.14); background:rgba(32,18,27,.72); }
 .lx .pill span { height:30px; line-height:30px; padding:0 14px; border-radius:999px; font-size:13px; font-weight:700; }
 .lx .pill .on { background:var(--cream); color:var(--ink); }
-/* The info button: a 38 px circle in the pill style; lit (cream, ink glyph) while the sheet is open */
-.lx .info { width:38px; height:38px; box-sizing:border-box; border-radius:999px; border:1px solid rgba(255,244,234,.14); background:rgba(32,18,27,.72);
-  display:flex; align-items:center; justify-content:center; }
-.lx .info svg { width:18px; height:18px; fill:none; stroke:var(--cream); stroke-width:2.2; stroke-linecap:round; }
-.lx .info.on { background:var(--cream); border-color:var(--cream); } .lx .info.on svg { stroke:var(--ink); }
-.lx .info.hover { background:rgba(58,36,49,.85); border-color:rgba(255,244,234,.3); }
+/* The info button: a small 16 px outline in the window's bottom-right corner, under the panel (its hit area is 24 px) */
+.lx .info { position:absolute; left:720px; top:480px; width:16px; height:16px; box-sizing:border-box; border-radius:999px;
+  border:1px solid rgba(255,244,234,.35); display:flex; align-items:center; justify-content:center; }
+.lx .info svg { width:12px; height:12px; fill:none; stroke:rgba(255,244,234,.55); stroke-width:2.4; stroke-linecap:round; }
+.lx .info.hover, .lx .info.on { border-color:rgba(255,244,234,.8); } .lx .info.hover svg, .lx .info.on svg { stroke:var(--cream); }
+.crop { position:relative; width:360px; height:150px; overflow:hidden; border-radius:10px; margin-bottom:26px; }
+.crop .win { position:absolute; right:0; bottom:0; transform:scale(3); transform-origin:100% 100%; }
 .lx .panel { position:absolute; left:24px; top:76px; width:712px; height:400px; box-sizing:border-box; border-radius:22px;
   border:1px solid rgba(255,244,234,.14); background:rgba(32,18,27,.66); backdrop-filter:blur(18px);
   padding:16px 18px; display:flex; flex-direction:column; gap:10px; box-shadow:0 26px 50px -22px rgba(20,8,16,.75); }
@@ -64,10 +65,12 @@ h2 { color:#eee; font-weight:500; margin:0 0 6px; }
 <body>
 
 <h2>Help: the info button and the help sheet</h2>
-<p class="note">A: the info button sits at the right end of the header, 8 px after the stems pill. It's a 38 px circle in the pill style with an "i" glyph, and it's the same on every screen. Here it's hovered.</p>
+<p class="note">A: the info button is a small 16 px outline with an "i" in the window's bottom-right corner, under the panel, lined up with the panel's right edge. It's dim (cream 0.35 ring, 0.55 "i"), the same on every screen, and the header is back to how it was. Its hit area is 24 px, so it's still easy to click.</p>
 <div class="lx"><div class="win" data-state="closed"></div></div>
+<p class="note">A, zoomed 3x: idle, then hovered (the ring and the "i" brighten; the lit state while the sheet is open looks the same).</p>
+<div style="display:flex;gap:16px"><div class="lx crop"><div class="win" data-state="closed"></div></div><div class="lx crop"><div class="win" data-state="hover"></div></div></div>
 
-<p class="note">B: the sheet, opened on the Play tab. It replaces the screen inside the panel, and the info button is lit. The tabs sit in the title row. Each tab shows four full-width tips that share the height. Solid keycaps are keys; dashed caps (the Drag chips' style, with a mouse glyph) are mouse actions and buttons. The × or the info button closes the sheet, and the screen comes back as it was.</p>
+<p class="note">B: the sheet, opened on the Play tab. It replaces the screen inside the panel, and the small info button is lit. The tabs sit in the title row. Each tab shows four full-width tips that share the height. Solid keycaps are keys; dashed caps (the Drag chips' style, with a mouse glyph) are mouse actions and buttons. The × or the info button closes the sheet, and the screen comes back as it was.</p>
 <div class="lx"><div class="win" data-state="play"></div></div>
 <p class="note">C: the Stems tab.</p>
 <div class="lx"><div class="win" data-state="stems"></div></div>
@@ -90,7 +93,7 @@ h2 { color:#eee; font-weight:500; margin:0 0 6px; }
   const iGlyph = '<svg viewBox="0 0 24 24"><path d="M12 11v6"/><path d="M12 7.2v.1" stroke-width="2.8"/></svg>';
   const header = cls => `<div class="hdr"><div class="logo">LISN<small>StemSplitter</small></div><div class="pills">
      <div class="pill"><span class="on">Dusk</span><span>Midnight</span></div><div class="pill"><span class="on">4 stems</span><span>6 stems</span></div>
-     <div class="info ${cls}">${iGlyph}</div></div></div>`;
+     </div></div><div class="info ${cls}">${iGlyph}</div>`;
   const cursor = (x, y) => `<svg class="cur" viewBox="0 0 24 24" style="left:${x}px;top:${y}px;width:20px;height:20px;fill:#FFF4EA;stroke:#2B1822;stroke-width:1.3"><path d="M5 3l12 11h-6l-3 6z"/></svg>`;
 
   // Icons (24 px, stroked)
@@ -137,13 +140,14 @@ h2 { color:#eee; font-weight:500; margin:0 0 6px; }
       <div class="tips">${tabs[tab].map(([ic, t, d, how]) => `<div class="tip"><div class="ico">${svg(I[ic])}</div>
         <div class="tx"><b>${t}</b><span>${d}</span></div><div class="how">${how.join('')}</div></div>`).join('')}</div></div>`;
   const S = {
-    closed: () => `${header('hover')}${cursor(721, 42)}<div class="panel">
+    closed: () => `${header('')}<div class="panel">
       <div class="top"><div class="playbig">❚❚</div>
         <div class="tt"><b>Travis Snippet.mp3</b><i>1:04 / 3:12 · 92 BPM</i></div>
         <div class="btn">⟲ Loop</div><div class="chip">⠿ Drag mix</div><div class="btn">＋ New song</div></div>
       <div class="div"></div>
       <div class="rows">${stems.map(s => `<div class="row"><div class="nm"><div class="bar" style="background:${s.c}"></div><div><b>${s.k}</b><i>${s.k.toLowerCase()}.wav</i></div></div>
         <div class="led"></div><div>${wave(s)}</div><div class="chip">⠿ Drag</div></div>`).join('')}</div></div>`,
+    hover: () => S.closed().replace('class="info "', 'class="info hover"') + cursor(731, 490),
     play: () => sheet('play'), stems: () => sheet('stems'), loop: () => sheet('loop'), export: () => sheet('export')
   };
   document.querySelectorAll('.lx .win').forEach(w => w.innerHTML = S[w.dataset.state]());

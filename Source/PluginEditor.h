@@ -51,6 +51,7 @@ private:
     StemsScreen stems;
     ErrorScreen error;
     HelpSheet help;
+    InfoButton info;                                 // bottom-right corner: opens and closes the help sheet
     bool helpOpen = false;
     std::optional<UiState> forced, shown;
     juce::String appliedThemeId;

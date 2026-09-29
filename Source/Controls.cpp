@@ -187,31 +187,20 @@ InfoButton::InfoButton() : juce::Button ("Help")
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
-void InfoButton::setTheme (const Theme& t)
-{
-    tint = t.pillTint;
-    repaint();
-}
-
 void InfoButton::paintButton (juce::Graphics& g, bool isMouseOver, bool)
 {
-    const auto r = getLocalBounds().toFloat();
-    const auto lit = getToggleState();
-    g.setColour (lit ? Theme::cream : tint);
-    g.fillEllipse (r);
-    if (isMouseOver && ! lit)
-    {
-        g.setColour (Theme::cream.withAlpha (0.08f));   // hover: a faint wash, and the border goes up to 0.3
-        g.fillEllipse (r);
-    }
-    g.setColour (Theme::cream.withAlpha (lit ? 1.0f : isMouseOver ? 0.3f : 0.14f));
-    g.drawEllipse (r.reduced (0.5f), 1.0f);
+    // Help.mockup.html: a 16 px ring (cream 0.35) around an "i" (cream 0.55), centred in the 24 px hit area. Hovered, or lit
+    // while the sheet is open, the ring goes to 0.8 and the "i" to full cream.
+    const auto bright = isMouseOver || getToggleState();
+    const auto ring = getLocalBounds().toFloat().withSizeKeepingCentre (16.0f, 16.0f);
+    g.setColour (Theme::cream.withAlpha (bright ? 0.8f : 0.35f));
+    g.drawEllipse (ring.reduced (0.5f), 1.0f);
 
-    // The mockup's "i": M12 11v6 at stroke 2.2 and a 2.8 dot at (12, 7.25), in a 24 px viewBox drawn at 18 px.
-    const auto icon = r.withSizeKeepingCentre (18.0f, 18.0f);
-    g.setColour (lit ? Theme::ink : Theme::cream);
-    strokeIcon (g, "M12 11v6", icon, 2.2f);
-    g.fillEllipse (juce::Rectangle<float> (2.1f, 2.1f).withCentre ({ icon.getX() + 9.0f, icon.getY() + 5.44f }));
+    // The "i": M12 11v6 at stroke 2.4 and a 2.8 dot at (12, 7.25), in a 24 px viewBox drawn at 12 px.
+    const auto icon = ring.withSizeKeepingCentre (12.0f, 12.0f);
+    g.setColour (bright ? Theme::cream : Theme::cream.withAlpha (0.55f));
+    strokeIcon (g, "M12 11v6", icon, 2.4f);
+    g.fillEllipse (juce::Rectangle<float> (1.4f, 1.4f).withCentre ({ icon.getX() + 6.0f, icon.getY() + 3.625f }));
 }
 
 MuteLight::MuteLight() : juce::Button ({})
