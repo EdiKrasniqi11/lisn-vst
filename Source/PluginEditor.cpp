@@ -245,6 +245,7 @@ void StemSplitterEditor::fileDragExit (const juce::StringArray&)
 
 void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
 {
+    setHelpOpen (false);
     drop.setHighlighted (false);
     proc.startSplit (juce::File (files[0]));
 }

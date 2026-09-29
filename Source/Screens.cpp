@@ -969,7 +969,7 @@ namespace
     const How orWord { Part::word, "or" }, plusWord { Part::word, "+" };
     How key (const char* t)   { return { Part::key, t }; }
     How mouse (const char* t) { return { Part::mouse, t }; }
-    const char* const oneToSix = "1\xe2\x80\x93" "6";   // "1–6"
+    const char* const oneToSix = "1\xe2\x80\x93" "6";   // "1-6" with an en dash
 
     const std::vector<std::vector<Tip>> helpTips {
         { { Icons::play, "Play or pause", "Every stem plays together, in sync", { key ("Space") } },

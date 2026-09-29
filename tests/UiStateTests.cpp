@@ -596,6 +596,20 @@ struct UiStateTests : juce::UnitTest
             expect (help.isVisible() && help.getTab() == 2);        // closing keeps the tab
             info->onClick();
             expect (! help.isVisible() && splittingScreen->isVisible());
+
+            {                                                        // the keys still work with the sheet open
+                StemSplitterProcessor keyProc;
+                keyProc.prepareToPlay (48000.0, 512);
+                StemSplitterEditor keyEd (keyProc);
+                UiState ks;
+                ks.screen = Screen::Stems;
+                ks.stemDir = four;
+                keyEd.forceState (ks);
+                keyEd.tick();
+                keyEd.setHelpOpen (true);
+                expect (keyEd.keyPressed (juce::KeyPress (juce::KeyPress::spaceKey)));
+                expect (keyProc.player.isPlaying());
+            }
         }
 
         root.deleteRecursively();

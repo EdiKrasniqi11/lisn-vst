@@ -185,6 +185,7 @@ InfoButton::InfoButton() : juce::Button ("Help")
     setWantsKeyboardFocus (false);
     setMouseClickGrabsKeyboardFocus (false);
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    setBufferedToImage (true);   // it sits in the waves' motion region (the bottom margin): repaint only on hover and toggle
 }
 
 void InfoButton::paintButton (juce::Graphics& g, bool isMouseOver, bool)
