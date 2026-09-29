@@ -312,8 +312,7 @@ void SplittingScreen::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (283 tall), footer at 367.
-namespace { constexpr float footerY = 367.0f; }
+// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (283 tall).
 
 StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
 {
@@ -590,14 +589,6 @@ void StemsScreen::paint (juce::Graphics& g)
 
     g.setColour (Theme::cream.withAlpha (0.12f));
     g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
-
-    if (g.clipRegionIntersects ({ 19, (int) footerY, 674, 16 }))
-    {
-        g.setColour (Theme::cream.withAlpha (0.62f));
-        g.fillPath (iconPath (Icons::play, { 19.0f, footerY + 1.0f, 14.0f, 14.0f }));
-        text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.62f), "Click a light to mute" + dot + "right-click to solo" + dot + "drag across the waves to loop",
-              { 19.0f + 14.0f + 8.0f, footerY, 600.0f, 16.0f }, juce::Justification::centredLeft);
-    }
 }
 
 //==============================================================================

@@ -15,13 +15,6 @@ namespace Icons
     inline constexpr const char* pause  = "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z";  // filled
     inline constexpr const char* speaker    = "M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13";   // stroked
     inline constexpr const char* speakerOff = "M11 5 6 9H3v6h3l5 4zM16 9.5l5 5M21 9.5l-5 5";                          // stroked
-
-    inline constexpr const char* vocals = "M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8";
-    inline constexpr const char* drums  = "M4 9a8 3 0 1 0 16 0a8 3 0 1 0-16 0M4 9v7a8 3 0 0 0 16 0V9M7 3l3.5 5M17 3l-3.5 5";
-    inline constexpr const char* bass   = "M3 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0";
-    inline constexpr const char* guitar = "M20 4l-6.5 6.5M17.5 2.5l4 4M11 10.5a3.6 3.6 0 0 0-5.3 1.2c-.8 1.5-.2 2.5-1.7 3.9a2.8 2.8 0 0 0 4 4c1.4-1.5 2.4-.9 3.9-1.7a3.6 3.6 0 0 0 1.2-5.3z";
-    inline constexpr const char* piano  = "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 5v8M12 5v14M16 5v8";
-    inline constexpr const char* other  = "M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0M21 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0";
 }
 
 // The icon's 24x24 viewBox mapped onto `area`.
@@ -37,14 +30,4 @@ inline void strokeIcon (juce::Graphics& g, const char* d, juce::Rectangle<float>
 {
     g.strokePath (iconPath (d, area), juce::PathStrokeType (strokeWidth * area.getWidth() / 24.0f,
                                                             juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-}
-
-inline const char* stemIcon (const juce::String& stem)   // unknown stem -> other
-{
-    if (stem == "vocals") return Icons::vocals;
-    if (stem == "drums")  return Icons::drums;
-    if (stem == "bass")   return Icons::bass;
-    if (stem == "guitar") return Icons::guitar;
-    if (stem == "piano")  return Icons::piano;
-    return Icons::other;
 }

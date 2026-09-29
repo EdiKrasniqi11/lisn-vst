@@ -33,7 +33,7 @@ private:
     bool looping = false;
 };
 
-// One stem row of the stem player (docs/design/StemPlayer.mockup.html): badge + name, mute light, waveform, drag chip.
+// One stem row of the stem player (docs/design/StemPlayer.mockup.html): colour bar + name, mute light, waveform, drag chip.
 // Drag from the row (outside the light and the waveform) to drop dragFile() onto a DAW track.
 class StemRow : public juce::Component
 {

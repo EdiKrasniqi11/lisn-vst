@@ -1,5 +1,4 @@
 #include "StemRow.h"
-#include "Icons.h"
 
 namespace
 {
@@ -165,19 +164,14 @@ void StemRow::paint (juce::Graphics& g)
     const auto h = (float) getHeight();
     const float a = muted ? 0.38f : 1.0f;            // a muted row dims its name block (the waveform dims via its alpha)
 
-    // Badge: 32 x 32, radius 10, stem colour at 0.16, icon 18 px with stroke 2.
-    const juce::Rectangle<float> badge ((float) padX, (h - 32.0f) / 2.0f, 32.0f, 32.0f);
-    if (g.clipRegionIntersects (badge.getSmallestIntegerContainer()))   // playhead repaints skip the path work
-    {
-        g.setColour (colour.withAlpha (0.16f * a));
-        g.fillRoundedRectangle (badge, 10.0f);
-        g.setColour (colour.withMultipliedAlpha (a));
-        strokeIcon (g, stemIcon (stemKey), badge.withSizeKeepingCentre (18.0f, 18.0f), 2.0f);
-    }
+    // Marker (LoopHandles.mockup.html): a 4 x 30 bar, radius 2, in the stem colour, dimmed with the name.
+    const juce::Rectangle<float> bar ((float) padX, (h - 30.0f) / 2.0f, 4.0f, 30.0f);
+    g.setColour (colour.withMultipliedAlpha (a));
+    g.fillRoundedRectangle (bar, 2.0f);
 
-    // Name (Bold 14) over the file name (11, cream 0.6), line-height 1.2, 1 px apart, centred as one column, 10 px after the badge.
+    // Name (Bold 14) over the file name (11, cream 0.6), line-height 1.2, 1 px apart, centred as one column, 10 px after the bar.
     const auto nameH = 14.0f * 1.2f, fileH = 11.0f * 1.2f, top = (h - (nameH + 1.0f + fileH)) / 2.0f;
-    const auto textX = badge.getRight() + 10.0f, textW = (float) (padX + nameW) - textX;
+    const auto textX = bar.getRight() + 10.0f, textW = (float) (padX + nameW) - textX;
     g.setColour (Theme::cream.withAlpha (a));
     g.setFont (Fonts::body (14.0f, 700));
     g.drawText (name, juce::Rectangle<float> (textX, top, textW, nameH), juce::Justification::centredLeft, true);

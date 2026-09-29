@@ -26,14 +26,11 @@ struct StemRowTests : juce::UnitTest
         beginTest ("icons");
         expect (iconPath (Icons::plus, { 10.0f, 10.0f, 48.0f, 48.0f }).getBounds() == juce::Rectangle<float> (20.0f, 20.0f, 28.0f, 28.0f));
         for (auto* d : { Icons::file, Icons::plus, Icons::upload, Icons::alert, Icons::copy, Icons::grip, Icons::play, Icons::pause,
-                         Icons::speaker, Icons::speakerOff, Icons::loop,
-                         Icons::vocals, Icons::drums, Icons::bass, Icons::guitar, Icons::piano, Icons::other })
+                         Icons::speaker, Icons::speakerOff, Icons::loop })
         {
             const auto p = iconPath (d, { 24.0f, 24.0f });
             expect (! p.isEmpty() && juce::Rectangle<float> (-2.0f, -2.0f, 28.0f, 28.0f).contains (p.getBounds()), d);
         }
-        expect (stemIcon ("drums") == Icons::drums);
-        expect (stemIcon ("kazoo") == Icons::other);
 
         beginTest ("pill");
         SegmentedPill pill ({ "4 stems", "6 stems" });
@@ -62,6 +59,17 @@ struct StemRowTests : juce::UnitTest
         expectLessOrEqual (row.chipBounds().getRight(), 664);
         expectEquals (row.chipBounds().getHeight(), 34);
         expectEquals (row.barCount(), 104);
+
+        beginTest ("colour bar instead of an icon");
+        {
+            const auto img = render (row);
+            const auto c = themeFor ("dusk").stemColour ("vocals");
+            const auto at = img.getPixelAt (12, 31);                        // the 4 x 30 bar at x 10, centred in 62
+            expectWithinAbsoluteError ((int) at.getRed(), (int) c.getRed(), 3);
+            expectWithinAbsoluteError ((int) at.getGreen(), (int) c.getGreen(), 3);
+            expectWithinAbsoluteError ((int) at.getBlue(), (int) c.getBlue(), 3);
+            expectEquals ((int) img.getPixelAt (18, 31).getAlpha(), 0);     // the old tinted badge covered x 10-42
+        }
 
         beginTest ("no keyboard focus");
         expect (! row.getWantsKeyboardFocus() && ! row.waveform().getWantsKeyboardFocus() && ! row.light().getWantsKeyboardFocus());
