@@ -46,11 +46,12 @@ public:
     float takePeak() { return peak.exchange (0.0f); }  // highest mix level since the last call
 
 private:
+    static constexpr int readAheadSamples = 32768;
     class Stack;
     juce::int64 songPosition (juce::int64 linear) const;   // read-ahead position -> song position (loop-wrapped)
     bool wraps() const;                                     // looping, and playback started before the loop end
     juce::int64 linearPosition() const;                     // the audio thread's position, in source samples
-    void seekSource (juce::int64 sourceSample);             // sets the wrap origin, then moves the transport
+    void seekSource (juce::int64 songSample, bool loopOn);  // jumps the read-ahead to a fresh range, then publishes the state
 
     juce::AudioFormatManager formats;
     juce::TimeSliceThread readAhead { "LISN player read-ahead" };
@@ -63,7 +64,8 @@ private:
     std::atomic<int> stemCount { 0 };
     std::atomic<bool> wanted { false }, prepared { false }, reachedEnd { false }, looping { false };
     std::atomic<juce::int64> readPos { 0 };     // host-rate linear samples, written by addTo and seekSource
-    std::atomic<juce::int64> origin { 0 }, loopStart { 0 }, loopEnd { 0 };   // source samples
+    std::atomic<juce::int64> origin { 0 }, loopStart { 0 }, loopEnd { 0 };   // song positions (source samples)
+    std::atomic<juce::int64> base { 0 };        // the linear read position the last seek jumped to
     std::atomic<float> peak { 0.0f };
     bool sounding = false;                      // audio thread only: last block was audible (for the fade-out block)
     juce::int64 lengthSamples = 0;              // source samples

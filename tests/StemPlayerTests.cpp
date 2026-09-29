@@ -177,6 +177,49 @@ struct StemPlayerTests : juce::UnitTest
         p.pause();
         pull (0.0f);
 
+        beginTest ("a loop set while the read-ahead is full wraps at the new end");
+        p.prepare (44100, 512);
+        expect (p.load ({ steps }));
+        juce::Thread::sleep (30);
+        p.play();
+        for (int block = 0; block < 10; ++block) { pull (0.0f); juce::Thread::sleep (1); }
+        juce::Thread::sleep (150);                           // the read-ahead fills ~0.74 s past the playhead
+        p.setLoop (0.45, 0.55);                              // 19845 .. 24255, inside the buffered range; spans the step at 22050
+        juce::Thread::sleep (30);
+        std::vector<float> after;
+        for (int block = 0; block < 15; ++block)             // 7680 samples: the wrap is due after 2205 + 2205
+        {
+            pull (0.0f);
+            after.insert (after.end(), buf.getReadPointer (0), buf.getReadPointer (0) + 512);
+            juce::Thread::sleep (1);
+        }
+        int firstFall = -1;
+        for (size_t i = 1; i < after.size() && firstFall < 0; ++i)
+            if (after[i - 1] > 0.5f && after[i] < 0.5f) firstFall = (int) i;
+        expectWithinAbsoluteError (firstFall, 2205 + 2205, 8);
+        p.pause();
+        pull (0.0f);
+
+        beginTest ("a seek before prepare() is kept");
+        {
+            StemPlayer q;
+            expect (q.load ({ steps }));
+            q.setPositionFraction (0.75);                    // in the 0.75 half of the file
+            q.prepare (44100, 512);
+            juce::Thread::sleep (30);
+            expectWithinAbsoluteError (q.getPositionFraction(), 0.75, 0.001);
+            q.play();
+            juce::AudioBuffer<float> b (2, 512);
+            for (int i = 0; i < 3; ++i) { b.clear(); q.addTo (b); juce::Thread::sleep (1); }
+            expectWithinAbsoluteError (b.getSample (0, 256), 0.75f, 0.01f);
+            q.unload();
+        }
+
+        beginTest ("zero-length stems are rejected");
+        const auto empty = dir.getChildFile ("empty.wav");
+        writeWav (empty, 0.0, [] (int, int) { return 0.0f; });
+        expect (! p.load ({ empty }));
+
         beginTest ("end of the song");
         p.prepare (48000, 512);
         expect (p.load ({ sine }));

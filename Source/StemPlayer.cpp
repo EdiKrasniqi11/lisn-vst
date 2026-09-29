@@ -28,14 +28,18 @@ public:
     }
 
     juce::int64 songLength() const { return length; }
-    int numStems() const { return readers.size(); }
 
     void prepareToPlay (int, double) override {}
     void releaseResources() override {}
     void setNextReadPosition (juce::int64 p) override { pos = p; }
     juce::int64 getNextReadPosition() const override { return pos; }
     // While the loop can wrap, the stream must not end: the read-ahead buffer and the transport stop at this length.
-    juce::int64 getTotalLength() const override { return owner.wraps() ? std::numeric_limits<juce::int64>::max() / 4 : length; }
+    // Otherwise it ends where the song ends, in linear positions (see songPosition).
+    juce::int64 getTotalLength() const override
+    {
+        return owner.wraps() ? std::numeric_limits<juce::int64>::max() / 4
+                             : owner.base.load() + (length - owner.origin.load());
+    }
     bool isLooping() const override { return false; }   // true would make the buffer wrap at the song length itself
 
     void getNextAudioBlock (const juce::AudioSourceChannelInfo& info) override
@@ -80,11 +84,14 @@ StemPlayer::~StemPlayer()
 void StemPlayer::prepare (double sampleRate, int maxBlockSize)
 {
     prepared = false;
+    const auto song = stack != nullptr ? songPosition (linearPosition()) : 0;   // before hostRate changes
     scratch.setSize (2 * maxStems, juce::jmax (1, maxBlockSize));   // a 0-sample scratch would make addTo's chunk loop spin
     mix.setSize (2, juce::jmax (1, maxBlockSize));
     hostRate = sampleRate;
     transport.prepareToPlay (maxBlockSize, sampleRate);
     transport.prepareToPlay (maxBlockSize, sampleRate);   // again: sizes the resampler for the ratio the first call set
+    if (stack != nullptr)
+        seekSource (song, looping.load());   // a seek made before this was a no-op (no sample rate yet); also re-bases readPos
     prepared = true;
 }
 
@@ -104,7 +111,7 @@ bool StemPlayer::load (const juce::Array<juce::File>& stems)
         if (readers.size() == maxStems)
             break;                                   // ponytail: stems past 8 are ignored; demucs makes 4 or 6
         std::unique_ptr<juce::AudioFormatReader> r (formats.createReaderFor (f));
-        if (r == nullptr || (! readers.isEmpty() && ! juce::exactlyEqual (r->sampleRate, readers[0]->sampleRate)))
+        if (r == nullptr || r->lengthInSamples <= 0 || (! readers.isEmpty() && ! juce::exactlyEqual (r->sampleRate, readers[0]->sampleRate)))
             return false;
         readers.add (r.release());
         loaded.add (f);
@@ -117,10 +124,10 @@ bool StemPlayer::load (const juce::Array<juce::File>& stems)
     stack = std::make_unique<Stack> (*this, readers);
     lengthSamples = stack->songLength();
     lengthSec = (double) lengthSamples / sourceRate;
-    transport.setSource (stack.get(), 32768, &readAhead, sourceRate, 2 * count);
+    transport.setSource (stack.get(), readAheadSamples, &readAhead, sourceRate, 2 * count);
     files = loaded;
     stemCount = count;
-    seekSource (0);
+    seekSource (0, false);
     transport.start();   // only sets flags under the lock; audio is gated by `wanted`
     return true;
 }
@@ -135,7 +142,7 @@ void StemPlayer::unload()
     for (auto& m : muted) m = false;
     looping = false;
     loop = {};
-    loopStart = loopEnd = origin = 0;
+    loopStart = loopEnd = origin = base = 0;
     lengthSamples = 0;
     lengthSec = 0;
     readPos = 0;
@@ -147,7 +154,7 @@ void StemPlayer::play()
     if (stack == nullptr) return;
     if (! transport.isPlaying())   // the transport stops itself only at the end; a seek made after that is kept
     {
-        if (transport.hasStreamFinished()) seekSource (0);
+        if (transport.hasStreamFinished()) seekSource (0, looping.load());
         transport.start();
     }
     wanted = true;
@@ -160,10 +167,11 @@ void StemPlayer::pause()
 
 juce::int64 StemPlayer::songPosition (juce::int64 linear) const
 {
+    const auto song = origin.load() + (linear - base.load());   // unwrapped: the last seek target plus what played since
     const auto s = loopStart.load(), e = loopEnd.load();
-    if (! looping.load() || s >= e || origin.load() >= e || linear < e)
-        return linear;
-    return s + (linear - e) % (e - s);
+    if (! looping.load() || s >= e || origin.load() >= e || song < e)
+        return song;
+    return s + (song - e) % (e - s);
 }
 
 bool StemPlayer::wraps() const
@@ -181,16 +189,22 @@ double StemPlayer::getPositionFraction() const
     return lengthSamples > 0 ? juce::jlimit (0.0, 1.0, (double) songPosition (linearPosition()) / (double) lengthSamples) : 0.0;
 }
 
-void StemPlayer::seekSource (juce::int64 sourceSample)
+void StemPlayer::seekSource (juce::int64 songSample, bool loopOn)
 {
-    origin = sourceSample;
-    transport.setPosition ((double) sourceSample / sourceRate);   // also flushes the read-ahead
-    readPos = (juce::int64) ((double) sourceSample * hostRate / sourceRate);
+    // BufferingAudioSource keeps its buffered audio when a seek lands inside it, and that audio was mapped with the old loop
+    // setting. So every seek jumps to a fresh linear range past anything it can have buffered; songPosition() maps it back.
+    // origin and base are published before `looping`, so getTotalLength() never falls behind the playing position.
+    const auto fresh = juce::jmax (base.load(), linearPosition()) + 2 * readAheadSamples;
+    origin = songSample;
+    base = fresh;
+    looping = loopOn;
+    transport.setPosition ((double) fresh / sourceRate);   // a no-op until prepare(), which repeats the seek
+    readPos = (juce::int64) ((double) fresh * hostRate / sourceRate);
 }
 
 void StemPlayer::setPositionFraction (double f)
 {
-    seekSource ((juce::int64) (juce::jlimit (0.0, 1.0, f) * (double) lengthSamples));
+    seekSource ((juce::int64) (juce::jlimit (0.0, 1.0, f) * (double) lengthSamples), looping.load());
 }
 
 void StemPlayer::setMuted (int stem, bool m)
@@ -223,6 +237,8 @@ void StemPlayer::solo (int stem)
 
 void StemPlayer::setLoop (double a, double b)
 {
+    // Re-base first: the bounds change below, and the transport must never see a finished stream meanwhile.
+    seekSource (songPosition (linearPosition()), looping.load());
     loop = { juce::jlimit (0.0, 1.0, juce::jmin (a, b)), juce::jlimit (0.0, 1.0, juce::jmax (a, b)) };
     loopStart = (juce::int64) (loop.getStart() * (double) lengthSamples);
     loopEnd = (juce::int64) (loop.getEnd() * (double) lengthSamples);
@@ -231,10 +247,11 @@ void StemPlayer::setLoop (double a, double b)
 
 void StemPlayer::setLooping (bool on)
 {
+    // ponytail: every loop change re-seeks, so the read-ahead refills and the resampler restarts: a small click is possible.
+    // Upgrade path: crossfade across the seek.
     const auto song = songPosition (linearPosition());
-    looping = on && ! loop.isEmpty();
-    // Turning a loop on jumps into it; every change re-seeks, which drops read-ahead audio from the old setting.
-    seekSource (looping.load() && (song < loopStart.load() || song >= loopEnd.load()) ? loopStart.load() : song);
+    const bool loopOn = on && ! loop.isEmpty();
+    seekSource (loopOn && (song < loopStart.load() || song >= loopEnd.load()) ? loopStart.load() : song, loopOn);   // turning a loop on jumps into it
 }
 
 void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
