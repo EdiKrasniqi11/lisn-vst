@@ -390,7 +390,7 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
         row->setCompact (files.size() > 4);
         row->onToggleMute = [this, i] { if (onToggleMute != nullptr) onToggleMute (i); };
         row->onSolo = [this, i] { if (onSolo != nullptr) onSolo (i); };
-        row->onWaveMouse = [this] (WaveMouse m, double f, bool alt) { waveMouse (m, f, alt); };
+        row->onWaveMouse = [this] (WaveMouse m, double f, bool alt, bool ctrl) { waveMouse (m, f, alt, ctrl); };
         row->dragFile = [this, i] { return stemFile != nullptr ? stemFile (i) : fileOf (i); };
         addAndMakeVisible (row);
     }
@@ -526,7 +526,7 @@ void StemsScreen::setHot (int edge)
     repaint (loopArea (loopRange));
 }
 
-void StemsScreen::waveMouse (WaveMouse m, double f, bool free)
+void StemsScreen::waveMouse (WaveMouse m, double f, bool free, bool ctrl)
 {
     const auto x = headX (f);
     switch (m)
@@ -542,15 +542,21 @@ void StemsScreen::waveMouse (WaveMouse m, double f, bool free)
             downX = x;
             downFraction = f;
             dragging = false;
+            newLoop = grab < 0 && ctrl;
             if (grab < 0 && onSeek != nullptr) onSeek (juce::jmin (f, 0.999));
             break;
         case WaveMouse::drag:
-            // 4 px or more: a trim or a new loop instead of a seek. Less is a click, whatever the mouse jitters (JUCE sends a
-            // drag for any move, sub-pixel at 125-150 % DPI). ponytail: a handle dragged to the view's edge stops there, no
+            // 4 px or more: a trim, a new loop or a scrub. Less is a click, whatever the mouse jitters (JUCE sends a drag for
+            // any move, sub-pixel at 125-150 % DPI). ponytail: a handle dragged to the view's edge stops there, no
             // autoscroll. Upgrade path: scroll the view while a handle is held at an edge.
             if (! dragging && std::abs (x - downX) < 4)
                 break;
             dragging = true;
+            if (grab < 0 && ! newLoop)
+            {
+                if (onSeek != nullptr) onSeek (juce::jmin (f, 0.999));
+                break;
+            }
             dragBand = grab >= 0 ? trimmed (f, free)
                                  : juce::Range<double> { snap (juce::jmin (downFraction, f), free), snap (juce::jmax (downFraction, f), free) };
             repaint (waveSpanArea());
@@ -576,7 +582,8 @@ void StemsScreen::tabMouse (WaveMouse m, const juce::MouseEvent& e)
     const auto ours = m == WaveMouse::drag || m == WaveMouse::up ? tabDown : inside;
     if (m == WaveMouse::up) tabDown = false;
     if (ours)
-        waveMouse (m, fractionAt ((float) juce::jlimit (waveLeft, waveLeft + waveWidth, e.x)), e.mods.isAltDown());
+        waveMouse (m, fractionAt ((float) juce::jlimit (waveLeft, waveLeft + waveWidth, e.x)), e.mods.isAltDown(),
+                   e.mods.isCtrlDown());
     else
         waveMouse (WaveMouse::exit, 0.0, false);
 }

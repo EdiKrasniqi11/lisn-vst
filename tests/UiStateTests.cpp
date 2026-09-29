@@ -309,7 +309,7 @@ struct UiStateTests : juce::UnitTest
             expectEquals (beatsText (1.05), juce::String ("1 beat"));
         }
 
-        beginTest ("handles: hover, trim with snapping and Alt, never crossing; a drag elsewhere makes a new loop");
+        beginTest ("handles: hover, trim with snapping and Alt, never crossing; a drag elsewhere scrubs, a Ctrl+drag makes a new loop");
         {
             StemsScreen screen;
             screen.setStems (four, "Song.mp3");
@@ -364,7 +364,7 @@ struct UiStateTests : juce::UnitTest
             expectEquals ((int) sets.size(), 3);
             expectEquals (seekTo, -1.0);
 
-            // Away from the edges: a click seeks, a drag makes a new snapped loop (here an inner one).
+            // Away from the edges: a click seeks, a drag scrubs, a Ctrl+drag makes a new snapped loop (here an inner one).
             const double mid = (a + b) / 2.0;
             screen.waveMouse (WaveMouse::down, mid, false);
             screen.waveMouse (WaveMouse::up, mid, false);
@@ -372,7 +372,12 @@ struct UiStateTests : juce::UnitTest
             expectEquals ((int) sets.size(), 3);
             screen.waveMouse (WaveMouse::down, mid, false);
             screen.waveMouse (WaveMouse::drag, mid + 30 * px, false);
+            expectWithinAbsoluteError (seekTo, mid + 30 * px, 1e-12);
             screen.waveMouse (WaveMouse::up, mid + 30 * px, false);
+            expectEquals ((int) sets.size(), 3);
+            screen.waveMouse (WaveMouse::down, mid, false, true);
+            screen.waveMouse (WaveMouse::drag, mid + 30 * px, false, true);
+            screen.waveMouse (WaveMouse::up, mid + 30 * px, false, true);
             expectEquals ((int) sets.size(), 4);
             expect (sets[3].first > a && sets[3].second < b);
             const double k = (sets[3].first * 192.0 - 0.2) / (beat / 4.0);

@@ -17,7 +17,7 @@ public:
     void setView (juce::Range<double> songFractions);  // the part of the song drawn; the whole song by default
     void setStemColour (juce::Colour);
     void setFraction (double);                         // the playhead (song fraction); no repaint, the screen repaints the strip
-    std::function<void (WaveMouse, double, bool)> onMouse;   // what happened, the song fraction under the mouse, Alt held
+    std::function<void (WaveMouse, double, bool, bool)> onMouse;   // what happened, the song fraction under the mouse, Alt, Ctrl
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -55,7 +55,7 @@ public:
     void setMuted (bool);                            // dims the name and waveform, swaps the light's icon
     void setPosition (double fraction);              // the shared playhead; no repaint (the screen repaints the strip)
     std::function<void()> onToggleMute, onSolo;
-    std::function<void (WaveMouse, double, bool)> onWaveMouse;   // the waveform's mouse, as song fractions
+    std::function<void (WaveMouse, double, bool, bool)> onWaveMouse;   // the waveform's mouse, as song fractions
     std::function<juce::File()> dragFile;            // what a drag drops; unset = the stem file
     juce::File getFile() const { return file; }
     juce::String getStemKey() const { return stemKey; }

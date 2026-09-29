@@ -136,10 +136,10 @@ struct StemRowTests : juce::UnitTest
         expectEquals (row.waveform().getAlpha(), 1.0f);
         render (row);
 
-        beginTest ("the waveform reports the mouse as song fractions through the view, with Alt");
+        beginTest ("the waveform reports the mouse as song fractions through the view, with Alt and Ctrl");
         {
-            std::vector<std::tuple<WaveMouse, double, bool>> got;
-            row.onWaveMouse = [&] (WaveMouse m, double f, bool alt) { got.push_back ({ m, f, alt }); };
+            std::vector<std::tuple<WaveMouse, double, bool, bool>> got;
+            row.onWaveMouse = [&] (WaveMouse m, double f, bool alt, bool ctrl) { got.push_back ({ m, f, alt, ctrl }); };
             auto& w = row.waveform();
             auto event = [&] (float x, juce::ModifierKeys mods)
             {
@@ -150,7 +150,7 @@ struct StemRowTests : juce::UnitTest
             };
             row.setView ({ 0.5, 1.0 });
             w.mouseMove (event (94.0f, {}));
-            w.mouseDown (event (94.0f, {}));
+            w.mouseDown (event (94.0f, juce::ModifierKeys (juce::ModifierKeys::ctrlModifier)));
             w.mouseDrag (event (500.0f, juce::ModifierKeys (juce::ModifierKeys::altModifier)));   // past the right edge
             w.mouseUp (event (188.0f, {}));
             w.mouseExit (event (188.0f, {}));
@@ -162,6 +162,7 @@ struct StemRowTests : juce::UnitTest
             expectWithinAbsoluteError (std::get<1> (got[2]), 1.0, 1e-9);     // clamped to the view
             expectWithinAbsoluteError (std::get<1> (got[3]), 0.75, 1e-9);
             expect (std::get<2> (got[2]) && ! std::get<2> (got[1]));
+            expect (std::get<3> (got[1]) && ! std::get<3> (got[2]));
             row.setView ({ 0.0, 1.0 });
         }
     }

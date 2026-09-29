@@ -97,7 +97,7 @@ void WaveformView::paint (juce::Graphics& g)
 void WaveformView::send (WaveMouse m, const juce::MouseEvent& e)
 {
     if (onMouse != nullptr && getWidth() > 0)
-        onMouse (m, fractionAt (e.position.x), e.mods.isAltDown());
+        onMouse (m, fractionAt (e.position.x), e.mods.isAltDown(), e.mods.isCtrlDown());
 }
 
 void WaveformView::mouseMove (const juce::MouseEvent& e) { send (WaveMouse::move, e); }
@@ -113,7 +113,7 @@ StemRow::StemRow (juce::File wav, juce::String key)
     setMouseCursor (juce::MouseCursor::DraggingHandCursor);
     lightButton.onToggle = [this] { if (onToggleMute != nullptr) onToggleMute(); };
     lightButton.onSolo = [this] { if (onSolo != nullptr) onSolo(); };
-    wave.onMouse = [this] (WaveMouse m, double f, bool alt) { if (onWaveMouse != nullptr) onWaveMouse (m, f, alt); };
+    wave.onMouse = [this] (WaveMouse m, double f, bool alt, bool ctrl) { if (onWaveMouse != nullptr) onWaveMouse (m, f, alt, ctrl); };
     addAndMakeVisible (lightButton);
     addAndMakeVisible (wave);
     setTheme (themeFor ("dusk"));

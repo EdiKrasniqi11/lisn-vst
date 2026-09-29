@@ -1,7 +1,7 @@
 # LISN StemSplitter: loop handles, beat grid, zoom and keys
 
 Follows `2026-09-29-stem-player-design.md` on the same branch (`feat/stem-player`, not merged yet). It adds:
-- **loop handles:** after a drag creates a loop, its two edges can be dragged to trim it;
+- **loop handles:** after a Ctrl+drag creates a loop (a plain drag scrubs the playhead), its two edges can be dragged to trim it;
 - **an adaptive beat grid** that the edges snap to (down to ¼ beat), with **Alt** to go off the grid;
 - **Ctrl+wheel zoom** on the waveforms, so a ¼ beat is wide enough to hit;
 - **keyboard control** (Space, L, 1–6, Home) while the plugin has focus;
@@ -43,7 +43,7 @@ The waveform is 376 px wide. On a 3-minute song at 92 BPM one pixel is about 0.8
 - **Hovering** within 6 px of a loop edge, while looping is on, shows the resize cursor and the hot tab.
 - **Dragging a handle** moves only that edge, snapped (or free with Alt). It stops one step short of the other edge; with Alt the minimum loop is 10 ms. The band follows the mouse, and the new range goes to the player on release (`onSetLoop`). Setting the loop re-seeks, so it isn't done live.
 - **Dragging anywhere else** (4 px or more) creates a new loop, as today, with edges snapped to the current step. It replaces the old loop and turns looping on.
-- **Moving the whole loop** by dragging its middle is not included. A drag inside the band makes a new loop.
+- **Moving the whole loop** by dragging its middle is not included. A Ctrl+drag inside the band makes a new loop.
 
 ## Loop button and L
 
@@ -83,7 +83,7 @@ The waveform is 376 px wide. On a 3-minute song at 92 BPM one pixel is about 0.8
 
 - **Unit tests:**
   - **Step choice:** at a given zoom and BPM the step is ¼ beat, 1 beat or 1 bar; there is no snapping without a BPM; Alt gives the raw position.
-  - **Handles:** the hit zone is 6 px; an edge can't cross the other; a handle drag sends one `onSetLoop` on release, and a drag in the middle creates a new loop.
+  - **Handles:** the hit zone is 6 px; an edge can't cross the other; a handle drag sends one `onSetLoop` on release, a Ctrl+drag in the middle creates a new loop, and a plain drag there scrubs.
   - **View:** zooming keeps the fraction under the cursor still, and the clamps work (2 s minimum, never past the whole song, stays inside 0..1). Scrolling works only while zoomed. `headX` and the seek fraction map through the view.
   - **Envelope bars:** the visible bars are the max over their slice. A 4-segment test file (silence, 0.5, silence, 1.0) reads back per segment at whole-song zoom, and a zoomed view picks the right segment.
   - **Beats text:** `8 beats`, `10.25 beats`, `1 beat`, and nothing without a BPM.

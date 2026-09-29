@@ -109,8 +109,9 @@ public:
     double gridStep() const;
     double snap (double fraction, bool free = false) const;   // to the nearest grid line; unchanged when free (Alt) or no grid
     // A waveform's mouse (song fractions). Within 6 px of a loop edge, while looping, it hovers and drags that edge (a
-    // handle); elsewhere a click seeks and a drag of 4 px or more makes a new loop. Loops go to onSetLoop on release.
-    void waveMouse (WaveMouse, double fraction, bool alt);
+    // handle); elsewhere a click seeks, a drag scrubs, and a Ctrl+drag of 4 px or more makes a new loop. Loops go to
+    // onSetLoop on release.
+    void waveMouse (WaveMouse, double fraction, bool alt, bool ctrl = false);
     int hotEdge() const { return hot; }              // 0 = loop start, 1 = loop end, -1 = none (test hook)
     juce::String chipText() const { return dragChip.getText(); }   // test hook
     std::function<void (double, double)> onSetLoop;  // a finished loop drag, a handle trim or defaultLoop (snapped unless Alt)
@@ -157,7 +158,8 @@ private:
     double position = 0.0;                           // the playhead, as a song fraction
     int hot = -1, grab = -1, downX = 0;              // the hovered / grabbed loop edge (0 start, 1 end, -1 none), the press x
     double downFraction = 0.0;
-    bool dragging = false;                           // a drag of 4 px or more: a trim (grab >= 0) or a new loop
+    bool dragging = false;                           // a drag of 4 px or more: a trim (grab >= 0), a new loop or a scrub
+    bool newLoop = false;                            // the press had Ctrl held away from the handles: its drag makes a loop
     bool tabDown = false;                            // the press went to the screen itself, over the waves: it owns the drag
     juce::OwnedArray<StemRow> rows;
     CircleButton playButton;
