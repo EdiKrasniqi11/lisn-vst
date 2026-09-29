@@ -1,0 +1,136 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Unbounded:wght@700&display=swap');
+.lx { --cream:#FFF4EA; --ink:#2B1822; font-family:'DM Sans',sans-serif; color:var(--cream); margin-bottom:18px; }
+.lx .win { position:relative; width:760px; height:500px; overflow:hidden; border-radius:10px;
+  background:
+    radial-gradient(ellipse 60% 70% at 8% 20%, #7B5467 0 60%, transparent 61%),
+    radial-gradient(ellipse 50% 60% at 60% 0%, #F4A76F 0 55%, transparent 56%),
+    radial-gradient(ellipse 45% 55% at 95% 10%, #6F7679 0 70%, transparent 71%),
+    radial-gradient(ellipse 60% 60% at 0% 100%, #D95F6B 0 55%, transparent 56%),
+    radial-gradient(ellipse 70% 60% at 100% 100%, #F08A7C 0 50%, transparent 51%), #D9775F; }
+.lx .hdr { position:absolute; left:24px; top:16px; width:712px; height:44px; display:flex; align-items:center; justify-content:space-between; }
+.lx .logo { font-family:'Unbounded'; font-size:22px; letter-spacing:.08em; }
+.lx .logo small { font-family:'DM Sans'; font-weight:500; font-size:14px; letter-spacing:0; margin-left:10px; }
+.lx .pills { display:flex; gap:8px; }
+.lx .pill { display:flex; gap:2px; padding:3px; border-radius:999px; border:1px solid rgba(255,244,234,.14); background:rgba(32,18,27,.72); }
+.lx .pill span { height:30px; line-height:30px; padding:0 14px; border-radius:999px; font-size:13px; font-weight:700; }
+.lx .pill .on { background:var(--cream); color:var(--ink); }
+.lx .panel { position:absolute; left:24px; top:76px; width:712px; height:400px; box-sizing:border-box; border-radius:22px;
+  border:1px solid rgba(255,244,234,.14); background:rgba(32,18,27,.66); backdrop-filter:blur(18px);
+  padding:16px 18px; display:flex; flex-direction:column; gap:10px; box-shadow:0 26px 50px -22px rgba(20,8,16,.75); }
+.lx .top { height:36px; display:flex; align-items:center; gap:12px; flex-shrink:0; }
+.lx .playbig { width:36px; height:36px; border-radius:999px; background:var(--cream); color:var(--ink); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.lx .tt { flex-grow:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.lx .tt b { font-size:15px; line-height:1.2; } .lx .tt i { font-style:normal; font-size:12px; line-height:1.2; color:rgba(255,244,234,.64); }
+.lx .btn { height:34px; box-sizing:border-box; padding:0 12px; display:flex; align-items:center; gap:6px; border-radius:10px; border:1px solid rgba(255,244,234,.22);
+  background:rgba(255,244,234,.06); font-size:13px; font-weight:700; white-space:nowrap; }
+.lx .btn.on { background:rgba(244,167,111,.22); border-color:#F4A76F; }
+.lx .chip { height:34px; box-sizing:border-box; padding:0 12px 0 8px; display:flex; align-items:center; gap:6px; border-radius:10px; border:1px dashed rgba(255,244,234,.3);
+  color:rgba(255,244,234,.82); font-size:12px; font-weight:700; white-space:nowrap; }
+.lx .div { height:1px; background:rgba(255,244,234,.12); flex-shrink:0; }
+.lx .rows { flex-grow:1; display:flex; flex-direction:column; gap:10px; position:relative; }
+.lx .row { display:flex; align-items:center; gap:14px; padding:0 10px; height:62px; border-radius:14px; flex-shrink:0; }
+.lx .row.muted .nm, .lx .row.muted .wave { opacity:.38; }
+.lx .nm { width:118px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.lx .bar { width:4px; height:30px; border-radius:2px; flex-shrink:0; }
+.lx .nm b { font-size:14px; display:block; } .lx .nm i { font-style:normal; font-size:11px; color:rgba(255,244,234,.6); }
+.lx .led { width:38px; height:38px; border-radius:999px; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-sizing:border-box;
+  background:rgba(255,244,234,.06); border:1px solid rgba(255,244,234,.25); }
+.lx .wave { position:relative; flex-shrink:0; height:40px; }
+.lx .foot { height:16px; display:flex; align-items:center; gap:8px; font-size:12px; color:rgba(255,244,234,.62); flex-shrink:0; }
+.lx .foot .sp { flex-grow:1; }
+.lx .key { height:16px; line-height:14px; box-sizing:border-box; padding:0 5px; border-radius:4px; font-size:11px; font-weight:700; border:1px solid rgba(255,244,234,.22); color:rgba(255,244,234,.4); }
+.lx .key.lit { border-color:rgba(255,244,234,.7); color:var(--cream); background:rgba(255,244,234,.1); }
+.lx .loopband { position:absolute; background:rgba(255,244,234,.10); border-left:2px solid var(--cream); border-right:2px solid var(--cream); pointer-events:none; }
+.lx .tab { position:absolute; width:10px; height:18px; margin-left:-5px; border-radius:4px; background:var(--cream); pointer-events:none;
+  display:flex; align-items:center; justify-content:center; gap:2px; }
+.lx .tab::before, .lx .tab::after { content:''; width:1px; height:8px; background:rgba(43,24,34,.55); }
+.lx .tab.hot { width:12px; height:22px; margin-left:-6px; box-shadow:0 0 0 3px rgba(255,244,234,.22); }
+.lx .head { position:absolute; width:2px; margin-left:-1px; background:var(--cream); border-radius:2px; pointer-events:none; }
+.lx .ov { position:absolute; height:4px; border-radius:2px; background:rgba(255,244,234,.10); }
+.lx .ov b { position:absolute; top:0; bottom:0; border-radius:2px; background:rgba(255,244,234,.55); }
+.lx .ov s { position:absolute; top:-2px; height:8px; width:2px; background:#F4A76F; }
+.lx .cur { position:absolute; pointer-events:none; }
+.note { font-size:13px; color:var(--text-secondary, #888); margin:6px 0 18px; max-width:760px; }
+</style>
+
+<h2>Loop handles, beat grid and zoom</h2>
+<p class="note">A: zoomed in with Ctrl+wheel (1:14 to 1:28 of 3:12). The loop is 8 beats; both edges are handles with a grab tab, and the right one is hovered (the cursor becomes the resize arrow). Faint lines mark beats, brighter lines mark bars, and the handles snap to a quarter beat at this zoom. The strip under the rows shows where the view sits in the song, with the loop in orange. Each stem is marked by a thin bar in its colour.</p>
+<div class="lx"><div class="win" data-state="zoom"></div></div>
+<p class="note">B: the whole song (zoomed all the way out). The handles are still there; at this zoom they snap to whole bars, so no grid is drawn and there's no position strip. There is no footer.</p>
+<div class="lx"><div class="win" data-state="song"></div></div>
+
+<script>
+(function () {
+  const stems = [
+    { k:'Vocals', c:'#F4A76F', icon:'🎤', seed:11, kind:'v' },
+    { k:'Drums',  c:'#EF7A7F', icon:'🥁', seed:23, kind:'d' },
+    { k:'Bass',   c:'#C9A0BD', icon:'〰', seed:37, kind:'b', muted:true },
+    { k:'Other',  c:'#A9B8BC', icon:'♫', seed:67, kind:'o' } ];
+  const song = 192, beat = 60 / 92, first = 0.2;
+  const rnd = s => () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const level = (kind, sec, r) => {
+    const ph = (((sec - first) / beat) % 1 + 1) % 1, t = sec / song;
+    if (kind === 'v') return ((t>.05&&t<.3)||(t>.35&&t<.6)||(t>.66&&t<.95)) ? .3+.62*r : .04;
+    if (kind === 'd') return (ph < .14 ? .95 : ph > .48 && ph < .6 ? .5 : .12) * (.8+.2*r);
+    if (kind === 'b') return .5 + .15*r;
+    return .26 + .34*r + .28*t; };
+  const waveX = 10 + 118 + 14 + 38 + 14, W = 376;
+  function wave(s, v0, v1, head, h) {
+    const n = 104, step = W / n, r = rnd(s.seed); let bars = '';
+    for (let i = 0; i < n; i++) {
+      const sec = v0 + (v1 - v0) * i / (n - 1), lv = Math.min(1, level(s.kind, sec, r())), half = Math.max(.75, lv*(h/2-.5));
+      bars += `<rect x="${(i*step).toFixed(1)}" y="${(h/2-half).toFixed(1)}" width="${(step*.6).toFixed(1)}" height="${(2*half).toFixed(1)}" fill="${sec < head ? s.c : s.c + '4D'}"/>`;
+    }
+    return `<svg width="${W}" height="${h}" style="display:block">${bars}</svg>`;
+  }
+  function grid(v0, v1, h) {
+    let lines = '';
+    for (let k = Math.ceil((v0 - first) / beat); first + k * beat < v1; k++) {
+      const x = W * (first + k * beat - v0) / (v1 - v0);
+      lines += `<rect x="${x.toFixed(1)}" y="0" width="1" height="100%" fill="rgba(255,244,234,${k % 4 === 0 ? .34 : .16})"/>`;
+    }
+    return `<svg width="${W}" style="position:absolute;left:${waveX}px;top:6px;height:calc(100% - 12px);pointer-events:none">${lines}</svg>`;
+  }
+  const speaker = on => on
+    ? '<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:#FFF4EA;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>'
+    : '<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:rgba(255,244,234,.5);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>';
+  function rows(v0, v1, head, withGrid) {
+    return stems.map(s => `<div class="row ${s.muted?'muted':''}">
+      <div class="nm"><div class="bar" style="background:${s.c}"></div><div><b>${s.k}</b><i>${s.k.toLowerCase()}.wav</i></div></div>
+      <div class="led">${speaker(! s.muted)}</div>
+      <div class="wave">${wave(s, v0, v1, head, 40)}</div>
+      <div class="chip">⠿ Drag</div></div>`).join('');
+  }
+  const header = `<div class="hdr"><div class="logo">LISN<small>StemSplitter</small></div><div class="pills">
+     <div class="pill"><span class="on">Dusk</span><span>Midnight</span></div><div class="pill"><span class="on">4 stems</span><span>6 stems</span></div></div></div>`;
+  const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  function overlay(v0, v1, a, b, head, hot) {
+    const X = s => waveX + W * (s - v0) / (v1 - v0), top = 6, bottom = 6;
+    const cursor = hot ? `<svg class="cur" viewBox="0 0 24 24" style="left:${X(b)+8}px;top:4px;width:22px;height:22px;fill:#FFF4EA;stroke:#2B1822;stroke-width:1.2"><path d="M2 12l5-5v3h10V7l5 5-5 5v-3H7v3z"/></svg>` : '';
+    return `<div class="loopband" style="left:${X(a)-1}px;width:${X(b)-X(a)}px;top:${top}px;bottom:${bottom}px"></div>
+      <div class="tab" style="left:${X(a)}px;top:${top-8}px"></div>
+      <div class="tab ${hot?'hot':''}" style="left:${X(b)}px;top:${top-(hot?10:8)}px"></div>
+      <div class="head" style="left:${X(head)}px;top:${top-6}px;bottom:${bottom-6}px"></div>${cursor}`;
+  }
+  const a = first + 120 * beat, b = first + 128 * beat;
+  const S = {
+    zoom: () => { const v0 = 74, v1 = 88, head = 80.6;
+      return `${header}<div class="panel">
+      <div class="top"><div class="playbig">❚❚</div>
+        <div class="tt"><b>Travis Snippet.mp3</b><i>${mmss(head)} / 3:12 · 92 BPM · loop ${mmss(a)}–${mmss(b)} · 8 beats</i></div>
+        <div class="btn on">⟲ Loop</div><div class="chip">⠿ Drag loop</div><div class="btn">＋ New song</div></div>
+      <div class="div"></div>
+      <div class="rows">${rows(v0, v1, head, true)}${grid(v0, v1)}${overlay(v0, v1, a, b, head, true)}
+        <div class="ov" style="left:${waveX}px;width:${W}px;bottom:4px"><b style="left:${100*v0/song}%;width:${100*(v1-v0)/song}%"></b><s style="left:${100*a/song}%"></s><s style="left:${100*b/song}%"></s></div></div></div>`; },
+    song: () => { const v0 = 0, v1 = song, head = 64, la = 58.3, lb = 86.1;
+      return `${header}<div class="panel">
+      <div class="top"><div class="playbig">❚❚</div>
+        <div class="tt"><b>Travis Snippet.mp3</b><i>1:04 / 3:12 · 92 BPM · loop 0:58–1:26 · 44 beats</i></div>
+        <div class="btn on">⟲ Loop</div><div class="chip">⠿ Drag loop</div><div class="btn">＋ New song</div></div>
+      <div class="div"></div>
+      <div class="rows">${rows(v0, v1, head, false)}${overlay(v0, v1, la, lb, head, false)}</div></div>`; }
+  };
+  document.querySelectorAll('.lx .win').forEach(w => w.innerHTML = S[w.dataset.state]());
+})();
+</script>
