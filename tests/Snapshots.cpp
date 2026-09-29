@@ -137,6 +137,10 @@ int runSnapshots (const juce::File& outDir)
         ed.tick();
     };
     const auto moving = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
+    const auto helpTab = [] (int tab)
+    {
+        return Setup ([tab] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.setHelpOpen (true); ed.helpSheet().setTab (tab); });
+    };
     const juce::String failedText = "demucs failed:\nTraceback (most recent call last):\n  File \"demucs/separate.py\", line 180, in main\n"
                                     "    100%|##########| 5.85/5.85 [00:14<00:00]\n  File \"demucs/apply.py\", line 214, in apply_model\n"
                                     "    out = model(mix)\nRuntimeError: CUDA out of memory. Tried to allocate 1.20 GiB (GPU 0; 4.00 GiB total capacity)\n"
@@ -158,6 +162,10 @@ int runSnapshots (const juce::File& outDir)
         { "motion-dusk", "dusk", state (Screen::Stems, false), 1.0f, moving },
         { "drop-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f },
         { "stems4-dusk@2x", "dusk", state (Screen::Stems, false), 2.0f, looping },
+        { "help-play-dusk", "dusk", state (Screen::Stems, false), 1.0f, helpTab (0) },
+        { "help-stems-midnight", "midnight", state (Screen::Drop, false), 1.0f, helpTab (1) },
+        { "help-loop-dusk", "dusk", state (Screen::Drop, false), 1.0f, helpTab (2) },
+        { "help-export-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f, helpTab (3) },
     };
 
     int failures = 0;

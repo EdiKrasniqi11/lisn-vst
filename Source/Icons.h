@@ -16,6 +16,14 @@ namespace Icons
     inline constexpr const char* speaker    = "M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13";   // stroked
     inline constexpr const char* speakerOff = "M11 5 6 9H3v6h3l5 4zM16 9.5l5 5M21 9.5l-5 5";                          // stroked
     inline constexpr const char* close  = "M6 6l12 12M18 6L6 18";                                       // Help.mockup.html, stroked
+    inline constexpr const char* jump   = "M4 12h11M11 7l5 5-5 5M20 5v14";                               // Help.mockup.html, stroked
+    inline constexpr const char* home   = "M6 5v14M19 5.5v13L9 12z";
+    inline constexpr const char* zoom   = "M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M20 20l-4-4M11 8v6M8 11h6";
+    inline constexpr const char* trim   = "M7 4v16M17 4v16M4 8h3M17 16h3";
+    inline constexpr const char* toggle = "M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7zM16 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4";
+    inline constexpr const char* grid   = "M4 4v16M9 4v16M14 4v16M19 4v16";
+    inline constexpr const char* layers = "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5";
+    inline constexpr const char* mouse  = "M12 3a6 6 0 0 0-6 6v6a6 6 0 0 0 12 0V9a6 6 0 0 0-6-6zM12 7v3";
 }
 
 // The icon's 24x24 viewBox mapped onto `area`.

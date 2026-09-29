@@ -967,6 +967,115 @@ void ErrorScreen::paint (juce::Graphics& g)
 }
 
 //==============================================================================
+namespace
+{
+    // Help.mockup.html's tips, [tab][tip]. A way to do a tip is a key (a solid keycap), a mouse action or a button (a dashed
+    // cap with a mouse), or a joining word.
+    enum class Part { key, mouse, word };
+    struct How { Part part; const char* text; };
+    struct Tip { const char* icon; const char* title; const char* line; std::vector<How> how; };
+
+    const How orWord { Part::word, "or" }, plusWord { Part::word, "+" };
+    How key (const char* t)   { return { Part::key, t }; }
+    How mouse (const char* t) { return { Part::mouse, t }; }
+    const char* const oneToSix = "1\xe2\x80\x93" "6";   // "1–6"
+
+    const std::vector<std::vector<Tip>> helpTips {
+        { { Icons::play, "Play or pause", "Every stem plays together, in sync", { key ("Space") } },
+          { Icons::jump, "Jump and scrub", "Click the waves to jump there, drag to scrub", { mouse ("Click"), mouse ("Drag") } },
+          { Icons::home, "Back to the start", "Back to 0:00, or to the loop's start while looping", { key ("Home") } },
+          { Icons::zoom, "Zoom and scroll", "Zoom around the mouse; the wheel alone scrolls", { key ("Ctrl"), plusWord, mouse ("Wheel") } } },
+        { { Icons::file, "Split a song", "Drop it on the panel or click Browse. 6 stems adds guitar and piano", { mouse ("Drop") } },
+          { Icons::speakerOff, "Mute a stem", "Click its light; stems 1 to 6 go top to bottom", { mouse ("Light"), orWord, key (oneToSix) } },
+          { Icons::speaker, "Solo a stem", "Only that stem plays; do it again to hear them all",
+            { mouse ("Right-click"), orWord, key ("Shift"), plusWord, key (oneToSix) } },
+          { Icons::plus, "New song", "Start over with another song", { mouse ("New song") } } },
+        { { Icons::loop, "Make a loop", "Ctrl+drag across the waves; the edges snap to the beat", { key ("Ctrl"), plusWord, mouse ("Drag") } },
+          { Icons::trim, "Trim it", "Drag either handle; hold Alt to go off the grid",
+            { mouse ("Handle"), orWord, key ("Alt"), plusWord, mouse ("Drag") } },
+          { Icons::toggle, "Loop on or off", "With no loop yet, you get 4 bars at the playhead", { key ("L"), orWord, mouse ("Loop") } },
+          { Icons::grid, "Finer steps", "Zoomed in, the grid is quarter beats; zoomed out, bars", { key ("Ctrl"), plusWord, mouse ("Wheel") } } },
+        { { Icons::grip, "Drag a stem", "Drag its row onto any track in FL", { mouse ("Drag row") } },
+          { Icons::layers, "Drag the mix", "Every stem you hear, as one WAV", { mouse ("Drag mix") } },
+          { Icons::loop, "Just the loop", "While looping, every drag gives only the loop", { key ("L"), plusWord, mouse ("Drag") } },
+          { Icons::speakerOff, "Leave stems out", "Muted stems stay out of the mix", { key (oneToSix), plusWord, mouse ("Drag mix") } } } };
+
+    juce::String utf8 (const char* s) { return juce::String (juce::CharPointer_UTF8 (s)); }
+
+    juce::Font howFont (const How& h) { return Fonts::body (12.0f, h.part == Part::word ? 400 : 700); }
+
+    // A cap's width: a key is 1 + 9 + text + 9 + 1; a mouse cap is 1 + 7 + icon 13 + 5 + text + 9 + 1; a word is its text.
+    float howWidth (const How& h)
+    {
+        const auto w = juce::GlyphArrangement::getStringWidth (howFont (h), utf8 (h.text));
+        return w + (h.part == Part::key ? 20.0f : h.part == Part::mouse ? 36.0f : 0.0f);
+    }
+
+    // Help.mockup.html .tip:
+    // - card: cream 0.05, a 1 px cream 0.08 border, radius 14;
+    // - icon tile: 40 px (cream 0.1, radius 12), 15 px in, holding a 20 px icon at stroke 1.9;
+    // - text: the title (Bold 14) over the line (12.5, cream 0.66), 14 px after the tile;
+    // - the how-to caps: 26 tall, 6 px apart, ending 17 px before the right edge.
+    void paintTip (juce::Graphics& g, const Tip& tip, juce::Rectangle<float> r)
+    {
+        g.setColour (Theme::cream.withAlpha (0.05f));
+        g.fillRoundedRectangle (r, 14.0f);
+        g.setColour (Theme::cream.withAlpha (0.08f));
+        g.drawRoundedRectangle (r.reduced (0.5f), 13.5f, 1.0f);
+
+        const juce::Rectangle<float> tile (r.getX() + 15.0f, r.getCentreY() - 20.0f, 40.0f, 40.0f);
+        g.setColour (Theme::cream.withAlpha (0.1f));
+        g.fillRoundedRectangle (tile, 12.0f);
+        g.setColour (Theme::cream);
+        strokeIcon (g, tip.icon, tile.withSizeKeepingCentre (20.0f, 20.0f), 1.9f);
+
+        auto x = r.getRight() - 17.0f - 6.0f * (float) (tip.how.size() - 1);
+        for (const auto& h : tip.how)
+            x -= howWidth (h);
+        const auto textX = tile.getRight() + 14.0f, textW = x - 14.0f - textX;
+        text (g, Fonts::body (14.0f, 700), Theme::cream, utf8 (tip.title), { textX, r.getCentreY() - 18.5f, textW, 18.0f },
+              juce::Justification::centredLeft);
+        text (g, Fonts::body (12.5f), Theme::cream.withAlpha (0.66f), utf8 (tip.line), { textX, r.getCentreY() + 2.5f, textW, 16.0f },
+              juce::Justification::centredLeft);
+
+        for (const auto& h : tip.how)
+        {
+            const juce::Rectangle<float> cap (x, r.getCentreY() - 13.0f, howWidth (h), 26.0f);
+            x = cap.getRight() + 6.0f;
+            if (h.part == Part::word)
+            {
+                text (g, howFont (h), Theme::cream.withAlpha (0.5f), utf8 (h.text), cap);
+                continue;
+            }
+            if (h.part == Part::mouse)
+            {
+                drawDashedRoundedRect (g, cap.reduced (0.5f), 6.5f, 1.0f, 3.0f, 3.0f, Theme::cream.withAlpha (0.36f));
+                g.setColour (Theme::cream.withAlpha (0.86f));
+                strokeIcon (g, Icons::mouse, { cap.getX() + 8.0f, cap.getCentreY() - 6.5f, 13.0f, 13.0f }, 2.0f);
+                text (g, howFont (h), Theme::cream.withAlpha (0.86f), utf8 (h.text), cap.withTrimmedLeft (26.0f),
+                      juce::Justification::centredLeft);
+                continue;
+            }
+            {
+                // A keycap's 2 px bottom edge, drawn outside the cap only (a CSS box-shadow), so the translucent fill stays even.
+                juce::Graphics::ScopedSaveState keep (g);
+                juce::Path outside;
+                outside.addRectangle (cap.expanded (0.0f, 3.0f));
+                outside.addRoundedRectangle (cap, 7.0f);
+                outside.setUsingNonZeroWinding (false);
+                g.reduceClipRegion (outside);
+                g.setColour (Theme::cream.withAlpha (0.12f));
+                g.fillRoundedRectangle (cap.translated (0.0f, 2.0f), 7.0f);
+            }
+            g.setColour (Theme::cream.withAlpha (0.1f));
+            g.fillRoundedRectangle (cap, 7.0f);
+            g.setColour (Theme::cream.withAlpha (0.4f));
+            g.drawRoundedRectangle (cap.reduced (0.5f), 6.5f, 1.0f);
+            text (g, howFont (h), Theme::cream, utf8 (h.text), cap);
+        }
+    }
+}
+
 HelpSheet::HelpSheet() : tabs ({ "Play", "Stems", "Loop", "Export" }), close ({}, LisnButton::Style::Ghost)
 {
     tabs.onChange = [this] (int) { repaint(); };
@@ -1004,4 +1113,10 @@ void HelpSheet::paint (juce::Graphics& g)
           { 19.0f, y + 20.0f, w, 14.4f }, juce::Justification::centredLeft);
     g.setColour (Theme::cream.withAlpha (0.12f));
     g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
+
+    // The tab's four tips share y 74-383, 8 px apart.
+    const auto tipH = (383.0f - 74.0f - 3.0f * 8.0f) / 4.0f;
+    const auto& tips = helpTips[(size_t) getTab()];
+    for (size_t i = 0; i < tips.size(); ++i)
+        paintTip (g, tips[i], { 19.0f, 74.0f + (float) i * (tipH + 8.0f), 674.0f, tipH });
 }
