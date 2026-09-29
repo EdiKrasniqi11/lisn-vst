@@ -399,6 +399,11 @@ struct UiStateTests : juce::UnitTest
             expectWithinAbsoluteError ((set.second - set.first) * 192.0, 4.0 * bar, 1e-9);
             expectEquals (toggles, 0);
 
+            screen.setPlayback (false, 0.0, 192.0);                 // before the first beat: the first bar, not 0:00
+            screen.toggleLoop();
+            expectWithinAbsoluteError (set.first * 192.0, 0.2, 1e-9);
+            expectWithinAbsoluteError ((set.second - set.first) * 192.0, 4.0 * bar, 1e-9);
+
             screen.setLoop ({ 0.2, 0.3 }, false);                   // with a loop range, it only toggles
             screen.toggleLoop();
             expectEquals (toggles, 1);

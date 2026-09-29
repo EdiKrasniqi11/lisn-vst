@@ -599,6 +599,7 @@ juce::Range<double> StemsScreen::defaultLoop() const
     {
         const auto bar = 4.0 * 60.0 / tempo.bpm;
         start = tempo.firstBeat + std::floor ((t - tempo.firstBeat) / bar) * bar;   // the bar under the playhead
+        start = juce::jmax (tempo.firstBeat, start);             // before the first beat: the first bar (bars start at firstBeat)
         len = 4.0 * bar;
     }
     if (start + len > length) start = length - len;             // past the end: the song's last 4 bars (or 8 s)
