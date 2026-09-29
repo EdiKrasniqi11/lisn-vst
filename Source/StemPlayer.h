@@ -45,6 +45,11 @@ public:
     void addTo (juce::AudioBuffer<float>& buffer);   // audio thread; idle = two relaxed atomic loads, then return
     float takePeak() { return peak.exchange (0.0f); }  // highest mix level since the last call
 
+    // The stems in audibleMask summed over [startSec, endSec) into a 24-bit stereo WAV at the stems' rate. Reuses dest if it
+    // already exists (renders are cached by name). False if nothing is audible, the range is empty or a file is unreadable.
+    static bool render (const juce::Array<juce::File>& stems, juce::uint32 audibleMask, double startSec, double endSec,
+                        const juce::File& dest);
+
 private:
     static constexpr int readAheadSamples = 32768;
     class Stack;

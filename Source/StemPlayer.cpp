@@ -285,3 +285,51 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
     readPos.store (transport.getNextReadPosition(), std::memory_order_relaxed);
     if (blockPeak > peak.load (std::memory_order_relaxed)) peak.store (blockPeak, std::memory_order_relaxed);   // benign race with takePeak
 }
+
+bool StemPlayer::render (const juce::Array<juce::File>& stems, juce::uint32 audibleMask, double startSec, double endSec,
+                         const juce::File& dest)
+{
+    if (dest.existsAsFile()) return true;            // renders are cached by name (FL keeps pointing at them)
+    juce::AudioFormatManager fm;
+    fm.registerBasicFormats();
+    juce::OwnedArray<juce::AudioFormatReader> readers;
+    for (int i = 0; i < stems.size() && i < 32; ++i)
+        if ((audibleMask >> i) & 1u)
+        {
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (stems[i]));
+            if (r == nullptr) return false;
+            readers.add (r.release());
+        }
+    if (readers.isEmpty()) return false;
+
+    const double rate = readers[0]->sampleRate;
+    const auto first = (juce::int64) (startSec * rate), last = (juce::int64) (endSec * rate);
+    if (last <= first) return false;
+
+    // Written next to dest, then renamed: a failed render never leaves a half file that FL could reference.
+    dest.getParentDirectory().createDirectory();
+    const auto part = dest.getSiblingFile (dest.getFileName() + ".part");
+    part.deleteFile();
+    {
+        auto out = part.createOutputStream();
+        if (out == nullptr) return false;
+        std::unique_ptr<juce::AudioFormatWriter> w (juce::WavAudioFormat().createWriterFor (out.get(), rate, 2, 24, {}, 0));
+        if (w == nullptr) return false;
+        out.release();   // the writer owns the stream now
+        constexpr int chunk = 65536;
+        juce::AudioBuffer<float> sum (2, chunk), one (2, chunk);
+        for (auto pos = first; pos < last; pos += chunk)
+        {
+            const int n = (int) juce::jmin ((juce::int64) chunk, last - pos);
+            sum.clear();
+            for (auto* r : readers)
+            {
+                readStereo (*r, one.getWritePointer (0), one.getWritePointer (1), pos, n);
+                for (int ch = 0; ch < 2; ++ch)
+                    sum.addFrom (ch, 0, one, ch, 0, n);
+            }
+            if (! w->writeFromAudioSampleBuffer (sum, 0, n)) return false;
+        }
+    }
+    return part.moveFileTo (dest);
+}

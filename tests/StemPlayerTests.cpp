@@ -284,6 +284,40 @@ struct StemPlayerTests : juce::UnitTest
         p.addTo (big);
         expectGreaterThan (rms (big, 768, 256), 0.2f);
 
+        beginTest ("render");
+        const auto a = dir.getChildFile ("a.wav"), b = dir.getChildFile ("b.wav");
+        writeWav (a, 1.0, [] (int, int i) { return (float) (0.3 * std::sin (0.04 * i)); });
+        writeWav (b, 1.0, [] (int, int i) { return (float) (0.2 * std::sin (0.07 * i)); });
+        const auto both = dir.getChildFile ("renders").getChildFile ("both.wav");
+        expect (StemPlayer::render ({ a, b }, 0b11, 0.25, 0.75, both));
+        juce::AudioFormatManager fm;
+        fm.registerBasicFormats();
+        {
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (both));
+            expect (r != nullptr);
+            if (r != nullptr)
+            {
+                expectWithinAbsoluteError ((int) r->lengthInSamples, 22050, 1);
+                juce::AudioBuffer<float> got (2, 22050);
+                r->read (&got, 0, 22050, 0, true, true);
+                float worst = 0.0f;
+                for (int i = 0; i < 22050; ++i)
+                {
+                    const int s = 11025 + i;
+                    const float want = (float) (0.3 * std::sin (0.04 * s) + 0.2 * std::sin (0.07 * s));
+                    worst = juce::jmax (worst, std::abs (got.getSample (0, i) - want), std::abs (got.getSample (1, i) - want));
+                }
+                expectLessThan (worst, 1e-4f);
+            }
+        }
+        const auto modified = both.getLastModificationTime();
+        juce::Thread::sleep (20);
+        expect (StemPlayer::render ({ a, b }, 0b11, 0.25, 0.75, both));   // cached by name: not rewritten
+        expect (both.getLastModificationTime() == modified);
+        expect (! StemPlayer::render ({ a, b }, 0, 0.0, 1.0, dir.getChildFile ("none.wav")));
+        expect (! StemPlayer::render ({ a, b }, 0b01, 0.5, 0.5, dir.getChildFile ("empty.wav")));
+        expect (! dir.getChildFile ("none.wav").exists() && ! dir.getChildFile ("empty.wav").exists());
+
         p.unload();   // releases the files so the temp dir can go
         dir.deleteRecursively();
     }
