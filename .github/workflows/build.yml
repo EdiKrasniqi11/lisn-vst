@@ -1,0 +1,65 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # gh release create
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -A x64
+          cmake --build build --config Release --parallel
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: pluginval
+        run: |
+          Invoke-WebRequest https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip -OutFile pluginval.zip
+          Expand-Archive pluginval.zip -DestinationPath pluginval
+          # GUI tests run locally (before each release) and in the DAWs; runners have no real display.
+          .\pluginval\pluginval.exe --strictness-level 5 --skip-gui-tests --validate "build\StemSplitter_artefacts\Release\VST3\LISN StemSplitter.vst3"
+
+      - name: Tag matches the CMake version
+        if: env.RELEASE == 'true'
+        run: |
+          $v = [regex]::Match((Get-Content CMakeLists.txt -Raw), 'project\(StemSplitter VERSION ([0-9.]+)\)').Groups[1].Value
+          if ("v$v" -ne '${{ github.ref_name }}') { throw "tag ${{ github.ref_name }} but CMakeLists.txt says $v" }
+
+      - name: Installer
+        if: env.RELEASE == 'true'
+        run: |
+          Invoke-WebRequest https://github.com/astral-sh/uv/releases/download/0.12.21/uv-x86_64-pc-windows-msvc.zip -OutFile uv.zip
+          if ((Get-FileHash uv.zip).Hash -ne '5d223efa0bf00208c3853246af09420419dfbd352536aa6bb8163d6170e23890') { throw 'uv checksum mismatch' }
+          Expand-Archive uv.zip -DestinationPath uv
+          Copy-Item uv\uv.exe installer\
+          Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile installer\vc_redist.x64.exe
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$('${{ github.ref_name }}'.TrimStart('v'))" installer\lisn-vst.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Draft release
+        if: env.RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $exe = 'installer\Output\LISN-StemSplitter-Setup.exe'
+          $sha = (Get-FileHash $exe).Hash.ToLower()
+          gh release create '${{ github.ref_name }}' $exe --draft --title 'LISN StemSplitter ${{ github.ref_name }}' --notes "Installer SHA-256: $sha"
