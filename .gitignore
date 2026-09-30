@@ -2,3 +2,6 @@ build/
 out/
 .superpowers/
 snapshots/
+installer/uv.exe
+installer/vc_redist.x64.exe
+installer/Output/

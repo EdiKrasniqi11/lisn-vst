@@ -6,13 +6,20 @@
 
 **Architecture:** lisn-vst gets an Inno Setup installer and one GitHub Actions workflow that builds, tests and, on a `v*` tag, drafts a GitHub Release whose asset name never changes. The installer puts the VST3 in the standard folder, installs the VC++ runtime, and runs a script that uses a bundled `uv.exe` to build a pinned Python + Demucs engine in `C:\ProgramData\LISN\engine`; `PythonFinder` checks that engine right after the saved path. A new public repo, lisn-site, is a static page on GitHub Pages whose Download button points at `releases/latest/download/LISN-StemSplitter-Setup.exe`, so shipping a new version never touches the site.
 
-**Tech Stack:** JUCE 8.0.15 (CMake, MSVC 2022), Inno Setup 6, Windows PowerShell 5.1, uv 0.12.21, CPython 3.11, demucs 4.1.0 / torch 2.14.0 / torchaudio 2.11.0 / soundfile 0.12.1 (the versions splitting works with on this PC today), GitHub Actions (`windows-latest`), GitHub Releases, GitHub Pages, plain HTML + CSS.
+**Tech Stack:** JUCE 8.0.15 (CMake, MSVC 2022), Inno Setup 6, Windows PowerShell 5.1, uv 0.12.21, CPython 3.11, demucs 4.1.0 / torch 2.14.0 / numpy 1.24.4 (the versions splitting works with on this PC today), GitHub Actions (`windows-latest`), GitHub Releases, GitHub Pages, plain HTML + CSS.
 
 ## Status (2026-10-01)
 
 - **Tasks 1 and 8 are done.** The site is built from the Claude Design export, published at https://github.com/EdiKrasniqi11/lisn-site (first commit `fab60b4`) and served at https://edikrasniqi11.github.io/lisn-site/. lisn-vst's repo homepage points at it. The placeholder page was skipped because the real design was ready. The fonts are the export's woff2 files, not the lisn-vst TTFs. The page is pixel-identical to the export at 1280 and 375 px.
 - **The site's Download buttons 404 until Task 7 publishes the first release.** Once Task 4 measures the real engine download, update "about 450 MB" in `lisn-site/index.html` (Install step 3).
 - **Remaining:** Task 0 and Tasks 2 to 7 (the installer).
+- **Done (2026-10-01):** Task 0 (`c3d9b90`), Task 2 (`405e27a`), Task 3 (`d2179d5`) and Task 4 (next commit). Task 2's FL Studio / Ableton smoke test is still owed by the owner, before merging to master.
+- **What executing Task 4 changed from this plan** (the code in the repo is the reference, not the Task 4 and 5 code blocks below):
+  - demucs 4.1 loads `htdemucs` and `htdemucs_6s` from Hugging Face (`demucs/hf.py`), not torch hub. `installer/sitecustomize.py` now sets `HF_HOME` (and `TORCH_HOME`) inside the engine and `HF_HUB_OFFLINE=1`. Splits never go online, and a model update upstream can't make a normal user rewrite admin-owned files in ProgramData. Only the setup script's prefetch goes online.
+  - The pins are `demucs==4.1.0`, `torch==2.14.0`, `numpy==1.24.4`. A split never imports torchaudio or soundfile, so they're gone. numpy is required (`demucs/audio.py`), but demucs only declares it for Intel Macs.
+  - `ready.txt` hashes `requirements.txt` and `sitecustomize.py`, so a change to either rebuilds the engine on the next install. The installer ships `sitecustomize.py` next to the script.
+  - Measured download: **about 320 MB** (157 MB of wheels, 134 MB of models, 25 MB of Python). The engine takes 908 MB on disk, and the first setup took 7.3 min on this PC. PyPI's torch splits as fast as the dev machine's `+cpu` build.
+  - JUCE 8.0.15 deprecates `AudioFormat::createWriterFor` (StemPlayer's mix export and five tests). It's a warning only, left for a separate change.
 - **Where the installer work happens:** the git worktree `C:\Projects\lisn-vst-installer` on branch `feature/installer`, not `C:\Projects\lisn-vst`. Another session uses that checkout, and switching its branch would switch it for that session too. The two folders share one repository: build, test and commit in the worktree, while `C:\Projects\lisn-vst` stays on `master`.
 
 ## Context
@@ -33,7 +40,7 @@ You asked three things. Short answers, found by reading `C:\Projects\lisn-vst` (
 
 - **Licence:** free, closed source under JUCE 8 **Starter** (free up to $20k/yr revenue from JUCE work, no splash screen; the older desktop plan's $50k figure is stale). lisn-vst stays public so its Releases are downloadable by anyone; `LICENSE` says all rights reserved. If lisn-vst ever goes private, release downloads stop working for the public: move releases to lisn-site then.
 - **Site:** `https://edikrasniqi11.github.io/lisn-site/`. Custom domain later (optional section at the end).
-- **Engine at install time** (installer about 50 MB, then about 450 MB downloaded while installing). Not bundled offline (a ~400 MB installer re-downloaded for every plugin fix) and not left to users (Python + pip is too much to ask of the public).
+- **Engine at install time** (installer about 50 MB, then about 320 MB downloaded while installing, measured). Not bundled offline (a ~400 MB installer re-downloaded for every plugin fix) and not left to users (Python + pip is too much to ask of the public).
 - **Signing:** v0.1 ships unsigned as a beta and the site explains the "More info > Run anyway" click. Revisit with traction (a cost decision).
 - **Scope:** Windows 10/11 x64, VST3 only. The desktop app is a later plan that reuses this engine and gets a second button on the site.
 
@@ -42,7 +49,7 @@ You asked three things. Short answers, found by reading `C:\Projects\lisn-vst` (
 - No em dashes in anything written: site copy, installer text, docs, commit messages.
 - Installer asset name is always `LISN-StemSplitter-Setup.exe`. The site links to `https://github.com/EdiKrasniqi11/lisn-vst/releases/latest/download/LISN-StemSplitter-Setup.exe`.
 - Plugin install path: `C:\Program Files\Common Files\VST3\LISN StemSplitter.vst3` (Inno `{commoncf64}\VST3`). The installer needs admin, like every plugin installer.
-- Engine: `C:\ProgramData\LISN\engine` (Inno `{commonappdata}\LISN\engine`, env `%ProgramData%`). Python: `engine\venv\Scripts\python.exe`. Models: `engine\venv\models` (TORCH_HOME).
+- Engine: `C:\ProgramData\LISN\engine` (Inno `{commonappdata}\LISN\engine`, env `%ProgramData%`). Python: `engine\venv\Scripts\python.exe`. Models: `engine\venv\models` (`HF_HOME`, set by `installer/sitecustomize.py`), and splits run offline.
 - The version lives only in `project(StemSplitter VERSION x.y.z)` in `CMakeLists.txt` (JUCE takes the plugin version from it). Tags are `vx.y.z`; CI refuses a mismatch.
 - This plan changes no UI, so lisn-vst's "Must hold" list (redesign spec) stays true untouched.
 - Site: static HTML + CSS, no build step, relative URLs only (it's served under `/lisn-site/`), fonts self-hosted, no cookies or analytics.

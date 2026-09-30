@@ -1,0 +1,6 @@
+# What a split needs, pinned to the versions splitting works with on the dev machine (2026-10-01).
+# demucs 4.1 reads audio with sphn and writes WAVs itself, so torchaudio and soundfile are not needed.
+# It imports numpy (demucs/audio.py) but only declares it for Intel Macs, so it is pinned here.
+demucs==4.1.0
+torch==2.14.0
+numpy==1.24.4
