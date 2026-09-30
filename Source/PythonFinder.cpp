@@ -17,6 +17,7 @@ PythonSearchDirs PythonSearchDirs::fromEnvironment()
     d.programFiles = dir ("ProgramFiles");
     d.systemDrive  = dir ("SystemDrive", "\\");
     d.userProfile  = dir ("USERPROFILE");
+    d.programData  = dir ("ProgramData");
     return d;
 }
 
@@ -30,6 +31,9 @@ juce::StringArray pythonCandidates (const juce::String& hint, const PythonSearch
     // Only absolute paths: juce::File asserts on relative ones, and a bare "python" hint could resolve to the Store stub.
     if (auto h = hint.trim().unquoted(); juce::File::isAbsolutePath (h))
         addIfFile (juce::File (h));
+
+    if (dirs.programData != juce::File())   // the private engine the LISN installer sets up
+        addIfFile (dirs.programData.getChildFile ("LISN\\engine\\venv\\Scripts\\python.exe"));
 
     for (auto entry : juce::StringArray::fromTokens (dirs.pathEnv, ";", "\""))
     {
