@@ -1,5 +1,7 @@
 # LISN StemSplitter Desktop: implementation plan
 
+> **Updated 2026-09-30 (installer plan):** the licence is decided: JUCE 8 Starter, closed source (Starter's cap is now $20k, not $50k). The AI engine lives at `C:\ProgramData\LISN\engine`, set up by lisn-vst's installer, and `PythonFinder` checks it first; Phase 6 should reuse it, not build a second engine. VST3 SDK 3.8 is MIT (JUCE 8.0.11+), so the Steinberg licence question is gone.
+
 > **For agentic workers:** run this in order, one phase at a time. Every phase ends with its verification and a commit. Two repos are involved:
 > - **lisn-vst:** https://github.com/EdiKrasniqi11/lisn-vst, the plugin and the shared code.
 > - **lisn-desktop:** the new repo, the app shell, setup, installer and releases.
