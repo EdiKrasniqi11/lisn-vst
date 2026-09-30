@@ -13,7 +13,9 @@
 - **Tasks 1 and 8 are done.** The site is built from the Claude Design export, published at https://github.com/EdiKrasniqi11/lisn-site (first commit `fab60b4`) and served at https://edikrasniqi11.github.io/lisn-site/. lisn-vst's repo homepage points at it. The placeholder page was skipped because the real design was ready. The fonts are the export's woff2 files, not the lisn-vst TTFs. The page is pixel-identical to the export at 1280 and 375 px.
 - **The site's Download buttons 404 until Task 7 publishes the first release.** Once Task 4 measures the real engine download, update "about 450 MB" in `lisn-site/index.html` (Install step 3).
 - **Remaining:** Task 0 and Tasks 2 to 7 (the installer).
-- **Done (2026-10-01):** Task 0 (`c3d9b90`), Task 2 (`405e27a`), Task 3 (`d2179d5`) and Task 4 (next commit). Task 2's FL Studio / Ableton smoke test is still owed by the owner, before merging to master.
+- **Done (2026-10-01):** Task 0 (`c3d9b90`), Task 2 (`405e27a`), Task 3 (`d2179d5`), Task 4 (`9c9762f`) and Task 5 (the commit after it).
+- **Task 5 on this PC:** installed with no errors. pluginval on the installed plugin said SUCCESS, and the engine built in about 5 min. The plugin's PythonFinder picks `C:\ProgramData\LISN\engine` over `C:\Python311` on PATH. A normal non-admin user splits offline with no permission errors. FL Studio works (Ableton isn't available here; REAPER on the clean machine is the second host). A second run finished in seconds without touching the engine. Uninstall removed everything except an empty `LISN StemSplitter.vst3` folder that a hand-copied beta had created before the install. `[UninstallDelete]` now removes that bundle folder too (untested until Task 7).
+- **The site says "Tested in FL Studio and Ableton Live" and "about 450 MB".** Both need updating: FL Studio (and REAPER after Task 7), about 320 MB.
 - **What executing Task 4 changed from this plan** (the code in the repo is the reference, not the Task 4 and 5 code blocks below):
   - demucs 4.1 loads `htdemucs` and `htdemucs_6s` from Hugging Face (`demucs/hf.py`), not torch hub. `installer/sitecustomize.py` now sets `HF_HOME` (and `TORCH_HOME`) inside the engine and `HF_HUB_OFFLINE=1`. Splits never go online, and a model update upstream can't make a normal user rewrite admin-owned files in ProgramData. Only the setup script's prefetch goes online.
   - The pins are `demucs==4.1.0`, `torch==2.14.0`, `numpy==1.24.4`. A split never imports torchaudio or soundfile, so they're gone. numpy is required (`demucs/audio.py`), but demucs only declares it for Intel Macs.
@@ -479,6 +481,7 @@ jobs:
   2. Run it: SmartScreen "Windows protected your PC" > More info > Run anyway; UAC Yes; install; no error box.
   3. REAPER: Options > Preferences > Plug-ins > VST > Re-scan; add LISN StemSplitter to a track; split a song into 4 stems; play; mute one; drag a stem onto a track.
   4. Uninstall from Settings > Apps; the VST3 folder and `C:\ProgramData\LISN` are gone.
+  5. The hand-copied-beta case: make an empty `C:\Program Files\Common Files\VST3\LISN StemSplitter.vst3\Contents` folder, install, uninstall, and check the whole `LISN StemSplitter.vst3` folder is gone. This is the `[UninstallDelete]` fix found in Task 5.
 - [ ] **Step 4 (owner):** publish: lisn-vst > Releases > v0.1.0 > Edit > write notes > Publish release (or `gh release edit v0.1.0 --draft=false`). Only published, non-prerelease releases count as "latest".
 - [ ] **Step 5:** `curl -sIL https://github.com/EdiKrasniqi11/lisn-vst/releases/latest/download/LISN-StemSplitter-Setup.exe | grep -iE '^(HTTP|content-length)'` ends in `200` with the installer's size.
 
