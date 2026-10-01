@@ -468,6 +468,21 @@ struct StemPlayerTests : juce::UnitTest
         expect (! StemPlayer::render ({ sine }, { 1.0f }, 0.0, 2.0, 1.25, cut, [&] (float) { return ++calls < 2; }));
         expect (! cut.exists() && ! cut.getSiblingFile ("cut.wav.part").exists());
 
+        beginTest ("a tiny range still stretches to the exact length");
+        const auto tiny = dir.getChildFile ("renders").getChildFile ("tiny.wav");
+        expect (StemPlayer::render ({ sine }, { 1.0f }, 0.5, 0.6, 1.25, tiny));
+        {
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (tiny));
+            expect (r != nullptr);
+            if (r != nullptr)
+            {
+                expectEquals ((int) r->lengthInSamples, 3528);   // llround (4410 / 1.25)
+                juce::AudioBuffer<float> got (2, 3528);
+                r->read (&got, 0, 3528, 0, true, true);
+                expectGreaterThan (rms (got, 200, 1500), 0.2f);   // stretched audio, not silence
+            }
+        }
+
         p.unload();   // releases the files so the temp dir can go
         dir.deleteRecursively();
     }

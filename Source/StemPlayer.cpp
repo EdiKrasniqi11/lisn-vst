@@ -53,9 +53,10 @@ namespace
         return true;
     }
 
-    // [first, last) mixed and time-stretched by speed (keeping the key) into w: llround ((last - first) / speed) samples.
+    // [first, last) mixed and time-stretched by speed (keeping the key) into w: always llround ((last - first) / speed) samples.
     // The stretcher's exact-length recipe (its exact(), a chunk at a time so progress and cancel work): outputSeek over
-    // the first outputSeekLength samples, process the rest into all but the tail, then flush the tail.
+    // the first outputSeekLength samples, process the rest into all but the tail, then flush the tail. A range no longer
+    // than that look-ahead is padded with silence to just past it and the output trimmed back to the exact length.
     bool writeStretched (juce::AudioFormatWriter& w, juce::OwnedArray<juce::AudioFormatReader>& readers, const std::vector<float>& levels,
                          juce::int64 first, juce::int64 last, double speed, double rate, const std::function<bool (float)>& onProgress)
     {
@@ -63,29 +64,44 @@ namespace
         st.presetDefault (2, (float) rate);
         const auto inLen = last - first, outLen = (juce::int64) std::llround ((double) inLen / speed);
         const int seekLen = st.outputSeekLength ((float) speed);
-        if (inLen <= seekLen)   // ponytail: shorter than the stretcher's look-ahead (~0.15 s) renders unstretched
-            return writeMix (w, readers, levels, first, last, onProgress);
+        const auto padded = juce::jmax (inLen, (juce::int64) seekLen + 1);
+        const auto outPadded = (juce::int64) std::llround ((double) padded / speed);
         juce::AudioBuffer<float> sum (2, renderChunk), one (2, renderChunk), out (2, 2 * renderChunk + 2);
-        readMix (readers, levels, sum, one, first, seekLen);
+        // n samples of the clip from offset (relative to first) into sum; silence past last
+        auto readClip = [&] (juce::int64 offset, int n)
+        {
+            const int real = (int) juce::jlimit ((juce::int64) 0, (juce::int64) n, inLen - offset);
+            if (real > 0) readMix (readers, levels, sum, one, first + offset, real);
+            sum.clear (real, n - real);
+        };
+        juce::int64 written = 0;
+        auto emit = [&] (int m)   // the first m samples of out, never past outLen in all
+        {
+            const int k = (int) juce::jmin ((juce::int64) m, outLen - written);
+            if (k > 0 && ! w.writeFromAudioSampleBuffer (out, 0, k)) return false;
+            written += juce::jmax (0, k);
+            return true;
+        };
+        readClip (0, seekLen);
         st.outputSeek (sum.getArrayOfReadPointers(), seekLen);
-        const auto bodyIn = inLen - seekLen;
-        const auto bodyOut = outLen - (juce::int64) (seekLen / speed);   // as exact(): the tail is what flush() returns
+        const auto bodyIn = padded - seekLen;
+        const auto bodyOut = outPadded - (juce::int64) (seekLen / speed);   // as exact(): the tail is what flush() returns
         juce::int64 inDone = 0, outDone = 0;
         while (inDone < bodyIn)
         {
             const int n = (int) juce::jmin ((juce::int64) renderChunk, bodyIn - inDone);
-            readMix (readers, levels, sum, one, first + seekLen + inDone, n);
+            readClip (seekLen + inDone, n);
             inDone += n;
             const auto target = (juce::int64) std::llround ((double) bodyOut * (double) inDone / (double) bodyIn);
             const int m = (int) (target - outDone);
             st.process (sum.getArrayOfReadPointers(), n, out.getArrayOfWritePointers(), m);
-            if (! w.writeFromAudioSampleBuffer (out, 0, m)) return false;
+            if (! emit (m)) return false;
             outDone = target;
-            if (onProgress && ! onProgress (0.99f * (float) (seekLen + inDone) / (float) inLen)) return false;
+            if (onProgress && ! onProgress (0.99f * (float) (seekLen + inDone) / (float) padded)) return false;
         }
-        const int tail = (int) (outLen - outDone);
+        const int tail = (int) (outPadded - outDone);
         st.flush (out.getArrayOfWritePointers(), tail, (float) speed);
-        if (! w.writeFromAudioSampleBuffer (out, 0, tail)) return false;
+        if (! emit (tail)) return false;
         return ! onProgress || onProgress (1.0f);
     }
 }
