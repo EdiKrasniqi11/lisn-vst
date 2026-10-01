@@ -13,6 +13,36 @@ namespace
         if (r.numChannels == 1)
             juce::FloatVectorOperations::copy (rgt, l, n);
     }
+
+    // Every reader times its level, summed into sum's first n samples (stereo) from file position pos; one is scratch.
+    void readMix (juce::OwnedArray<juce::AudioFormatReader>& readers, const std::vector<float>& levels,
+                  juce::AudioBuffer<float>& sum, juce::AudioBuffer<float>& one, juce::int64 pos, int n)
+    {
+        sum.clear (0, n);
+        for (int k = 0; k < readers.size(); ++k)
+        {
+            readStereo (*readers[k], one.getWritePointer (0), one.getWritePointer (1), pos, n);
+            for (int ch = 0; ch < 2; ++ch)
+                sum.addFrom (ch, 0, one, ch, 0, n, levels[(size_t) k]);
+        }
+    }
+
+    constexpr int renderChunk = 65536;
+
+    // The plain mix of [first, last) into w, a chunk at a time; onProgress after each (false cancels).
+    bool writeMix (juce::AudioFormatWriter& w, juce::OwnedArray<juce::AudioFormatReader>& readers, const std::vector<float>& levels,
+                   juce::int64 first, juce::int64 last, const std::function<bool (float)>& onProgress)
+    {
+        juce::AudioBuffer<float> sum (2, renderChunk), one (2, renderChunk);
+        for (auto pos = first; pos < last; pos += renderChunk)
+        {
+            const int n = (int) juce::jmin ((juce::int64) renderChunk, last - pos);
+            readMix (readers, levels, sum, one, pos, n);
+            if (! w.writeFromAudioSampleBuffer (sum, 0, n)) return false;
+            if (onProgress && ! onProgress ((float) (pos + n - first) / (float) (last - first))) return false;
+        }
+        return true;
+    }
 }
 
 // Every stem read at the same position into channels 2i / 2i+1. The read-ahead buffer counts positions linearly, so this
@@ -70,6 +100,7 @@ private:
 
 StemPlayer::StemPlayer()
 {
+    for (auto& v : volumes) v = 1.0f;
     formats.registerBasicFormats();
     readAhead.startThread();
 }
@@ -140,6 +171,7 @@ void StemPlayer::unload()
     stack.reset();
     files.clear();
     for (auto& m : muted) m = false;
+    for (auto& v : volumes) v = 1.0f;
     looping = false;
     loop = {};
     loopStart = loopEnd = origin = base = 0;
@@ -235,6 +267,25 @@ void StemPlayer::solo (int stem)
         muted[(size_t) i] = ! alone && i != stem;
 }
 
+void StemPlayer::setVolume (int stem, float level)
+{
+    if (juce::isPositiveAndBelow (stem, maxStems))
+        volumes[(size_t) stem] = juce::jlimit (0.0f, 1.0f, level);
+}
+
+float StemPlayer::getVolume (int stem) const
+{
+    return juce::isPositiveAndBelow (stem, maxStems) ? volumes[(size_t) stem].load() : 1.0f;
+}
+
+std::vector<float> StemPlayer::mixGains() const
+{
+    std::vector<float> g ((size_t) files.size());
+    for (size_t i = 0; i < g.size(); ++i)
+        g[i] = muted[i].load() ? 0.0f : volumes[i].load();
+    return g;
+}
+
 void StemPlayer::setLoop (double a, double b)
 {
     // Re-base first: the bounds change below, and the transport must never see a finished stream meanwhile.
@@ -269,8 +320,9 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
         mix.clear (0, n);
         for (int i = 0; i < stems; ++i)
         {
-            // A mute (or the one faded block after pause()) ramps across this block: heard at once, never a click.
-            const float to = want && ! muted[(size_t) i].load (std::memory_order_relaxed) ? 1.0f : 0.0f;
+            // A mute or volume change (or the one faded block after pause()) ramps across this block: heard at once, never a click.
+            const float to = want && ! muted[(size_t) i].load (std::memory_order_relaxed)
+                               ? volumes[(size_t) i].load (std::memory_order_relaxed) : 0.0f;
             for (int ch = 0; ch < 2; ++ch)
                 mix.addFromWithRamp (ch, 0, scratch.getReadPointer (2 * i + ch), n, gains[(size_t) i], to);
             gains[(size_t) i] = to;
@@ -286,19 +338,22 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
     if (blockPeak > peak.load (std::memory_order_relaxed)) peak.store (blockPeak, std::memory_order_relaxed);   // benign race with takePeak
 }
 
-bool StemPlayer::render (const juce::Array<juce::File>& stems, juce::uint32 audibleMask, double startSec, double endSec,
-                         const juce::File& dest)
+bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector<float>& gains, double startSec, double endSec,
+                         double speed, const juce::File& dest, const std::function<bool (float)>& onProgress)
 {
     if (dest.existsAsFile()) return true;            // renders are cached by name (FL keeps pointing at them)
+    if (! juce::exactlyEqual (speed, 1.0)) return false;   // stretched renders are not supported yet
     juce::AudioFormatManager fm;
     fm.registerBasicFormats();
     juce::OwnedArray<juce::AudioFormatReader> readers;
-    for (int i = 0; i < stems.size() && i < 32; ++i)
-        if ((audibleMask >> i) & 1u)
+    std::vector<float> levels;
+    for (int i = 0; i < stems.size() && i < (int) gains.size(); ++i)
+        if (gains[(size_t) i] > 0.0f)
         {
             std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (stems[i]));
             if (r == nullptr) return false;
             readers.add (r.release());
+            levels.push_back (gains[(size_t) i]);
         }
     if (readers.isEmpty()) return false;
 
@@ -306,30 +361,47 @@ bool StemPlayer::render (const juce::Array<juce::File>& stems, juce::uint32 audi
     const auto first = (juce::int64) (startSec * rate), last = (juce::int64) (endSec * rate);
     if (last <= first) return false;
 
-    // Written next to dest, then renamed: a failed render never leaves a half file that FL could reference.
+    // Written next to dest, then renamed: a failed or cancelled render never leaves a file that FL could reference.
     dest.getParentDirectory().createDirectory();
     const auto part = dest.getSiblingFile (dest.getFileName() + ".part");
     part.deleteFile();
+    bool ok = false;
     {
         auto out = part.createOutputStream();
-        if (out == nullptr) return false;
-        std::unique_ptr<juce::AudioFormatWriter> w (juce::WavAudioFormat().createWriterFor (out.get(), rate, 2, 24, {}, 0));
-        if (w == nullptr) return false;
-        out.release();   // the writer owns the stream now
-        constexpr int chunk = 65536;
-        juce::AudioBuffer<float> sum (2, chunk), one (2, chunk);
-        for (auto pos = first; pos < last; pos += chunk)
+        std::unique_ptr<juce::AudioFormatWriter> w (out != nullptr ? juce::WavAudioFormat().createWriterFor (out.get(), rate, 2, 24, {}, 0)
+                                                                   : nullptr);
+        if (w != nullptr)
         {
-            const int n = (int) juce::jmin ((juce::int64) chunk, last - pos);
-            sum.clear();
-            for (auto* r : readers)
-            {
-                readStereo (*r, one.getWritePointer (0), one.getWritePointer (1), pos, n);
-                for (int ch = 0; ch < 2; ++ch)
-                    sum.addFrom (ch, 0, one, ch, 0, n);
-            }
-            if (! w->writeFromAudioSampleBuffer (sum, 0, n)) return false;
+            out.release();   // the writer owns the stream now
+            ok = writeMix (*w, readers, levels, first, last, onProgress);
         }
     }
+    if (! ok)
+    {
+        part.deleteFile();
+        return false;
+    }
     return part.moveFileTo (dest);
+}
+
+juce::String StemPlayer::renderName (const juce::String& songFile, const juce::StringArray& stemNames,
+                                     const std::vector<float>& gains, double speed, juce::Range<double> loopSeconds)
+{
+    juce::StringArray parts;
+    for (int i = 0; i < stemNames.size() && i < (int) gains.size(); ++i)
+    {
+        const float g = gains[(size_t) i];
+        if (g > 0.0f)
+            parts.add (g < 1.0f ? stemNames[i] + " " + juce::String (juce::roundToInt (g * 100.0f)) : stemNames[i]);
+    }
+    if (parts.isEmpty()) return {};
+    auto clock = [] (double sec)
+    {
+        const auto cs = juce::jmax (0, (int) (sec * 100));
+        return juce::String (cs / 6000) + "." + juce::String (cs / 100 % 60).paddedLeft ('0', 2) + "." + juce::String (cs % 100).paddedLeft ('0', 2);
+    };
+    auto name = songFile.upToLastOccurrenceOf (".", false, false) + " - " + parts.joinIntoString ("+");
+    if (! juce::exactlyEqual (speed, 1.0)) name << " x" << juce::String (speed, 2);
+    if (! loopSeconds.isEmpty()) name << " (" << clock (loopSeconds.getStart()) << "-" << clock (loopSeconds.getEnd()) << ")";
+    return juce::File::createLegalFileName (name + ".wav");
 }

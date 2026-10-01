@@ -2,6 +2,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <array>
 #include <atomic>
+#include <vector>
 
 // Plays every stem of a song in lockstep through the plugin's output, on top of the audio passing through.
 // Message thread: load/unload/play/pause/seek/mutes/loop/queries. Audio thread: addTo(). UI: takePeak()/takeReachedEnd().
@@ -36,6 +37,9 @@ public:
     bool isMuted (int stem) const;
     void solo (int stem);                       // FL: only this stem on; if it already is the only one on, all on
     juce::uint32 audibleMask() const;           // bit i set = stem i audible
+    void setVolume (int stem, float level);     // 0..1 (clamped), heard within one block; load() resets every stem to 1
+    float getVolume (int stem) const;           // 1 for a stem out of range
+    std::vector<float> mixGains() const;        // per loaded stem: its volume, or 0 while muted (what a mix renders)
 
     void setLoop (double startFraction, double endFraction);   // sets the range and switches looping on
     void setLooping (bool);                     // keeps the range; turning it on jumps into the loop if outside it
@@ -45,10 +49,17 @@ public:
     void addTo (juce::AudioBuffer<float>& buffer);   // audio thread; idle = two relaxed atomic loads, then return
     float takePeak() { return peak.exchange (0.0f); }  // highest mix level since the last call
 
-    // The stems in audibleMask summed over [startSec, endSec) into a 24-bit stereo WAV at the stems' rate. Reuses dest if it
-    // already exists (renders are cached by name). False if nothing is audible, the range is empty or a file is unreadable.
-    static bool render (const juce::Array<juce::File>& stems, juce::uint32 audibleMask, double startSec, double endSec,
-                        const juce::File& dest);
+    // Every stem with a gain above 0, scaled by it, summed over [startSec, endSec) into a 24-bit stereo WAV at the stems'
+    // rate. Reuses dest if it already exists (renders are cached by name). onProgress gets 0..1 after each chunk; returning
+    // false cancels. False, with no dest and no dest.part left, if no gain is above 0, the range is empty, a file is
+    // unreadable, a write fails or it was cancelled. A speed other than 1 is not supported yet and returns false.
+    static bool render (const juce::Array<juce::File>& stems, const std::vector<float>& gains, double startSec, double endSec,
+                        double speed, const juce::File& dest, const std::function<bool (float)>& onProgress = {});
+
+    // A render's cached file name: "<song> - <stem>[ <volume %>]+..."; " x<speed>" when not 1; " (m.ss.cc-m.ss.cc)" for a
+    // loop (empty loopSeconds = the whole song). Empty when no gain is above 0.
+    static juce::String renderName (const juce::String& songFile, const juce::StringArray& stemNames,
+                                    const std::vector<float>& gains, double speed, juce::Range<double> loopSeconds);
 
 private:
     static constexpr int readAheadSamples = 32768;
@@ -65,6 +76,7 @@ private:
     juce::AudioBuffer<float> scratch, mix;      // 2 * maxStems channels / stereo, sized in prepare()
     juce::Array<juce::File> files;
     std::array<std::atomic<bool>, maxStems> muted {};
+    std::array<std::atomic<float>, maxStems> volumes;   // 0..1 per stem; 1 after construction and load()
     std::array<float, maxStems> gains {};       // audio thread: each stem's gain at the end of the last block
     std::atomic<int> stemCount { 0 };
     std::atomic<bool> wanted { false }, prepared { false }, reachedEnd { false }, looping { false };
