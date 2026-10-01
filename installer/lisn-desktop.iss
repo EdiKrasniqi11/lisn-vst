@@ -18,6 +18,8 @@ DefaultDirName={autopf}\LISN
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+; Setup's RedirectionGuard reaches the engine step's uv, which then can't follow the junction it makes (error 448). This installer never elevates, so there is nothing for the guard to protect.
+RedirectionGuard=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
