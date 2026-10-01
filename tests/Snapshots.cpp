@@ -287,11 +287,32 @@ int runBench()
         metered = metered && proc.player.takePeak() > 0.0f;
         juce::Thread::sleep (60);
     }
+    // The same bursts through the time-stretcher (1.25x, keeping the key): 30% of a 512-sample block at 48 kHz is 3200 us.
+    proc.player.setSpeed (1.25);
+    proc.player.setPositionFraction (0.0);
+    proc.player.play();
+    juce::Thread::sleep (60);
+    double stretchTotal = 0.0;
+    for (int burst = 0; burst < 20; ++burst)
+    {
+        for (int i = 0; i < 50; ++i)
+        {
+            buffer.clear();
+            t0 = now();
+            proc.processBlock (buffer, midi);
+            stretchTotal += (now() - t0) * 1000.0;
+        }
+        juce::Thread::sleep (60);
+    }
+    const double stretchUs = stretchTotal / 1000.0;
     proc.player.unload();
     std::printf ("process_block_us_playing=%.3f\nprocess_block_us_playing_max=%.3f\n", total / 2000.0, worst);
+    std::printf ("process_block_us_stretch=%.3f\n", stretchUs);
+    if (stretchUs > 3200.0)
+        std::puts ("FAIL: process_block_us_stretch is over 30% of a 512-sample block at 48 kHz");
     if (! metered)
         std::puts ("FAIL: a playing burst metered no peak");
     if (motionMs > 4.0)
         std::puts ("FAIL: motion_frame_ms is over the 4 ms budget");
-    return metered && motionMs <= 4.0 ? 0 : 1;
+    return metered && motionMs <= 4.0 && stretchUs <= 3200.0 ? 0 : 1;
 }
