@@ -140,8 +140,9 @@ void StemPlayer::prepare (double sampleRate, int maxBlockSize)
     carry = 0.0;
     outGain = 1.0f;
     hostRate = sampleRate;
-    transport.prepareToPlay (maxBlockSize, sampleRate);
-    transport.prepareToPlay (maxBlockSize, sampleRate);   // again: sizes the resampler for the ratio the first call set
+    // The transport is prepared for the largest read, a stretched block's 1.5x, so its resampler's ring never grows on the audio thread.
+    transport.prepareToPlay (inMax, sampleRate);
+    transport.prepareToPlay (inMax, sampleRate);          // again: sizes the resampler for the ratio the first call set
     if (stack != nullptr)
         seekSource (song, looping.load());   // a seek made before this was a no-op (no sample rate yet); also re-bases readPos
     prepared = true;
@@ -383,6 +384,7 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
             const float fade = want ? 1.0f : 0.0f;
             mix.applyGainRamp (0, n, outGain, fade);
             outGain = fade;
+            if (! want) gains.fill (0.0f);   // a later resume at 1x ramps in from silence, like a direct pause
         }
         blockPeak = juce::jmax (blockPeak, mix.getMagnitude (0, n));
         for (int ch = 0; ch < buffer.getNumChannels(); ++ch)

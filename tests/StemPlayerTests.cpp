@@ -361,6 +361,8 @@ struct StemPlayerTests : juce::UnitTest
         p.play();
         juce::Thread::sleep (30);
         pull (0.0f);
+        expectLessThan (rms (buf, 0, 64), rms (buf, 448, 64) / 4,    // a sine from phase 0 already has a smaller head, so a plain "<" cannot tell a ramp from a step
+                        "the first block after a resume ramps in");
         pull (0.0f);                                         // stretched, this block would still be in the ~60 ms fade-in
         expectGreaterThan (rms (buf, 0, 512), 0.3f);
         p.pause();
