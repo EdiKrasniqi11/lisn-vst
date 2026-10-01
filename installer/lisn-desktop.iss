@@ -18,7 +18,7 @@ DefaultDirName={autopf}\LISN
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-; Setup's RedirectionGuard reaches the engine step's uv, which then can't follow the junction it makes (error 448). This installer never elevates, so there is nothing for the guard to protect.
+; Setup's RedirectionGuard reaches the engine step's uv, which then can't follow the junction it makes (error 448). Inno's help says child processes don't inherit it, but an A/B test showed they do: a cmd started by Setup couldn't traverse its own junction by default and could with /NOREDIRECTIONGUARD. This installer runs unelevated unless started with Run as administrator, so there is nothing for the guard to protect.
 RedirectionGuard=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -66,7 +66,7 @@ Root: HKCU; Subkey: "Software\Classes\.aiff\OpenWithProgids"; ValueType: string;
 Root: HKCU; Subkey: "Software\Classes\.ogg\OpenWithProgids"; ValueType: string; ValueName: "LISN.Audio"; ValueData: ""; Flags: uninsdeletevalue; Tasks: openwith
 
 [Run]
-Filename: "{app}\LISN.exe"; Description: "Launch LISN"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\LISN.exe"; Description: "Launch LISN"; Flags: postinstall nowait skipifsilent; Check: VCRuntimeIsCurrent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{#Engine}"
@@ -114,10 +114,17 @@ begin
   else
   begin
     WizardForm.StatusLabel.Caption := 'Installing the Microsoft Visual C++ runtime...';
-    // The one admin prompt. Declined or failed shows up below: the engine check loads torch's DLLs.
+    // The one admin prompt.
     Started := ShellExec('runas', ExpandConstant('{tmp}\vc_redist.x64.exe'), '/install /quiet /norestart', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     // Started = False: the prompt was declined or the redist could not start. Exit 0 or 3010 (restart pending) is success.
     Log('VC++ runtime installer: started=' + YesNo(Started) + ', exit code ' + IntToStr(ResultCode));
+    // LISN.exe and torch can't load without the runtime: stop here, before the engine download blames the network.
+    if not VCRuntimeIsCurrent() then
+    begin
+      Log('VC++ runtime is still missing or old, skipping the AI engine step');
+      SuppressibleMsgBox('LISN needs the Microsoft Visual C++ runtime. Run this installer again and allow the Windows prompt.', mbError, MB_OK, IDOK);
+      Exit;
+    end;
   end;
 
   WizardForm.StatusLabel.Caption := 'Setting up the AI engine (about 320 MB download, a few minutes)...';
@@ -136,4 +143,13 @@ begin
   else
     Log('AI engine is ready');
   WizardForm.ProgressGauge.Style := npbstNormal;
+end;
+
+// Inno's CloseApplications covers Setup only. Without this, an uninstall with LISN open leaves the in-use LISN.exe behind.
+// JUCE's single-instance lock is the mutex "juceAppLock_" + the app name: Global\ if it can, else Local\.
+function InitializeUninstall(): Boolean;
+begin
+  Result := True;
+  while Result and CheckForMutexes('Global\juceAppLock_LISN,Local\juceAppLock_LISN') do
+    Result := SuppressibleMsgBox('LISN is running. Close it, then click OK.', mbError, MB_OKCANCEL, IDCANCEL) = IDOK;
 end;

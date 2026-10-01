@@ -45,7 +45,7 @@ One file, about 80 lines, guarded by `#if JucePlugin_Build_Standalone`. It inclu
   - It has the native title bar with minimise and close buttons, and isn't resizable.
   - Its content is `processor->createEditor()` at 760x500, centred on screen.
   - When the window first shows, the editor gets keyboard focus, so Space, L, 1-6, Shift+1-6 and Home work before any click.
-- **Close:** `holder->savePluginState()`, then `quit()`.
+- **Close:** `holder->savePluginState()`, then `settings.saveIfNeeded()` (so the state is on disk before Windows can end the process on sign-out), then `quit()`.
   - Shutdown deletes the window (and so the editor) before the holder, which stops audio and deletes the processor.
   - The saved state is whatever `getStateInformation` writes today: the theme, 4 or 6 stems, the Python hint, the last song and its stem folder.
 - **Start:** the holder's constructor restores the saved state (`reloadPluginState`) and starts audio. The window is created after that.
@@ -79,6 +79,7 @@ Behaviour is unchanged. `StandaloneApp.cpp` is compiled into the shared code, bu
   - `AppName=LISN` and `UninstallDisplayName=LISN`. Settings > Apps then lists "LISN" next to the VST's "LISN StemSplitter".
   - `AppVersion` comes from `/DAppVersion`, as in `lisn-vst.iss`.
   - `PrivilegesRequired=lowest`, with `DefaultDirName={autopf}\LISN`, which for a per-user install is `%LOCALAPPDATA%\Programs\LISN`.
+  - `RedirectionGuard=no`. Inno 6.7's guard reaches the engine step's `uv`, which then fails with error 448 on its own Python junction. Inno's help says child processes don't inherit the guard, but an A/B test showed they do (a `cmd` started by Setup couldn't traverse its own junction by default, and could with `/NOREDIRECTIONGUARD`). Turning it off is safe because a per-user install runs unelevated (unless started with Run as administrator).
   - The licence page, architecture and Windows 10+ settings, compression and wizard style are the same as `lisn-vst.iss`.
 - **Files:**
   - the Release `LISN StemSplitter.exe` into `{app}`, with `DestName: "LISN.exe"`;
@@ -97,13 +98,15 @@ Behaviour is unchanged. `StandaloneApp.cpp` is compiled into the shared code, bu
 - **VC++ runtime:**
   - `HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64` is compared with the bundled `vc_redist.x64.exe`'s file version.
   - If the key is missing, `Installed` isn't 1, or Major.Minor.Bld is older, the installer runs `vc_redist.x64.exe /install /quiet /norestart` with `ShellExec ('runas', ...)`: the one possible UAC prompt.
-  - A declined prompt or a failure isn't fatal on its own. It shows up in the engine step, which loads torch's DLLs.
+  - After the redist runs, the same check runs again. If the runtime is still missing or old (the prompt was declined, or the redist failed), the installer logs it, shows "LISN needs the Microsoft Visual C++ runtime. Run this installer again and allow the Windows prompt." and skips the engine step. `LISN.exe` and torch can't load without it. Exit code 0 or 3010 (restart pending) counts as success only if the registry check passes.
 - **Engine step:** the same `CurStepChanged (ssPostInstall)` code as `lisn-vst.iss`:
   - a marquee bar, status text "Setting up the AI engine (about 320 MB download, a few minutes)...";
   - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{app}\engine-setup\setup-engine.ps1" -EngineDir "{localappdata}\LISN\engine"`.
   - On failure, the same message box with "LISN" in place of "LISN StemSplitter", pointing at `{localappdata}\LISN\engine\setup.log`.
-- **Finish page:** `[Run]` "Launch LISN" (`postinstall nowait skipifsilent`, checked).
-- **Running app:** Inno's default `CloseApplications=yes` closes a running copy before files are replaced.
+- **Finish page:** `[Run]` "Launch LISN" (`postinstall nowait skipifsilent`, checked), only when the VC++ runtime is current (`Check: VCRuntimeIsCurrent`), because the exe can't start without it.
+- **Running app:**
+  - Upgrade: Inno's default `CloseApplications=yes` closes a running copy before files are replaced (Restart Manager). This applies to Setup only.
+  - Uninstall: `InitializeUninstall` looks for JUCE's single-instance mutex (`Global\juceAppLock_LISN`, or `Local\juceAppLock_LISN` when the global one couldn't be created) and, while LISN runs, asks the user to close it and click OK. Cancel aborts the uninstall. Otherwise the in-use `LISN.exe` would be left behind and the still-running app would rewrite `LISN.settings` on exit. `AppMutex` is not used: it would replace Setup's auto-close with a blocking box.
 - **Uninstall** (`[UninstallDelete]`):
   - removes `{localappdata}\LISN\engine`, and `{localappdata}\LISN` if it's left empty;
   - removes `{userappdata}\LISN\LISN.settings`, and `{userappdata}\LISN` if it's left empty. Only the file is targeted, so any future LISN product sharing that folder is left alone.
@@ -120,11 +123,13 @@ Behaviour is unchanged. `StandaloneApp.cpp` is compiled into the shared code, bu
 
 | Case | What the user sees |
 |---|---|
-| Engine not ready (setup failed, UAC declined, offline) | The existing "Python isn't set up yet" screen, as in the VST. Running the installer again fixes it. |
+| Engine not ready (setup failed, offline) | The installer's "AI engine could not be set up" box, then the existing "Python isn't set up yet" screen in the app, as in the VST. Running the installer again fixes it. |
+| VC++ runtime still missing (UAC declined or the redist failed) | The installer's runtime message. The engine step is skipped and the finish page has no "Launch LISN" box. Running the installer again and allowing the Windows prompt fixes it. |
 | No output device | The app opens and splits; playback is silent. |
 | A command-line argument that isn't one supported, existing audio file | Ignored. The app opens normally (or the open window comes to the front). |
 | Second launch, no file | The existing window comes to the front; no second window. |
-| App running during an upgrade or uninstall | Inno closes it first. |
+| App running during an upgrade | Inno (Restart Manager) closes it first. |
+| App running during an uninstall | The uninstaller asks the user to close LISN, then click OK. Cancel aborts the uninstall. |
 
 ## Testing
 
@@ -144,7 +149,7 @@ Behaviour is unchanged. `StandaloneApp.cpp` is compiled into the shared code, bu
      - the app folder, the per-user engine, `LISN.settings` and the Open with entries are gone;
      - the VST and its engine still work;
      - the stem cache is still there.
-- **Release checklist (after sub-project 2):** a clean Windows PC or VM with no VC++ runtime and no Python. Install LISN (one UAC prompt for the runtime), split, play, uninstall. Do this together with the VST's outstanding clean-machine test.
+- **Release checklist (after sub-project 2):** a clean Windows PC or VM with no VC++ runtime and no Python. Install LISN (one UAC prompt for the runtime), split, play, uninstall. Also decline the UAC prompt once: the runtime message appears, no engine download starts, and the finish page has no "Launch LISN" box. Do this together with the VST's outstanding clean-machine test.
 
 ## Docs
 

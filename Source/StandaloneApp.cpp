@@ -59,6 +59,7 @@ public:
     void systemRequestedQuit() override
     {
         holder->savePluginState();   // theme, 4 or 6 stems, the last song and its stems
+        settings.saveIfNeeded();     // to disk now: Windows may end the process on sign-out before shutdown() runs
         quit();
     }
 
