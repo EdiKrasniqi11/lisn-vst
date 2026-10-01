@@ -36,7 +36,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
     stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
     stems.onToggleLoop = [this] { proc.player.setLooping (! proc.player.isLooping()); };
-    stems.mixFile = [this] { return renderFile (proc.player.mixGains(), 1.0); };
+    stems.mixFile = [this] { return renderFile (proc.player.mixGains(), proc.player.getSpeed()); };   // the mix: what you hear
     stems.stemFile = [this] (int i)   // single stems are the originals: gain 1, speed 1
     {
         if (! proc.player.isLooping()) return stems.fileOf (i);

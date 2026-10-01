@@ -441,6 +441,33 @@ struct StemPlayerTests : juce::UnitTest
                       juce::String ("Song - vocals (0.58.25-1.26.50).wav"));
         expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 0.0f, 0.0f }, 1.0, {}), juce::String());
 
+        beginTest ("render keeps the key at other speeds, at the exact length");
+        for (const double s : { 0.75, 1.25 })
+        {
+            const auto out = dir.getChildFile ("renders").getChildFile ("tone x" + juce::String (s, 2) + ".wav");
+            expect (StemPlayer::render ({ sine }, { 1.0f }, 0.0, 2.0, s, out), "render at " + juce::String (s));
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (out));
+            expect (r != nullptr);
+            if (r == nullptr) continue;
+            expectWithinAbsoluteError ((double) r->lengthInSamples, 2.0 * 44100.0 / s, 1.0);
+            const int len = (int) r->lengthInSamples;
+            juce::AudioBuffer<float> got (2, len);
+            r->read (&got, 0, len, 0, true, true);
+            const int from = len / 4, n = len / 2;           // the middle, away from the edges
+            int crossings = 0;
+            for (int i = from + 1; i < from + n; ++i)
+                crossings += (got.getSample (0, i - 1) < 0.0f) != (got.getSample (0, i) < 0.0f);
+            expectWithinAbsoluteError (crossings / 2.0 / (n / 44100.0), 440.0, 4.4);
+            const float level = rms (got, from, n);
+            expect (level > 0.354f * 0.891f && level < 0.354f * 1.122f, "rms " + juce::String (level));
+        }
+
+        beginTest ("a cancelled stretched render leaves no file");
+        const auto cut = dir.getChildFile ("renders").getChildFile ("cut.wav");
+        int calls = 0;
+        expect (! StemPlayer::render ({ sine }, { 1.0f }, 0.0, 2.0, 1.25, cut, [&] (float) { return ++calls < 2; }));
+        expect (! cut.exists() && ! cut.getSiblingFile ("cut.wav.part").exists());
+
         p.unload();   // releases the files so the temp dir can go
         dir.deleteRecursively();
     }

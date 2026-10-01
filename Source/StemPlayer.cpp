@@ -52,6 +52,42 @@ namespace
         }
         return true;
     }
+
+    // [first, last) mixed and time-stretched by speed (keeping the key) into w: llround ((last - first) / speed) samples.
+    // The stretcher's exact-length recipe (its exact(), a chunk at a time so progress and cancel work): outputSeek over
+    // the first outputSeekLength samples, process the rest into all but the tail, then flush the tail.
+    bool writeStretched (juce::AudioFormatWriter& w, juce::OwnedArray<juce::AudioFormatReader>& readers, const std::vector<float>& levels,
+                         juce::int64 first, juce::int64 last, double speed, double rate, const std::function<bool (float)>& onProgress)
+    {
+        signalsmith::stretch::SignalsmithStretch<float> st;
+        st.presetDefault (2, (float) rate);
+        const auto inLen = last - first, outLen = (juce::int64) std::llround ((double) inLen / speed);
+        const int seekLen = st.outputSeekLength ((float) speed);
+        if (inLen <= seekLen)   // ponytail: shorter than the stretcher's look-ahead (~0.15 s) renders unstretched
+            return writeMix (w, readers, levels, first, last, onProgress);
+        juce::AudioBuffer<float> sum (2, renderChunk), one (2, renderChunk), out (2, 2 * renderChunk + 2);
+        readMix (readers, levels, sum, one, first, seekLen);
+        st.outputSeek (sum.getArrayOfReadPointers(), seekLen);
+        const auto bodyIn = inLen - seekLen;
+        const auto bodyOut = outLen - (juce::int64) (seekLen / speed);   // as exact(): the tail is what flush() returns
+        juce::int64 inDone = 0, outDone = 0;
+        while (inDone < bodyIn)
+        {
+            const int n = (int) juce::jmin ((juce::int64) renderChunk, bodyIn - inDone);
+            readMix (readers, levels, sum, one, first + seekLen + inDone, n);
+            inDone += n;
+            const auto target = (juce::int64) std::llround ((double) bodyOut * (double) inDone / (double) bodyIn);
+            const int m = (int) (target - outDone);
+            st.process (sum.getArrayOfReadPointers(), n, out.getArrayOfWritePointers(), m);
+            if (! w.writeFromAudioSampleBuffer (out, 0, m)) return false;
+            outDone = target;
+            if (onProgress && ! onProgress (0.99f * (float) (seekLen + inDone) / (float) inLen)) return false;
+        }
+        const int tail = (int) (outLen - outDone);
+        st.flush (out.getArrayOfWritePointers(), tail, (float) speed);
+        if (! w.writeFromAudioSampleBuffer (out, 0, tail)) return false;
+        return ! onProgress || onProgress (1.0f);
+    }
 }
 
 // Every stem read at the same position into channels 2i / 2i+1. The read-ahead buffer counts positions linearly, so this
@@ -401,7 +437,6 @@ bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector
                          double speed, const juce::File& dest, const std::function<bool (float)>& onProgress)
 {
     if (dest.existsAsFile()) return true;            // renders are cached by name (FL keeps pointing at them)
-    if (! juce::exactlyEqual (speed, 1.0)) return false;   // stretched renders are not supported yet
     juce::AudioFormatManager fm;
     fm.registerBasicFormats();
     juce::OwnedArray<juce::AudioFormatReader> readers;
@@ -432,7 +467,9 @@ bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector
         if (w != nullptr)
         {
             out.release();   // the writer owns the stream now
-            ok = writeMix (*w, readers, levels, first, last, onProgress);
+            const double s = juce::jlimit (0.5, 1.5, speed);
+            ok = juce::exactlyEqual (s, 1.0) ? writeMix (*w, readers, levels, first, last, onProgress)
+                                             : writeStretched (*w, readers, levels, first, last, s, rate, onProgress);
         }
     }
     if (! ok)
