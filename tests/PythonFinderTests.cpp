@@ -23,6 +23,7 @@ struct PythonFinderTests : juce::UnitTest
         const auto sd39   = fakePython ("sd/Python39");
         const auto mini   = fakePython ("home/miniconda3");
         const auto engine = fakePython ("pd/LISN/engine/venv/Scripts");
+        const auto user   = fakePython ("lad/LISN/engine/venv/Scripts");
         auto dirOf = [] (const juce::String& exe) { return juce::File (exe).getParentDirectory().getFullPathName(); };
 
         PythonSearchDirs dirs;
@@ -33,7 +34,7 @@ struct PythonFinderTests : juce::UnitTest
         dirs.userProfile  = root.getChildFile ("home");
         dirs.programData  = root.getChildFile ("pd");
 
-        const juce::StringArray expected { pf311, engine, path1, path2, lad312, lad310, sd39, mini };
+        const juce::StringArray expected { pf311, engine, user, path1, path2, lad312, lad310, sd39, mini };
         expectEquals (pythonCandidates (pf311, dirs).joinIntoString ("\n"), expected.joinIntoString ("\n"));
 
         beginTest ("bare hint is dropped");

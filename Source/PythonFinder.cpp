@@ -35,6 +35,9 @@ juce::StringArray pythonCandidates (const juce::String& hint, const PythonSearch
     if (dirs.programData != juce::File())   // the private engine the LISN installer sets up
         addIfFile (dirs.programData.getChildFile ("LISN\\engine\\venv\\Scripts\\python.exe"));
 
+    if (dirs.localAppData != juce::File())   // the per-user engine the LISN desktop installer sets up
+        addIfFile (dirs.localAppData.getChildFile ("LISN\\engine\\venv\\Scripts\\python.exe"));
+
     for (auto entry : juce::StringArray::fromTokens (dirs.pathEnv, ";", "\""))
     {
         entry = entry.trim().unquoted();
