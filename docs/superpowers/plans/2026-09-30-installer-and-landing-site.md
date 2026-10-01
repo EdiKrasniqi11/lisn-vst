@@ -8,21 +8,28 @@
 
 **Tech Stack:** JUCE 8.0.15 (CMake, MSVC 2022), Inno Setup 6, Windows PowerShell 5.1, uv 0.12.21, CPython 3.11, demucs 4.1.0 / torch 2.14.0 / numpy 1.24.4 (the versions splitting works with on this PC today), GitHub Actions (`windows-latest`), GitHub Releases, GitHub Pages, plain HTML + CSS.
 
-## Status (2026-10-01)
+## Status (2026-10-01): shipped as v0.1.0
 
-- **Tasks 1 and 8 are done.** The site is built from the Claude Design export, published at https://github.com/EdiKrasniqi11/lisn-site (first commit `fab60b4`) and served at https://edikrasniqi11.github.io/lisn-site/. lisn-vst's repo homepage points at it. The placeholder page was skipped because the real design was ready. The fonts are the export's woff2 files, not the lisn-vst TTFs. The page is pixel-identical to the export at 1280 and 375 px.
-- **The site's Download buttons 404 until Task 7 publishes the first release.** Once Task 4 measures the real engine download, update "about 450 MB" in `lisn-site/index.html` (Install step 3).
-- **Remaining:** Task 0 and Tasks 2 to 7 (the installer).
-- **Done (2026-10-01):** Task 0 (`c3d9b90`), Task 2 (`405e27a`), Task 3 (`d2179d5`), Task 4 (`9c9762f`) and Task 5 (the commit after it).
-- **Task 5 on this PC:** installed with no errors. pluginval on the installed plugin said SUCCESS, and the engine built in about 5 min. The plugin's PythonFinder picks `C:\ProgramData\LISN\engine` over `C:\Python311` on PATH. A normal non-admin user splits offline with no permission errors. FL Studio works (Ableton isn't available here; REAPER on the clean machine is the second host). A second run finished in seconds without touching the engine. Uninstall removed everything except an empty `LISN StemSplitter.vst3` folder that a hand-copied beta had created before the install. `[UninstallDelete]` now removes that bundle folder too (untested until Task 7).
-- **The site says "Tested in FL Studio and Ableton Live" and "about 450 MB".** Both need updating: FL Studio (and REAPER after Task 7), about 320 MB.
+- **Released.** PR #2 was merged into master as a fast-forward (`579a1a9`) after CI passed: build, ctest and pluginval. `v0.1.0` was published on 2026-10-01 at https://github.com/EdiKrasniqi11/lisn-vst/releases/tag/v0.1.0, and the site's Download buttons serve it. The worktree and the `feature/installer` branch were removed after the merge, so all work happens in `C:\Projects\lisn-vst` again.
+- **The site** (Tasks 1 and 8) is https://edikrasniqi11.github.io/lisn-site/, from the repo https://github.com/EdiKrasniqi11/lisn-site. It's built from the Claude Design export and pixel-identical to it at 1280 and 375 px. It states the measured "about 320 MB" and "Tested in FL Studio".
+- **Tested on the dev PC (Task 5):**
+  - Installed with no errors, and pluginval on the installed plugin said SUCCESS.
+  - The engine built in about 5 min, and PythonFinder picks it over Python on PATH.
+  - A normal user splits offline with no permission errors, and FL Studio works.
+  - A second run skips the engine and finishes in seconds.
+  - Uninstall removes the plugin, the app folder and the engine.
+- **Not tested yet,** because the owner published without Task 7's clean-machine run:
+  - a fresh PC without the VC++ runtime or Python;
+  - the `[UninstallDelete]` fix for a bundle folder that a hand-copied beta created before the install;
+  - Ableton Live.
+  Do Task 7 Step 3 on another PC soon.
+- **Follow-up:** move the `createWriterFor` calls to the `AudioFormatWriterOptions` overload (a JUCE 8.0.15 deprecation), on its own branch.
 - **What executing Task 4 changed from this plan** (the code in the repo is the reference, not the Task 4 and 5 code blocks below):
   - demucs 4.1 loads `htdemucs` and `htdemucs_6s` from Hugging Face (`demucs/hf.py`), not torch hub. `installer/sitecustomize.py` now sets `HF_HOME` (and `TORCH_HOME`) inside the engine and `HF_HUB_OFFLINE=1`. Splits never go online, and a model update upstream can't make a normal user rewrite admin-owned files in ProgramData. Only the setup script's prefetch goes online.
   - The pins are `demucs==4.1.0`, `torch==2.14.0`, `numpy==1.24.4`. A split never imports torchaudio or soundfile, so they're gone. numpy is required (`demucs/audio.py`), but demucs only declares it for Intel Macs.
   - `ready.txt` hashes `requirements.txt` and `sitecustomize.py`, so a change to either rebuilds the engine on the next install. The installer ships `sitecustomize.py` next to the script.
   - Measured download: **about 320 MB** (157 MB of wheels, 134 MB of models, 25 MB of Python). The engine takes 908 MB on disk, and the first setup took 7.3 min on this PC. PyPI's torch splits as fast as the dev machine's `+cpu` build.
   - JUCE 8.0.15 deprecates `AudioFormat::createWriterFor` (StemPlayer's mix export and five tests). It's a warning only, left for a separate change.
-- **Where the installer work happens:** the git worktree `C:\Projects\lisn-vst-installer` on branch `feature/installer`, not `C:\Projects\lisn-vst`. Another session uses that checkout, and switching its branch would switch it for that session too. The two folders share one repository: build, test and commit in the worktree, while `C:\Projects\lisn-vst` stays on `master`.
 
 ## Context
 
