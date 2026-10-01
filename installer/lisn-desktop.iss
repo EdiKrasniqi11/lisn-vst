@@ -93,9 +93,16 @@ begin
             ((Minor > (MS and $FFFF)) or ((Minor = (MS and $FFFF)) and (Bld >= (LS shr 16)))));
 end;
 
+// Pascal Script has no BoolToStr.
+function YesNo(Value: Boolean): String;
+begin
+  if Value then Result := 'yes' else Result := 'no';
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
+  Started: Boolean;
 begin
   if CurStep <> ssPostInstall then
     Exit;
@@ -106,16 +113,25 @@ begin
   begin
     WizardForm.StatusLabel.Caption := 'Installing the Microsoft Visual C++ runtime...';
     // The one admin prompt. Declined or failed shows up below: the engine check loads torch's DLLs.
-    ShellExec('runas', ExpandConstant('{tmp}\vc_redist.x64.exe'), '/install /quiet /norestart', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Started := ShellExec('runas', ExpandConstant('{tmp}\vc_redist.x64.exe'), '/install /quiet /norestart', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Started = False: the prompt was declined or the redist could not start. Exit 0 or 3010 (restart pending) is success.
+    Log('VC++ runtime installer: started=' + YesNo(Started) + ', exit code ' + IntToStr(ResultCode));
   end;
 
   WizardForm.StatusLabel.Caption := 'Setting up the AI engine (about 320 MB download, a few minutes)...';
   WizardForm.ProgressGauge.Style := npbstMarquee;
-  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-              ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\engine-setup\setup-engine.ps1" -EngineDir "{#Engine}"'),
-              '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-    MsgBox('LISN is installed, but its AI engine could not be set up.' + #13#10#13#10 +
-           'Check your internet connection and run this installer again.' + #13#10 +
-           'Details: ' + ExpandConstant('{#Engine}\setup.log'), mbError, MB_OK);
+  Started := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+                  ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\engine-setup\setup-engine.ps1" -EngineDir "{#Engine}"'),
+                  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if not Started or (ResultCode <> 0) then
+  begin
+    Log('AI engine setup failed: started=' + YesNo(Started) + ', exit code ' + IntToStr(ResultCode));
+    // Suppressible: a silent install (/SUPPRESSMSGBOXES) must not hang on this box; the log line above is the record.
+    SuppressibleMsgBox('LISN is installed, but its AI engine could not be set up.' + #13#10#13#10 +
+                       'Check your internet connection and run this installer again.' + #13#10 +
+                       'Details: ' + ExpandConstant('{#Engine}\setup.log'), mbError, MB_OK, IDOK);
+  end
+  else
+    Log('AI engine is ready');
   WizardForm.ProgressGauge.Style := npbstNormal;
 end;
