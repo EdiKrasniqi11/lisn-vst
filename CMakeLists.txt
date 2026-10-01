@@ -35,16 +35,18 @@ juce_add_plugin(StemSplitter
     PLUGIN_CODE Stsp
     FORMATS VST3 Standalone
     PRODUCT_NAME "LISN StemSplitter"
+    ICON_BIG Resources/icon.png
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     COPY_PLUGIN_AFTER_BUILD TRUE
     VST3_COPY_DIR "$ENV{USERPROFILE}/VST3")   # no admin needed; add this folder to the DAW's scan paths
 
-target_sources(StemSplitter PRIVATE ${LISN_SOURCES})
+# Source/StandaloneApp.cpp is LISN, the desktop app: JUCE's Standalone wrapper runs it instead of its own app class.
+target_sources(StemSplitter PRIVATE ${LISN_SOURCES} Source/StandaloneApp.cpp)
 
 target_compile_definitions(StemSplitter PUBLIC
-    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
 
 target_link_libraries(StemSplitter
     PRIVATE LisnFonts juce::juce_audio_utils
@@ -65,6 +67,7 @@ target_sources(lisn_tests PRIVATE
     tests/WaveBackgroundTests.cpp
     tests/StemRowTests.cpp
     tests/UiStateTests.cpp
+    tests/OpenWithTests.cpp
     tests/Snapshots.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE
