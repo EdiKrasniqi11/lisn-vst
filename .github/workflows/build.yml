@@ -54,12 +54,16 @@ jobs:
           choco install innosetup --no-progress -y
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$('${{ github.ref_name }}'.TrimStart('v'))" installer\lisn-vst.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$('${{ github.ref_name }}'.TrimStart('v'))" installer\lisn-desktop.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Draft release
         if: env.RELEASE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $exe = 'installer\Output\LISN-StemSplitter-Setup.exe'
-          $sha = (Get-FileHash $exe).Hash.ToLower()
-          gh release create '${{ github.ref_name }}' $exe --draft --title 'LISN StemSplitter ${{ github.ref_name }}' --notes "Installer SHA-256: $sha"
+          $vst = 'installer\Output\LISN-StemSplitter-Setup.exe'
+          $app = 'installer\Output\LISN-Setup.exe'
+          $notes = "LISN-StemSplitter-Setup.exe is the VST3 for FL Studio and Ableton Live. SHA-256: $((Get-FileHash $vst).Hash.ToLower())`n`n" +
+                   "LISN-Setup.exe is LISN, the desktop app. SHA-256: $((Get-FileHash $app).Hash.ToLower())"
+          gh release create '${{ github.ref_name }}' $vst $app --draft --title 'LISN StemSplitter ${{ github.ref_name }}' --notes $notes
