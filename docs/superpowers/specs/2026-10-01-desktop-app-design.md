@@ -62,7 +62,7 @@ Behaviour is unchanged. `StandaloneApp.cpp` is compiled into the shared code, bu
 ## The engine
 
 - **`installer/setup-engine.ps1` is reused unchanged**, run with `-EngineDir "%LOCALAPPDATA%\LISN\engine"`. It needs the same ~320 MB download, and the same `ready.txt` check makes a re-install skip a finished engine.
-- **`installer/sitecustomize.py`:** only the comment changes. It says every Windows user shares the models, which holds for the ProgramData engine but not the per-user one. Reword it to cover both: the models live inside whichever engine runs, so uninstall removes them.
+- **`installer/sitecustomize.py` stays byte-identical.** Its comment says every Windows user shares the models, which isn't true of the per-user engine, but `ready.txt` hashes this file. Even a comment edit would make every VST user's engine rebuild (~320 MB, ~7 min) on their next install.
 - **`PythonFinder`:** a new candidate 3 is inserted after the ProgramData engine (the later candidates move down by one):
   ```
   3. localAppData\LISN\engine\venv\Scripts\python.exe, the per-user engine the desktop installer sets up
