@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Export: stems saved, mix in progress</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&amp;family=Unbounded:wght@700&amp;display=swap">
+<style>
+body{margin:0}
+.lx{font-family:'DM Sans',sans-serif;color:#FFF4EA}
+.lx button{font-family:inherit;color:inherit}
+.win{position:relative;width:760px;height:500px;overflow:hidden;background:#D9775F}
+.bg{position:absolute;left:0;top:0;width:100%;height:100%}
+.hdr{position:absolute;left:24px;top:16px;width:712px;height:44px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:'Unbounded',sans-serif;font-weight:700;font-size:22px;letter-spacing:.08em}
+.right{display:flex;align-items:center;gap:8px}
+.pill{display:flex;gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,244,234,.14);background:rgba(32,18,27,.72)}
+.seg{height:30px;padding:0 14px;border:0;border-radius:999px;background:transparent;font-size:13px;font-weight:700;cursor:pointer}
+.lx .seg.on{background:#FFF4EA;color:#2B1822}
+.sep{width:1px;height:22px;background:rgba(255,244,234,.24);margin:0 2px}
+.wbtn{width:32px;height:32px;padding:0;border-radius:999px;border:1px solid rgba(255,244,234,.18);background:rgba(32,18,27,.55);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ic{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel{position:absolute;left:24px;top:76px;width:712px;height:400px;box-sizing:border-box;border-radius:22px;border:1px solid rgba(255,244,234,.14);background:rgba(32,18,27,.66);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 26px 50px -22px rgba(20,8,16,.75);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.info{position:absolute;right:14px;bottom:8px;width:14px;height:14px;box-sizing:border-box;border-radius:999px;border:1px solid rgba(255,244,234,.4);font-size:9px;line-height:12px;text-align:center;color:rgba(255,244,234,.55)}
+.top{height:36px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.tt{flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.tt b{font-size:15px;line-height:1.2}
+.tt i{font-style:normal;font-size:12px;line-height:1.2;color:rgba(255,244,234,.64)}
+.xbtn{width:36px;height:36px;padding:0;border-radius:10px;border:1px solid rgba(255,244,234,.22);background:rgba(255,244,234,.06);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.hr{height:1px;background:rgba(255,244,234,.12);flex-shrink:0}
+.cards{flex-grow:1;display:flex;flex-direction:column;gap:10px}
+.card{flex:1;display:flex;align-items:center;gap:14px;padding:0 16px;border-radius:16px;border:1px solid rgba(255,244,234,.12);background:rgba(255,244,234,.05)}
+.card.dim{opacity:.4}
+.tile{width:44px;height:44px;border-radius:12px;background:rgba(255,244,234,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tile.ok{background:rgba(244,167,111,.22);border:1px solid #F4A76F;box-sizing:border-box}
+.ct{flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ct b{font-size:15px}
+.ct i{font-style:normal;font-size:12.5px;color:rgba(255,244,234,.64)}
+.ghost{height:34px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,244,234,.22);background:rgba(255,244,234,.06);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.prog{height:6px;border-radius:3px;background:rgba(255,244,234,.12);margin-top:8px;overflow:hidden;max-width:420px}
+.prog b{display:block;height:100%;width:62%;border-radius:3px;background:#FFF4EA}
+.picks{display:flex;gap:6px;margin-top:7px}
+.pk{display:flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:999px;border:1px solid rgba(255,244,234,.16);background:rgba(255,244,234,.06);font-size:12px;font-weight:700}
+.pk i{width:8px;height:8px;border-radius:999px}
+</style>
+</helmet>
+<div class="lx win">
+<svg class="bg" viewBox="0 0 760 500" preserveAspectRatio="none" aria-hidden="true">
+<path fill="#6F7679" d="M560 0 C600 40 640 70 700 110 C735 135 750 220 760 300 L760 0 Z"></path>
+<path fill="#F4A76F" d="M205 0 C250 30 300 40 320 70 C340 100 400 80 470 70 C520 62 540 30 560 0 Z"></path>
+<path fill="#7B5467" d="M0 0 L215 0 C260 20 300 50 310 75 C280 80 200 90 120 110 C70 122 30 125 0 135 Z"></path>
+<path fill="#D95F6B" d="M0 130 C40 120 70 118 95 116 C40 180 20 260 30 340 C35 400 60 450 90 500 L0 500 Z"></path>
+<path fill="#7B5467" d="M250 500 C300 470 400 465 520 480 C560 485 600 495 620 500 Z"></path>
+<path fill="#F08A7C" d="M760 330 C720 380 700 430 660 470 C640 488 600 495 560 500 L760 500 Z"></path>
+<path fill="#F4A76F" d="M760 440 C740 470 720 490 700 500 L760 500 Z"></path>
+<path fill="#F08A7C" d="M0 330 C40 360 80 430 140 500 L0 500 Z"></path>
+</svg>
+<div class="hdr">
+<div class="logo">LISN</div>
+<div class="right">
+<div class="pill"><button class="seg on">Dusk</button><button class="seg">Midnight</button></div>
+<div class="pill"><button class="seg on">4 stems</button><button class="seg">6 stems</button></div>
+<div class="sep"></div>
+<button class="wbtn" aria-label="Minimise"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M6 12h12"></path></svg></button>
+<button class="wbtn" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M7 7l10 10M17 7 7 17"></path></svg></button>
+</div>
+</div>
+<div class="panel">
+<div class="top">
+<div class="tt"><b>Export</b><i>Travis Snippet.mp3 · 4 stems</i></div>
+<button class="xbtn" aria-label="Close export"><svg class="ic" viewBox="0 0 24 24" style="width: 16px; height: 16px"><path d="M7 7l10 10M17 7 7 17"></path></svg></button>
+</div>
+<div class="hr"></div>
+<div class="cards">
+<div class="card">
+<div class="tile ok"><svg class="ic" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></div>
+<div class="ct"><b>All stems saved</b><i>4 WAVs in Music › Travis Snippet stems</i></div>
+<button class="ghost">Show in folder</button>
+</div>
+<div class="card">
+<div class="tile"><svg class="ic" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="m12 3 9 5-9 5-9-5z"></path><path d="m3 13 9 5 9-5"></path></svg></div>
+<div class="ct"><b>Saving my mix… 62%</b><i>Bass muted · Vocals at 85% · 1.25× speed</i><div class="prog"><b></b></div></div>
+<button class="ghost">Cancel</button>
+</div>
+<div class="card dim">
+<div class="tile"><svg class="ic" viewBox="0 0 24 24" style="width: 20px; height: 20px"><path d="M3 12h2l2-6 3 12 3-9 2 6 2-3h4"></path></svg></div>
+<div class="ct"><b>One stem</b><i>Pick a stem to save it on its own</i>
+<div class="picks"><span class="pk"><i style="background: #F4A76F"></i>Vocals</span><span class="pk"><i style="background: #EF7A7F"></i>Drums</span><span class="pk"><i style="background: #C9A0BD"></i>Bass</span><span class="pk"><i style="background: #A9B8BC"></i>Other</span></div>
+</div>
+</div>
+</div>
+</div>
+<div class="info">i</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":500}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

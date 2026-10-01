@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stems C with 6 stems, desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&amp;family=Unbounded:wght@700&amp;display=swap">
+<style>
+body{margin:0}
+.lx{font-family:'DM Sans',sans-serif;color:#FFF4EA}
+.lx button{font-family:inherit;color:inherit}
+.win{position:relative;width:760px;height:500px;overflow:hidden;background:#D9775F}
+.bg{position:absolute;left:0;top:0;width:100%;height:100%}
+.hdr{position:absolute;left:24px;top:16px;width:712px;height:44px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:'Unbounded',sans-serif;font-weight:700;font-size:22px;letter-spacing:.08em}
+.right{display:flex;align-items:center;gap:8px}
+.pill{display:flex;gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,244,234,.14);background:rgba(32,18,27,.72)}
+.seg{height:30px;padding:0 14px;border:0;border-radius:999px;background:transparent;font-size:13px;font-weight:700;cursor:pointer}
+.lx .seg.on{background:#FFF4EA;color:#2B1822}
+.sep{width:1px;height:22px;background:rgba(255,244,234,.24);margin:0 2px}
+.wbtn{width:32px;height:32px;padding:0;border-radius:999px;border:1px solid rgba(255,244,234,.18);background:rgba(32,18,27,.55);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ic{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel{position:absolute;left:24px;top:76px;width:712px;height:400px;box-sizing:border-box;border-radius:22px;border:1px solid rgba(255,244,234,.14);background:rgba(32,18,27,.66);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 26px 50px -22px rgba(20,8,16,.75);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.info{position:absolute;right:14px;bottom:8px;width:14px;height:14px;box-sizing:border-box;border-radius:999px;border:1px solid rgba(255,244,234,.4);font-size:9px;line-height:12px;text-align:center;color:rgba(255,244,234,.55)}
+.top{height:36px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.playbig{width:36px;height:36px;padding:0;border:0;border-radius:999px;background:#FFF4EA;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:4px;cursor:pointer}
+.tt{flex-grow:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.tt b{font-size:15px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt i{font-style:normal;font-size:12px;line-height:1.2;color:rgba(255,244,234,.64);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{height:34px;box-sizing:border-box;padding:0 12px;display:flex;align-items:center;gap:6px;border-radius:10px;border:1px solid rgba(255,244,234,.22);background:rgba(255,244,234,.06);font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer;flex-shrink:0}
+.btn.sm{height:28px;padding:0 10px;font-size:12px;border-radius:8px}
+.hr{height:1px;background:rgba(255,244,234,.12);flex-shrink:0}
+.rows{flex-grow:1;display:flex;flex-direction:column;gap:6px;position:relative}
+.row{display:flex;align-items:center;gap:14px;padding:0 10px;height:36px;flex-shrink:0}
+.row.muted .nm,.row.muted .wave{opacity:.38}
+.nm{width:118px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.bar{width:4px;height:24px;border-radius:2px;flex-shrink:0}
+.nmc{display:flex;flex-direction:column;gap:6px}
+.nm b{font-size:13px;display:block;line-height:1}
+.volm{-webkit-appearance:none;appearance:none;width:96px;height:3px;border-radius:2px;margin:0;cursor:pointer}
+.volm::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:999px;background:#FFF4EA;border:0;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.volm::-moz-range-thumb{width:10px;height:10px;border-radius:999px;background:#FFF4EA;border:0}
+.led{width:30px;height:30px;padding:0;border-radius:999px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-sizing:border-box;background:rgba(255,244,234,.06);border:1px solid rgba(255,244,234,.25);cursor:pointer}
+.wave{display:block;flex-shrink:0}
+.head{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#FFF4EA;border-radius:2px;pointer-events:none}
+.tp{height:30px;display:flex;align-items:center;gap:12px;flex-shrink:0;padding:0 10px}
+.lbl{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;width:118px;flex-shrink:0}
+.slw{flex-grow:1;display:flex;flex-direction:column;gap:4px;padding-top:6px}
+.spdr{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;margin:0;cursor:pointer}
+.spdr::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:999px;background:#FFF4EA;border:0;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.spdr::-moz-range-thumb{width:14px;height:14px;border-radius:999px;background:#FFF4EA;border:0}
+.ticks{display:flex;justify-content:space-between;font-size:10px;color:rgba(255,244,234,.5)}
+.sv{width:48px;text-align:right;font-size:14px;flex-shrink:0}
+.hint{font-size:11px;color:rgba(255,244,234,.55);flex-shrink:0}
+</style>
+</helmet>
+<div class="lx win">
+<svg class="bg" viewBox="0 0 760 500" preserveAspectRatio="none" aria-hidden="true">
+<path fill="#6F7679" d="M560 0 C600 40 640 70 700 110 C735 135 750 220 760 300 L760 0 Z"></path>
+<path fill="#F4A76F" d="M205 0 C250 30 300 40 320 70 C340 100 400 80 470 70 C520 62 540 30 560 0 Z"></path>
+<path fill="#7B5467" d="M0 0 L215 0 C260 20 300 50 310 75 C280 80 200 90 120 110 C70 122 30 125 0 135 Z"></path>
+<path fill="#D95F6B" d="M0 130 C40 120 70 118 95 116 C40 180 20 260 30 340 C35 400 60 450 90 500 L0 500 Z"></path>
+<path fill="#7B5467" d="M250 500 C300 470 400 465 520 480 C560 485 600 495 620 500 Z"></path>
+<path fill="#F08A7C" d="M760 330 C720 380 700 430 660 470 C640 488 600 495 560 500 L760 500 Z"></path>
+<path fill="#F4A76F" d="M760 440 C740 470 720 490 700 500 L760 500 Z"></path>
+<path fill="#F08A7C" d="M0 330 C40 360 80 430 140 500 L0 500 Z"></path>
+</svg>
+<div class="hdr">
+<div class="logo">LISN</div>
+<div class="right">
+<div class="pill"><button class="seg on">Dusk</button><button class="seg">Midnight</button></div>
+<div class="pill"><button class="seg">4 stems</button><button class="seg on">6 stems</button></div>
+<div class="sep"></div>
+<button class="wbtn" aria-label="Minimise"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M6 12h12"></path></svg></button>
+<button class="wbtn" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M7 7l10 10M17 7 7 17"></path></svg></button>
+</div>
+</div>
+<div class="panel">
+<div class="top">
+<button class="playbig" aria-label="Pause"><svg viewBox="0 0 24 24" style="width: 14px; height: 14px"><rect x="6" y="5" width="4" height="14" rx="1" fill="#2B1822"></rect><rect x="14" y="5" width="4" height="14" rx="1" fill="#2B1822"></rect></svg></button>
+<div class="tt"><b>Travis Snippet.mp3</b><i>1:04 / 3:12 · 92 BPM</i></div>
+<button class="btn"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="m17 2 4 4-4 4"></path><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>Loop</button>
+<button class="btn"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>Export</button>
+<button class="btn"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M12 5v14M5 12h14"></path></svg>New song</button>
+</div>
+<div class="hr"></div>
+<div class="rows">
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="6">
+<div class="row {{row.mutedCls}}">
+<div class="nm"><div class="bar" style="background: {{row.c}}"></div><div class="nmc"><b>{{row.name}}</b><input class="volm" type="range" min="0" max="100" value="{{row.vol}}" onChange="{{row.onVol}}" aria-label="{{row.volLabel}}" style="background: {{row.volBg}}"></div></div>
+<button class="led" aria-label="{{row.muteLabel}}" onClick="{{row.toggle}}">
+<sc-if value="{{row.isOn}}" hint-placeholder-val="{{true}}"><svg class="ic" viewBox="0 0 24 24" style="width: 15px; height: 15px"><path d="M11 5 6 9H3v6h3l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg></sc-if>
+<sc-if value="{{row.isOff}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24" style="width: 15px; height: 15px; color: rgba(255,244,234,.5)"><path d="M11 5 6 9H3v6h3l5 4z"></path><path d="m16 9.5 5 5M21 9.5l-5 5"></path></svg></sc-if>
+</button>
+<svg class="wave" viewBox="0 0 480 24" style="width: 480px; height: 24px" aria-hidden="true"><path d="{{row.played}}" fill="{{row.c}}"></path><path d="{{row.rest}}" fill="{{row.dim}}"></path></svg>
+</div>
+</sc-for>
+<div class="head" style="left: {{headLeft}}"></div>
+</div>
+<div class="hr"></div>
+<div class="tp">
+<span class="lbl"><svg class="ic" viewBox="0 0 24 24" style="width: 16px; height: 16px"><path d="M4.5 18a8.5 8.5 0 1 1 15 0"></path><path d="m12 13 3.5-3.5"></path></svg>Speed</span>
+<div class="slw">
+<input class="spdr" type="range" min="50" max="150" step="5" value="{{speedPct}}" onChange="{{onSpeed}}" aria-label="Speed" style="background: {{speedBg}}">
+<div class="ticks"><span>0.5×</span><span>0.75×</span><span>1×</span><span>1.25×</span><span>1.5×</span></div>
+</div>
+<b class="sv">{{speedTxt}}</b>
+<span class="hint">same key</span>
+<button class="btn sm" onClick="{{reset}}">Reset</button>
+</div>
+</div>
+<div class="info">i</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":500}}'>
+const STEMS = [
+  { name: 'Vocals', c: '#F4A76F', seed: 11, kind: 'v' },
+  { name: 'Drums', c: '#EF7A7F', seed: 23, kind: 'd' },
+  { name: 'Bass', c: '#C9A0BD', seed: 37, kind: 'b' },
+  { name: 'Guitar', c: '#F3CD7F', seed: 41, kind: 'o' },
+  { name: 'Piano', c: '#EFE3D6', seed: 53, kind: 'b' },
+  { name: 'Other', c: '#A9B8BC', seed: 67, kind: 'o' }];
+function bars(s, W, H, head) {
+  let r = s.seed;
+  const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+  const n = Math.round(W / 3.6), step = W / n, bw = (step * 0.6).toFixed(1);
+  let played = '', rest = '';
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    let lv;
+    if (s.kind === 'v') lv = ((t > .05 && t < .3) || (t > .35 && t < .6) || (t > .66 && t < .95)) ? .35 + .6 * rnd() : .05;
+    else if (s.kind === 'd') lv = (i % 6 === 0 ? .95 : i % 6 === 3 ? .55 : .15) * (.8 + .2 * rnd());
+    else if (s.kind === 'b') lv = .5 + .15 * rnd();
+    else lv = .25 + .35 * rnd() + .25 * t;
+    const h = Math.max(1.5, lv * H);
+    const seg = 'M' + (i * step).toFixed(1) + ' ' + ((H - h) / 2).toFixed(1) + 'h' + bw + 'v' + h.toFixed(1) + 'h-' + bw + 'z';
+    if (t <= head) played += seg; else rest += seg;
+  }
+  return { played, rest };
+}
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const speedPct = st.speedPct ?? 90;
+    const vols = st.vols ?? [85, 100, 60, 75, 50, 70];
+    const muted = st.muted ?? [false, false, true, false, false, false];
+    const W = 480, head = 0.333;
+    const rows = STEMS.map((s, i) => {
+      const w = bars(s, W, 24, head);
+      return {
+        name: s.name, c: s.c, dim: s.c + '4D', played: w.played, rest: w.rest,
+        mutedCls: muted[i] ? 'muted' : '', isOn: !muted[i], isOff: muted[i],
+        muteLabel: (muted[i] ? 'Unmute ' : 'Mute ') + s.name,
+        toggle: () => { const m = muted.slice(); m[i] = !m[i]; this.setState({ muted: m }); },
+        vol: vols[i], volLabel: s.name + ' volume',
+        volBg: 'linear-gradient(90deg, ' + s.c + ' ' + vols[i] + '%, rgba(255,244,234,.16) ' + vols[i] + '%)',
+        onVol: e => { const v = vols.slice(); v[i] = +e.target.value; this.setState({ vols: v }); }
+      };
+    });
+    const pos = speedPct - 50, lo = Math.min(50, pos), hi = Math.max(50, pos);
+    return {
+      rows,
+      speedPct,
+      speedTxt: (speedPct / 100).toFixed(2) + '×',
+      speedBg: 'linear-gradient(90deg, rgba(255,244,234,.16) 0% ' + lo + '%, #F4A76F ' + lo + '% ' + hi + '%, rgba(255,244,234,.16) ' + hi + '% 100%)',
+      onSpeed: e => this.setState({ speedPct: +e.target.value }),
+      reset: () => this.setState({ speedPct: 100 }),
+      headLeft: (186 + W * head).toFixed(1) + 'px'
+    };
+  }
+}
+</script>
+</body>
+</html>

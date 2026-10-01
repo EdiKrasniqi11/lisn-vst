@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Intro A: waves flow in from the sides</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&amp;family=Unbounded:wght@700&amp;display=swap">
+<style>
+body{margin:0}
+.lx{font-family:'DM Sans',sans-serif;color:#FFF4EA;background:#141217}
+.lx button{font-family:inherit;color:inherit}
+.stage{position:relative;width:760px;height:500px;overflow:hidden;background:#1E1219}
+.bg{position:absolute;left:0;top:0;width:100%;height:100%}
+.hdr{position:absolute;left:24px;top:16px;width:712px;height:44px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:'Unbounded',sans-serif;font-weight:700;font-size:22px;letter-spacing:.08em}
+.right{display:flex;align-items:center;gap:8px}
+.pill{display:flex;gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,244,234,.14);background:rgba(32,18,27,.72)}
+.seg{height:30px;padding:0 14px;border:0;border-radius:999px;background:transparent;font-size:13px;font-weight:700;cursor:pointer}
+.lx .seg.on{background:#FFF4EA;color:#2B1822}
+.sep{width:1px;height:22px;background:rgba(255,244,234,.24);margin:0 2px}
+.wbtn{width:32px;height:32px;padding:0;border-radius:999px;border:1px solid rgba(255,244,234,.18);background:rgba(32,18,27,.55);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ic{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.panel{position:absolute;left:24px;top:76px;width:712px;height:400px;box-sizing:border-box;border-radius:22px;border:1px solid rgba(255,244,234,.14);background:rgba(32,18,27,.66);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 26px 50px -22px rgba(20,8,16,.75);padding:12px;display:flex;flex-direction:column}
+.info{position:absolute;right:14px;bottom:8px;width:14px;height:14px;box-sizing:border-box;border-radius:999px;border:1px solid rgba(255,244,234,.4);font-size:9px;line-height:12px;text-align:center;color:rgba(255,244,234,.55)}
+.drop{flex-grow:1;border:2px dashed rgba(255,244,234,.3);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.upc{width:64px;height:64px;border-radius:999px;background:rgba(255,244,234,.12);display:flex;align-items:center;justify-content:center}
+.dropt{font-family:'Unbounded',sans-serif;font-weight:700;font-size:24px}
+.orrow{display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(255,244,234,.7)}
+.lx .primary{height:34px;padding:0 16px;border:0;border-radius:10px;background:#FFF4EA;color:#2B1822;font-size:13px;font-weight:700;cursor:pointer}
+.fmt{font-size:12px;letter-spacing:.04em;color:rgba(255,244,234,.55)}
+.get{margin-top:10px;font-size:12px;color:rgba(255,244,234,.6)}
+.dots{display:flex;gap:8px}
+.dp{display:flex;align-items:center;gap:7px;height:28px;padding:0 12px;border-radius:999px;background:rgba(255,244,234,.08);font-size:12px;font-weight:700}
+.dp i{width:8px;height:8px;border-radius:999px}
+.bar{height:60px;display:flex;align-items:center;justify-content:center}
+.replay{height:34px;padding:0 16px;border-radius:10px;border:1px solid rgba(255,244,234,.25);background:rgba(255,244,234,.08);font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;cursor:pointer}
+@keyframes fL1{from{transform:translateX(-820px)}to{transform:translateX(0)}}
+@keyframes fR1{from{transform:translateX(820px)}to{transform:translateX(0)}}
+@keyframes fL2{from{transform:translateX(-820px)}to{transform:translateX(0)}}
+@keyframes fR2{from{transform:translateX(820px)}to{transform:translateX(0)}}
+@keyframes pin1{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes pin2{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes fd1{from{opacity:0}to{opacity:1}}
+@keyframes fd2{from{opacity:0}to{opacity:1}}
+.a .L{animation:fL1 1.25s cubic-bezier(.22,1,.36,1) both}
+.a .R{animation:fR1 1.25s cubic-bezier(.22,1,.36,1) both}
+.b .L{animation:fL2 1.25s cubic-bezier(.22,1,.36,1) both}
+.b .R{animation:fR2 1.25s cubic-bezier(.22,1,.36,1) both}
+.a .panel{animation:pin1 .7s cubic-bezier(.22,1,.36,1) 1.05s both}
+.b .panel{animation:pin2 .7s cubic-bezier(.22,1,.36,1) 1.05s both}
+.a .hdr,.a .info{animation:fd1 .6s ease 1.3s both}
+.b .hdr,.b .info{animation:fd2 .6s ease 1.3s both}
+</style>
+</helmet>
+<div class="lx" style="width: 760px; height: 560px">
+<div class="stage {{run}}">
+<svg class="bg" viewBox="0 0 760 500" preserveAspectRatio="none" aria-hidden="true">
+<path class="L" fill="#D9775F" d="M0 0H760V500H0Z" style="animation-delay: 0s"></path>
+<path class="R" fill="#6F7679" d="M560 0 C600 40 640 70 700 110 C735 135 750 220 760 300 L760 0 Z" style="animation-delay: .06s"></path>
+<path class="L" fill="#F4A76F" d="M205 0 C250 30 300 40 320 70 C340 100 400 80 470 70 C520 62 540 30 560 0 Z" style="animation-delay: .12s"></path>
+<path class="L" fill="#7B5467" d="M0 0 L215 0 C260 20 300 50 310 75 C280 80 200 90 120 110 C70 122 30 125 0 135 Z" style="animation-delay: .18s"></path>
+<path class="L" fill="#D95F6B" d="M0 130 C40 120 70 118 95 116 C40 180 20 260 30 340 C35 400 60 450 90 500 L0 500 Z" style="animation-delay: .24s"></path>
+<path class="R" fill="#7B5467" d="M250 500 C300 470 400 465 520 480 C560 485 600 495 620 500 Z" style="animation-delay: .3s"></path>
+<path class="R" fill="#F08A7C" d="M760 330 C720 380 700 430 660 470 C640 488 600 495 560 500 L760 500 Z" style="animation-delay: .36s"></path>
+<path class="R" fill="#F4A76F" d="M760 440 C740 470 720 490 700 500 L760 500 Z" style="animation-delay: .42s"></path>
+<path class="L" fill="#F08A7C" d="M0 330 C40 360 80 430 140 500 L0 500 Z" style="animation-delay: .48s"></path>
+</svg>
+<div class="hdr">
+<div class="logo">LISN</div>
+<div class="right">
+<div class="pill"><button class="seg on">Dusk</button><button class="seg">Midnight</button></div>
+<div class="pill"><button class="seg on">4 stems</button><button class="seg">6 stems</button></div>
+<div class="sep"></div>
+<button class="wbtn" aria-label="Minimise"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M6 12h12"></path></svg></button>
+<button class="wbtn" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M7 7l10 10M17 7 7 17"></path></svg></button>
+</div>
+</div>
+<div class="panel">
+<div class="drop">
+<div class="upc"><svg class="ic" viewBox="0 0 24 24" style="width: 22px; height: 22px"><path d="M12 15V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 15v4h14v-4"></path></svg></div>
+<div class="dropt">Drop a song here</div>
+<div class="orrow"><span>or</span><button class="primary">Browse…</button></div>
+<div class="fmt">WAV · MP3 · FLAC · AIFF · OGG</div>
+<div class="get">You'll get these stems</div>
+<div class="dots"><span class="dp"><i style="background: #F4A76F"></i>Vocals</span><span class="dp"><i style="background: #EF7A7F"></i>Drums</span><span class="dp"><i style="background: #C9A0BD"></i>Bass</span><span class="dp"><i style="background: #A9B8BC"></i>Other</span></div>
+</div>
+</div>
+<div class="info">i</div>
+</div>
+<div class="bar"><button class="replay" onClick="{{replay}}"><svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>Replay</button></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const r = (this.state && this.state.r) || 0;
+    return { run: r % 2 ? 'b' : 'a', replay: () => this.setState({ r: r + 1 }) };
+  }
+}
+</script>
+</body>
+</html>
