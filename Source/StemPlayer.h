@@ -49,6 +49,11 @@ public:
     void addTo (juce::AudioBuffer<float>& buffer);   // audio thread; idle = two relaxed atomic loads, then return
     float takePeak() { return peak.exchange (0.0f); }  // highest mix level since the last call
 
+    // Playback speed 0.5..1.5 (clamped) that keeps the key. At exactly 1 the stems play directly; otherwise every block
+    // goes through a time-stretcher, which stays engaged until the next play() or seek. load() resets it to 1.
+    void setSpeed (double);
+    double getSpeed() const { return speed.load(); }
+
     // Every stem with a gain above 0, scaled by it, summed over [startSec, endSec) into a 24-bit stereo WAV at the stems'
     // rate. Reuses dest if it already exists (renders are cached by name). onProgress gets 0..1 after each chunk; returning
     // false cancels. False, with no dest and no dest.part left, if no gain is above 0, the range is empty, a file is
@@ -64,6 +69,7 @@ public:
 private:
     static constexpr int readAheadSamples = 32768;
     class Stack;
+    struct Stretch;                             // the time-stretcher (StemPlayer.cpp), configured in prepare()
     juce::int64 songPosition (juce::int64 linear) const;   // read-ahead position -> song position (loop-wrapped)
     bool wraps() const;                                     // looping, and playback started before the loop end
     juce::int64 linearPosition() const;                     // the audio thread's position, in source samples
@@ -73,7 +79,13 @@ private:
     juce::TimeSliceThread readAhead { "LISN player read-ahead" };
     std::unique_ptr<Stack> stack;
     juce::AudioTransportSource transport;
-    juce::AudioBuffer<float> scratch, mix;      // 2 * maxStems channels / stereo, sized in prepare()
+    juce::AudioBuffer<float> scratch, mix, mixIn;   // 2 * maxStems channels for 1.5x a block / stereo, a block / stereo, 1.5x
+    std::unique_ptr<Stretch> stretch;
+    std::atomic<double> speed { 1.0 };
+    std::atomic<bool> restretch { false };          // play() and seeks: the next block decides the path again
+    bool stretching = false;                        // audio thread: blocks go through the stretcher
+    double carry = 0.0;                             // audio thread: the part of an input sample owed to the next block
+    float outGain = 1.0f;                           // audio thread: the stretched output's level at the end of the last block
     juce::Array<juce::File> files;
     std::array<std::atomic<bool>, maxStems> muted {};
     std::array<std::atomic<float>, maxStems> volumes;   // 0..1 per stem; 1 after construction and load()

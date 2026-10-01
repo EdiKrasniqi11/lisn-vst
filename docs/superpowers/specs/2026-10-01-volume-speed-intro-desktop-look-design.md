@@ -41,7 +41,7 @@ All of them are in this spec. Volume, speed and the opening animation are **shar
   - `process` them through one stereo stretcher into exactly n output samples.
   One stretcher handles any number of stems.
 - **Set-up:** the stretcher is configured in `prepare()` for 2 channels at the host rate (its default preset). `scratch` and the mix buffers are sized there for `ceil (maxBlock * 1.5) + 1` samples. **Nothing allocates on the audio thread.**
-- **Jumps:** entering or leaving 1.0, a seek and a loop wrap each re-prime the stretcher (`reset` plus `seek` with the upcoming input), so no old audio smears across a jump. The switch between the direct and stretched paths crossfades over one block.
+- **Engaging and seeks:** the stretcher engages the moment the speed leaves 1.0 (reset, so its first ~60 ms fade in from its pre-roll) and stays engaged, even back at 1.0, until the next `play()` or seek; then 1.0 plays directly again. A seek while stretching resets it, so no old audio smears across the jump. A loop wrap is a seamless splice in its input, so it needs no reset. Pause fades the stretched output over one block.
 - **Position:** the position and playhead stay the transport's input position.
   - `// ponytail:` while stretching, what is heard trails the playhead by the stretcher's latency (about 0.1 s). Upgrade path: shift the reported position back by that latency times the speed.
 - **Reset:** `load()` resets the speed to 1.0.

@@ -1,4 +1,13 @@
 #include "StemPlayer.h"
+#if JUCE_MSVC
+ #pragma warning (push, 0)
+#endif
+#include <signalsmith-stretch/signalsmith-stretch.h>
+#if JUCE_MSVC
+ #pragma warning (pop)
+#endif
+
+struct StemPlayer::Stretch { signalsmith::stretch::SignalsmithStretch<float> st; };
 
 // ponytail: while playing, the read-ahead thread can briefly wait on a disk read and the audio thread on the buffer's lock;
 // idle blocks take no lock. Upgrade path: decode the stems into memory on load and play them lock-free.
@@ -98,7 +107,7 @@ private:
     std::atomic<juce::int64> pos { 0 };
 };
 
-StemPlayer::StemPlayer()
+StemPlayer::StemPlayer() : stretch (std::make_unique<Stretch>())
 {
     for (auto& v : volumes) v = 1.0f;
     formats.registerBasicFormats();
@@ -116,8 +125,20 @@ void StemPlayer::prepare (double sampleRate, int maxBlockSize)
 {
     prepared = false;
     const auto song = stack != nullptr ? songPosition (linearPosition()) : 0;   // before hostRate changes
-    scratch.setSize (2 * maxStems, juce::jmax (1, maxBlockSize));   // a 0-sample scratch would make addTo's chunk loop spin
-    mix.setSize (2, juce::jmax (1, maxBlockSize));
+    const int block = juce::jmax (1, maxBlockSize), inMax = (int) std::ceil (block * 1.5) + 1;   // a stretched block reads up to 1.5x
+    scratch.setSize (2 * maxStems, inMax);
+    mix.setSize (2, block);
+    mixIn.setSize (2, inMax);
+    stretch->st.presetDefault (2, (float) sampleRate);
+    {   // size the stretcher's working buffers now, so resets and blocks on the audio thread never allocate
+        juce::AudioBuffer<float> zeros (2, stretch->st.seekLength());
+        zeros.clear();
+        stretch->st.seek (zeros.getArrayOfReadPointers(), zeros.getNumSamples(), 1.0);
+        stretch->st.reset();
+    }
+    stretching = false;
+    carry = 0.0;
+    outGain = 1.0f;
     hostRate = sampleRate;
     transport.prepareToPlay (maxBlockSize, sampleRate);
     transport.prepareToPlay (maxBlockSize, sampleRate);   // again: sizes the resampler for the ratio the first call set
@@ -172,6 +193,7 @@ void StemPlayer::unload()
     files.clear();
     for (auto& m : muted) m = false;
     for (auto& v : volumes) v = 1.0f;
+    speed = 1.0;
     looping = false;
     loop = {};
     loopStart = loopEnd = origin = base = 0;
@@ -189,6 +211,7 @@ void StemPlayer::play()
         if (transport.hasStreamFinished()) seekSource (0, looping.load());
         transport.start();
     }
+    restretch = true;
     wanted = true;
 }
 
@@ -232,6 +255,7 @@ void StemPlayer::seekSource (juce::int64 songSample, bool loopOn)
     looping = loopOn;
     transport.setPosition ((double) fresh / sourceRate);   // a no-op until prepare(), which repeats the seek
     readPos = (juce::int64) ((double) fresh * hostRate / sourceRate);
+    restretch = true;
 }
 
 void StemPlayer::setPositionFraction (double f)
@@ -286,6 +310,11 @@ std::vector<float> StemPlayer::mixGains() const
     return g;
 }
 
+void StemPlayer::setSpeed (double s)
+{
+    speed = juce::jlimit (0.5, 1.5, s);
+}
+
 void StemPlayer::setLoop (double a, double b)
 {
     // Re-base first: the bounds change below, and the transport must never see a finished stream meanwhile.
@@ -311,21 +340,49 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
     if ((! want && ! sounding) || ! prepared.load (std::memory_order_relaxed)) return;   // idle: nothing else runs
     juce::ScopedNoDenormals noDenormals;
     const int total = buffer.getNumSamples(), stems = stemCount.load (std::memory_order_relaxed);
-    float blockPeak = 0.0f;
-    for (int start = 0; start < total; start += scratch.getNumSamples())               // chunks if the host exceeds its block size
+    const double rate = speed.load (std::memory_order_relaxed);
+    if (restretch.exchange (false, std::memory_order_relaxed))
+        stretching = false;                                                    // a play or seek: at 1x the stems play directly
+    if (! stretching && ! juce::exactlyEqual (rate, 1.0))
     {
-        const int n = juce::jmin (scratch.getNumSamples(), total - start);
-        juce::AudioSourceChannelInfo info (&scratch, 0, n);
+        stretch->st.reset();                                                   // engages; its first ~60 ms fade in
+        stretching = true;
+        carry = 0.0;
+        outGain = 1.0f;
+    }
+    float blockPeak = 0.0f;
+    for (int start = 0; start < total; start += mix.getNumSamples())          // chunks if the host exceeds its block size
+    {
+        const int n = juce::jmin (mix.getNumSamples(), total - start);
+        int in = n;
+        if (stretching)
+        {
+            const double owed = n * rate + carry;
+            in = juce::jlimit (1, scratch.getNumSamples(), (int) owed);
+            carry = owed - in;
+        }
+        juce::AudioSourceChannelInfo info (&scratch, 0, in);
         transport.getNextAudioBlock (info);
-        mix.clear (0, n);
+        auto& sum = stretching ? mixIn : mix;
+        sum.clear (0, in);
         for (int i = 0; i < stems; ++i)
         {
-            // A mute or volume change (or the one faded block after pause()) ramps across this block: heard at once, never a click.
-            const float to = want && ! muted[(size_t) i].load (std::memory_order_relaxed)
+            // A mute or volume change (or, playing directly, the one faded block after pause()) ramps across this block:
+            // heard at once, never a click. Stretched, pause fades the output below instead.
+            const float to = (want || stretching) && ! muted[(size_t) i].load (std::memory_order_relaxed)
                                ? volumes[(size_t) i].load (std::memory_order_relaxed) : 0.0f;
             for (int ch = 0; ch < 2; ++ch)
-                mix.addFromWithRamp (ch, 0, scratch.getReadPointer (2 * i + ch), n, gains[(size_t) i], to);
+                sum.addFromWithRamp (ch, 0, scratch.getReadPointer (2 * i + ch), in, gains[(size_t) i], to);
             gains[(size_t) i] = to;
+        }
+        if (stretching)
+        {
+            // ponytail: what is heard trails the playhead by the stretcher's latency (~0.1 s). Upgrade path: report the
+            // position minus that latency times the speed.
+            stretch->st.process (mixIn.getArrayOfReadPointers(), in, mix.getArrayOfWritePointers(), n);
+            const float fade = want ? 1.0f : 0.0f;
+            mix.applyGainRamp (0, n, outGain, fade);
+            outGain = fade;
         }
         blockPeak = juce::jmax (blockPeak, mix.getMagnitude (0, n));
         for (int ch = 0; ch < buffer.getNumChannels(); ++ch)

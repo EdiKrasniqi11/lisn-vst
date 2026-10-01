@@ -1,6 +1,7 @@
 #include "../Source/StemPlayer.h"
 #include <thread>
 #include <algorithm>
+#include <cmath>
 
 struct StemPlayerTests : juce::UnitTest
 {
@@ -293,6 +294,9 @@ struct StemPlayerTests : juce::UnitTest
         expectLessThan (msTaken ([&] { p.play(); }), 20.0, "play");
         expectLessThan (msTaken ([&] { p.setMuted (1, true); }), 20.0, "mute");
         expectLessThan (msTaken ([&] { p.setLoop (0.2, 0.4); }), 20.0, "loop");
+        expectLessThan (msTaken ([&] { p.setSpeed (1.2); }), 20.0, "speed");
+        expectLessThan (msTaken ([&] { p.setVolume (0, 0.5f); }), 20.0, "volume");
+        juce::Thread::sleep (30);                            // a few stretched blocks run on the audio thread
         expectLessThan (msTaken ([&] { expect (p.load ({ sine, sine })); }), 100.0, "load");
         expectLessThan (msTaken ([&] { p.unload(); }), 20.0, "unload");
         running = false;
@@ -308,10 +312,59 @@ struct StemPlayerTests : juce::UnitTest
         p.addTo (big);
         expectGreaterThan (rms (big, 768, 256), 0.2f);
 
-        beginTest ("load resets the volumes");
+        beginTest ("load resets the volumes and the speed");
         p.setVolume (0, 0.3f);
+        p.setSpeed (1.3);
         expect (p.load ({ sine }));
         expectEquals (p.getVolume (0), 1.0f);
+        expectEquals (p.getSpeed(), 1.0);
+
+        beginTest ("speed keeps the key and moves the playhead faster");
+        p.prepare (48000, 512);
+        expect (p.load ({ sine }));
+        juce::Thread::sleep (100);                           // the read-ahead fills (40 stretched blocks read ~25600 samples)
+        p.setSpeed (2.0);                                    // clamped
+        expectEquals (p.getSpeed(), 1.5);
+        p.setSpeed (1.25);
+        p.play();
+        juce::AudioBuffer<float> heard (1, 512 * 40);
+        for (int k = 0; k < 40; ++k)
+        {
+            pull (0.0f);
+            heard.copyFrom (0, k * 512, buf, 0, 0, 512);
+            if (k % 10 == 9) juce::Thread::sleep (10);       // lets the read-ahead keep up with the faster reads
+        }
+        expectWithinAbsoluteError (p.getPositionFraction() * p.getLengthSeconds(), 40 * 512 / 48000.0 * 1.25, 0.02);
+        {
+            const int from = 9600, len = 40 * 512 - from;        // after the stretcher's ~60 ms fade-in
+            bool finite = true;
+            for (int i = from; i < from + len; ++i) finite = finite && std::isfinite (heard.getSample (0, i));
+            expect (finite, "NaN or inf in the stretched output");
+            const float level = rms (heard, from, len);
+            expect (level > 0.354f * 0.891f && level < 0.354f * 1.122f, "rms " + juce::String (level));   // within 1 dB
+            int crossings = 0;
+            for (int i = from + 1; i < from + len; ++i)
+                crossings += (heard.getSample (0, i - 1) < 0.0f) != (heard.getSample (0, i) < 0.0f);
+            expectWithinAbsoluteError (crossings / 2.0 / (len / 48000.0), 440.0, 4.4);
+        }
+
+        beginTest ("pause fades the stretched output");
+        p.pause();
+        pull (0.0f);                                         // the fade-out block
+        expectLessThan (rms (buf, 384, 128), rms (buf, 0, 128));
+        pull (0.0f);
+        expect (allEqual (buf, 0.0f));
+
+        beginTest ("at 1x after a seek the stems play directly again");
+        p.setSpeed (1.0);
+        p.setPositionFraction (0.0);
+        p.play();
+        juce::Thread::sleep (30);
+        pull (0.0f);
+        pull (0.0f);                                         // stretched, this block would still be in the ~60 ms fade-in
+        expectGreaterThan (rms (buf, 0, 512), 0.3f);
+        p.pause();
+        pull (0.0f);
 
         beginTest ("render");
         const auto a = dir.getChildFile ("a.wav"), b = dir.getChildFile ("b.wav");
