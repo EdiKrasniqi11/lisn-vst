@@ -1,4 +1,5 @@
 #include "../Source/Controls.h"
+#include "../Source/Screens.h"
 
 struct ControlsTests : juce::UnitTest
 {
@@ -24,6 +25,28 @@ struct ControlsTests : juce::UnitTest
         expectEquals (got, 1.0f);
         expectEquals (bar.getValue(), 1.0f);
         expect (! bar.getWantsKeyboardFocus());
+
+        beginTest ("SpeedStrip maps x to 0.5..1.5 in 0.05 steps and sticks at 1");
+        expectEquals (SpeedStrip::speedAt (100.0f, 100.0f, 500.0f), 0.5);
+        expectEquals (SpeedStrip::speedAt (500.0f, 100.0f, 500.0f), 1.5);
+        expectEquals (SpeedStrip::speedAt (303.0f, 100.0f, 500.0f), 1.0);   // within 4 px of the centre (300)
+        expectEquals (SpeedStrip::speedAt (400.0f, 100.0f, 500.0f), 1.25);
+        expectEquals (SpeedStrip::speedAt (362.0f, 100.0f, 500.0f), 1.15);  // 1.155 rounds to the 0.05 step 1.15
+        expectEquals (SpeedStrip::speedAt (0.0f, 100.0f, 500.0f), 0.5);     // clamped
+
+        beginTest ("SpeedStrip: setSpeed is silent, Reset reports 1 and nothing takes focus");
+        SpeedStrip strip;
+        strip.setSize (674, 30);
+        double heard = -1.0;
+        strip.onChange = [&] (double s) { heard = s; };
+        strip.setSpeed (0.85);
+        expectEquals (heard, -1.0);
+        expectEquals (strip.getSpeed(), 0.85);
+        expect (! strip.getWantsKeyboardFocus());
+        strip.mouseDoubleClick (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { 300.0f, 10.0f }, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                                  &strip, &strip, juce::Time::getCurrentTime(), { 300.0f, 10.0f }, juce::Time::getCurrentTime(), 2, false));
+        expectEquals (heard, 1.0);
+        expectEquals (strip.getSpeed(), 1.0);
     }
 };
 

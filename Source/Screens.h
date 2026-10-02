@@ -71,6 +71,37 @@ private:
 
 juce::String beatsText (double beats);   // "8 beats", "10.25 beats", "1 beat": rounded to a quarter beat
 
+// The speed row at the bottom of the stems panel (board 2C): icon + "Speed" in the 118 px name column, a slider whose 4 px
+// track fills in the accent colour from the 1x centre to the value (14 px cream thumb) with 0.5x / 0.75x / 1x / 1.25x / 1.5x
+// under it, the value ("1.15x"), "same key" and a small Ghost Reset button. Steps of 0.05, sticks at 1 for 4 px; a
+// double-click on the slider or Reset sets 1. Never takes focus.
+class SpeedStrip : public juce::Component
+{
+public:
+    SpeedStrip();
+    void setTheme (const Theme&);
+    void setSpeed (double);                      // no callback; repaints only on change
+    double getSpeed() const { return speed; }
+    // The slider's value for an x on its track [left, right]: 0.5..1.5 in steps of 0.05; within 4 px of the centre it is 1.
+    static double speedAt (float x, float left, float right);
+    std::function<void (double)> onChange;
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+
+private:
+    void set (double, bool report);
+    bool onSlider (juce::Point<int>) const;      // inside the track's x range (plus the thumb's radius) and above the ticks
+    Theme theme = themeFor ("dusk");
+    double speed = 1.0;
+    juce::Rectangle<float> track;                // the slider's track, set in resized()
+    float valueX = 0.0f, hintX = 0.0f;           // the value's and the hint's left edges, set in resized()
+    bool dragging = false;                       // the press went down on the slider
+    LisnButton reset { "Reset", LisnButton::Style::Ghost };
+};
+
 // StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, the loop band with its handles
 // over them, and the position strip while zoomed.
 class StemsScreen : public juce::Component
@@ -86,6 +117,8 @@ public:
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
     void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
     void setVolume (int row, float v);               // the row's volume bar; no callback, repaints only on change
+    void setSpeed (double v) { speedStrip.setSpeed (v); }   // the speed strip; no callback, repaints only on change
+    SpeedStrip& speedStripControl() { return speedStrip; }   // test hook
     void setAudible (juce::uint32 mask);            // bit i set = row i audible
     // The shared view: the song fractions every row shows (the whole song by default; new stems reset it).
     void setView (juce::Range<double>);             // kept inside 0..1
@@ -124,6 +157,7 @@ public:
 
     std::function<void()> onNewSong, onPlayPause;
     std::function<void (int)> onToggleMute, onSolo;
+    std::function<void (double)> onSpeed;            // the speed strip moved (0.5..1.5)
     std::function<void (int, float)> onVolume;       // a row's volume bar moved
     std::function<void (double)> onSeek;             // fraction 0..0.999
 
@@ -169,6 +203,7 @@ private:
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };
     DragChip dragChip;
+    SpeedStrip speedStrip;
     LisnButton newSong;
     juce::ThreadPool pool { 1 };                     // last member: its jobs stop before the rows go
 };

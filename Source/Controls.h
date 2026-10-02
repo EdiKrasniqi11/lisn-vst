@@ -37,6 +37,7 @@ public:
     float iconSize = 16.0f, iconStroke = 2.0f;
     int height = 34;
     float padLeft = 16.0f, padRight = 16.0f, fontSize = 13.0f;
+    float corner = 10.0f;                        // Soft is always 8
     float borderAlpha = 0.22f;                   // Ghost only (0.3 for Cancel and the error buttons)
     std::optional<juce::Colour> tint;            // Ghost "on" state: fill tint@0.22, border tint (the Loop button)
 

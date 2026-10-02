@@ -313,12 +313,115 @@ void SplittingScreen::paint (juce::Graphics& g)
 
 //==============================================================================
 // Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (4 rows end at 74+4*56+3*8=322, 6 at 74+6*36+5*6=320),
-// position strip at 375.
+// zoom position strip at 326, divider at 332, speed strip at 343.
 
 namespace
 {
     constexpr int waveWidth = 376;                        // the waveforms; their left edge is StemsScreen::waveLeft()
-    constexpr float stripY = 375.0f;                      // the position strip (4 tall) while zoomed, in the old footer's slot
+    constexpr float stripY = 326.0f;                      // the position strip (4 tall) while zoomed, between the last row and the divider
+}
+
+//==============================================================================
+SpeedStrip::SpeedStrip()
+{
+    setWantsKeyboardFocus (false);
+    setMouseClickGrabsKeyboardFocus (false);
+    reset.fontSize = 12.0f;
+    reset.height = 28;
+    reset.padLeft = reset.padRight = 10.0f;
+    reset.corner = 8.0f;
+    reset.onClick = [this] { set (1.0, true); };
+    addAndMakeVisible (reset);
+}
+
+void SpeedStrip::setTheme (const Theme& t)
+{
+    theme = t;
+    repaint();
+}
+
+void SpeedStrip::setSpeed (double v)
+{
+    set (juce::jlimit (0.5, 1.5, v), false);
+}
+
+void SpeedStrip::set (double v, bool report)
+{
+    if (juce::exactlyEqual (v, speed)) return;
+    speed = v;
+    repaint();
+    if (report && onChange != nullptr) onChange (v);
+}
+
+double SpeedStrip::speedAt (float x, float left, float right)
+{
+    const auto centre = (left + right) / 2.0f;
+    if (std::abs (x - centre) <= 4.0f) return 1.0;
+    const auto raw = 0.5 + juce::jlimit (0.0, 1.0, (double) (x - left) / (double) (right - left));
+    return juce::jlimit (0.5, 1.5, std::round (raw * 20.0) / 20.0);
+}
+
+void SpeedStrip::resized()
+{
+    reset.setBounds (getWidth() - 10 - reset.preferredWidth(), (getHeight() - reset.height) / 2, reset.preferredWidth(), reset.height);
+    hintX = (float) reset.getX() - 12.0f - (float) juce::GlyphArrangement::getStringWidth (Fonts::body (11.0f), "same key");
+    valueX = hintX - 12.0f - 48.0f;
+    track = { 10.0f + 118.0f + 12.0f, 6.0f, valueX - 12.0f - (10.0f + 118.0f + 12.0f), 4.0f };
+}
+
+void SpeedStrip::paint (juce::Graphics& g)
+{
+    const auto h = (float) getHeight();
+    const auto times = juce::String (juce::CharPointer_UTF8 ("\xc3\x97"));
+    g.setColour (Theme::cream);
+    strokeIcon (g, Icons::speed, { 10.0f, (h - 16.0f) / 2.0f, 16.0f, 16.0f }, 2.0f);
+    text (g, Fonts::body (13.0f, 700), Theme::cream, "Speed", { 10.0f + 16.0f + 6.0f, 0.0f, 118.0f - 22.0f, h }, juce::Justification::centredLeft);
+
+    const auto centre = track.getCentreX();
+    const auto x = track.getX() + (float) (speed - 0.5) * track.getWidth();
+    g.setColour (Theme::cream.withAlpha (0.16f));
+    g.fillRoundedRectangle (track, 2.0f);
+    g.setColour (theme.accent());
+    g.fillRoundedRectangle (juce::Rectangle<float> (juce::jmin (x, centre), track.getY(), std::abs (x - centre), track.getHeight()), 2.0f);
+    g.setColour (juce::Colour (0x73000000));
+    g.fillEllipse (juce::Rectangle<float> (14.0f, 14.0f).withCentre ({ x, track.getCentreY() + 1.0f }));
+    g.setColour (Theme::cream);
+    g.fillEllipse (juce::Rectangle<float> (14.0f, 14.0f).withCentre ({ x, track.getCentreY() }));
+
+    const char* labels[] = { "0.5", "0.75", "1", "1.25", "1.5" };
+    for (int i = 0; i < 5; ++i)
+    {
+        const auto cx = track.getX() + track.getWidth() * (float) i / 4.0f;   // the first and last labels sit flush with the track's ends
+        const juce::Rectangle<float> r (i == 0 ? cx : i == 4 ? cx - 50.0f : cx - 25.0f, track.getBottom() + 4.0f, 50.0f, 12.0f);
+        text (g, Fonts::body (10.0f), Theme::cream.withAlpha (0.5f), juce::String (labels[i]) + times, r,
+              i == 0 ? juce::Justification::centredLeft : i == 4 ? juce::Justification::centredRight : juce::Justification::centred);
+    }
+
+    text (g, Fonts::body (14.0f, 700), Theme::cream, juce::String (speed, 2).trimCharactersAtEnd ("0").trimCharactersAtEnd (".") + times,
+          { valueX, 0.0f, 48.0f, h }, juce::Justification::centredRight);
+    text (g, Fonts::body (11.0f), Theme::cream.withAlpha (0.55f), "same key", { hintX, 0.0f, (float) reset.getX() - 12.0f - hintX + 2.0f, h },
+          juce::Justification::centredLeft);
+}
+
+bool SpeedStrip::onSlider (juce::Point<int> p) const
+{
+    return p.x >= (int) track.getX() - 7 && p.x <= (int) track.getRight() + 7 && p.y < 18;
+}
+
+void SpeedStrip::mouseDown (const juce::MouseEvent& e)
+{
+    dragging = onSlider (e.getPosition());
+    if (dragging) set (speedAt ((float) e.x, track.getX(), track.getRight()), true);
+}
+
+void SpeedStrip::mouseDrag (const juce::MouseEvent& e)
+{
+    if (dragging) set (speedAt ((float) e.x, track.getX(), track.getRight()), true);
+}
+
+void SpeedStrip::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    if (onSlider (e.getPosition())) set (1.0, true);
 }
 
 juce::String beatsText (double beats)
@@ -344,6 +447,8 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
     addAndMakeVisible (dragChip);
     addAndMakeVisible (newSong);
     addAndMakeVisible (playButton);
+    addAndMakeVisible (speedStrip);
+    speedStrip.onChange = [this] (double s) { if (onSpeed != nullptr) onSpeed (s); };
 }
 
 StemsScreen::~StemsScreen()
@@ -356,6 +461,7 @@ void StemsScreen::setTheme (const Theme& t)
     theme = t;
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     loopButton.repaint();
+    speedStrip.setTheme (t);
     for (auto* r : rows)
         r->setTheme (t);
     repaint();
@@ -460,7 +566,7 @@ int StemsScreen::waveLeft() const   // rows sit at x 19; the waveform is at row 
 
 juce::Rectangle<int> StemsScreen::stripArea() const   // with the loop ticks
 {
-    return { waveLeft() - 2, 372, waveWidth + 4, 10 };
+    return { waveLeft() - 2, 323, waveWidth + 4, 10 };
 }
 
 int StemsScreen::headX (double f) const
@@ -814,6 +920,7 @@ void StemsScreen::resized()
     const auto chipW = dragChipWidth (dragChip.getText());
     dragChip.setBounds (newSong.getX() - 8 - chipW, 18, chipW, 34);
     loopButton.setBounds (dragChip.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
+    speedStrip.setBounds (19, 343, 674, 30);
     auto y = 74;
     for (auto* r : rows)
     {
@@ -844,6 +951,7 @@ void StemsScreen::paint (juce::Graphics& g)
 
     g.setColour (Theme::cream.withAlpha (0.12f));
     g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
+    if (g.clipRegionIntersects ({ 19, 332, 674, 1 })) g.fillRect (19.0f, 332.0f, 674.0f, 1.0f);
 
     // Position strip (only while zoomed): where the view sits in the song, the loop edges in the accent colour.
     if (view.getLength() < 1.0 && g.clipRegionIntersects (stripArea()))

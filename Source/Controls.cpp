@@ -93,7 +93,7 @@ int LisnButton::preferredWidth() const
 void LisnButton::paintButton (juce::Graphics& g, bool, bool)
 {
     const auto r = getLocalBounds().toFloat();
-    const auto radius = style == Style::Soft ? 8.0f : 10.0f;
+    const auto radius = style == Style::Soft ? 8.0f : corner;
     g.setColour (tint.has_value() ? tint->withAlpha (0.22f)
                                   : style == Style::Primary ? Theme::cream : Theme::cream.withAlpha (style == Style::Ghost ? 0.06f : 0.12f));
     g.fillRoundedRectangle (r, radius);

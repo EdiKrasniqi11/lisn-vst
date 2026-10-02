@@ -141,6 +141,7 @@ int runSnapshots (const juce::File& outDir)
         const float v[] = { 0.85f, 1.0f, 0.6f, 0.7f, 0.5f, 0.9f };
         for (int i = 0; i < 6; ++i) p.player.setVolume (i, v[i]);
         p.player.setMuted (2, true);
+        p.player.setSpeed (1.15);
         p.player.setPositionFraction (0.4);
         ed.tick();
     };
@@ -150,6 +151,12 @@ int runSnapshots (const juce::File& outDir)
         p.player.setMuted (2, false);
         p.player.setMuted (4, true);
         p.player.setLoop (0.30, 0.45);
+        ed.tick();
+    };
+    const auto slow = [volumes6] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        volumes6 (p, ed);
+        p.player.setSpeed (0.85);
         ed.tick();
     };
     const auto moving = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
@@ -173,6 +180,7 @@ int runSnapshots (const juce::File& outDir)
         { "stems6-midnight-loop", "midnight", state (Screen::Stems, true), 1.0f, sixLooping },
         { "stems4-dusk-volume", "dusk", state (Screen::Stems, false), 1.0f, volumes },
         { "stems6-midnight-volume", "midnight", state (Screen::Stems, true), 1.0f, volumes6 },
+        { "stems6-midnight-speed", "midnight", state (Screen::Stems, true), 1.0f, slow },
         { "stems4-dusk-zoom@2x", "dusk", state (Screen::Stems, false), 2.0f, zoomed },
         { "error-python-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::PythonMissing, {}, {}) },
         { "error-demucs-midnight", "midnight", withError (state (Screen::Error, false), ErrorKind::DemucsMissing, {}, "C:\\Python311\\python.exe") },

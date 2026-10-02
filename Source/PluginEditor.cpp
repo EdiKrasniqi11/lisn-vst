@@ -33,6 +33,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     };
     stems.onToggleMute = [this] (int i) { proc.player.setMuted (i, ! proc.player.isMuted (i)); };
     stems.onSolo = [this] (int i) { proc.player.solo (i); };
+    stems.onSpeed = [this] (double s) { proc.player.setSpeed (s); };
     stems.onVolume = [this] (int i, float v) { proc.player.setVolume (i, v); };
     stems.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
     stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
@@ -146,6 +147,7 @@ void StemSplitterEditor::tick()
     stems.setAudible (player.audibleMask());
     for (int i = 0; i < stems.numRows(); ++i)
         stems.setVolume (i, player.getVolume (i));
+    stems.setSpeed (player.getSpeed());
     stems.setLoop (player.getLoop(), player.isLooping());
 
     // Beat motion: fast attack, slow release; after the player stops the waves settle and stop.
