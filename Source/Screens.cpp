@@ -386,12 +386,6 @@ SpeedStrip::SpeedStrip()
 {
     setWantsKeyboardFocus (false);
     setMouseClickGrabsKeyboardFocus (false);
-    reset.fontSize = 12.0f;
-    reset.height = 28;
-    reset.padLeft = reset.padRight = 10.0f;
-    reset.corner = 8.0f;
-    reset.onClick = [this] { set (1.0, true); };
-    addAndMakeVisible (reset);
 }
 
 void SpeedStrip::setTheme (const Theme& t)
@@ -403,6 +397,19 @@ void SpeedStrip::setTheme (const Theme& t)
 void SpeedStrip::setSpeed (double v)
 {
     set (juce::jlimit (0.5, 1.5, v), false);
+}
+
+void SpeedStrip::setPitch (int st)
+{
+    setKey (juce::jlimit (-12, 12, st), false);
+}
+
+void SpeedStrip::setKey (int st, bool report)
+{
+    if (st == pitch) return;
+    pitch = st;
+    repaint();
+    if (report && onPitch != nullptr) onPitch (st);
 }
 
 void SpeedStrip::set (double v, bool report)
@@ -423,8 +430,7 @@ double SpeedStrip::speedAt (float x, float left, float right)
 
 void SpeedStrip::resized()
 {
-    reset.setBounds (getWidth() - 10 - reset.preferredWidth(), (getHeight() - reset.height) / 2, reset.preferredWidth(), reset.height);
-    hintX = (float) reset.getX() - 12.0f - (float) juce::GlyphArrangement::getStringWidth (Fonts::body (11.0f), "same key");
+    hintX = (float) getWidth() - 10.0f - 12.0f - (float) juce::GlyphArrangement::getStringWidth (Fonts::body (11.0f), "same key");
     valueX = hintX - 12.0f - 48.0f;
     track = { 10.0f + 118.0f + 12.0f, 6.0f, valueX - 12.0f - (10.0f + 118.0f + 12.0f), 4.0f };
 }
@@ -459,8 +465,22 @@ void SpeedStrip::paint (juce::Graphics& g)
 
     text (g, Fonts::body (14.0f, 700), Theme::cream, juce::String (speed, 2).trimCharactersAtEnd ("0").trimCharactersAtEnd (".") + times,
           { valueX, 0.0f, 48.0f, h }, juce::Justification::centredRight);
-    text (g, Fonts::body (11.0f), Theme::cream.withAlpha (0.55f), "same key", { hintX, 0.0f, (float) reset.getX() - 12.0f - hintX + 2.0f, h },
+    const auto key = pitch == 0 ? juce::String ("same key") : (pitch > 0 ? "+" : "") + juce::String (pitch) + " st";
+    const auto keyW = (float) getWidth() - 10.0f - 12.0f - hintX;
+    text (g, Fonts::body (11.0f, pitch == 0 ? 400 : 700), Theme::cream.withAlpha (pitch == 0 ? 0.55f : 1.0f), key, { hintX, 0.0f, keyW, h },
           juce::Justification::centredLeft);
+    // Up and down chevrons after it: the key drags up or down.
+    juce::Path chevrons;
+    const auto cx = hintX + keyW + 6.0f, cy = h / 2.0f;
+    chevrons.startNewSubPath (cx - 3.0f, cy - 3.0f); chevrons.lineTo (cx, cy - 6.0f); chevrons.lineTo (cx + 3.0f, cy - 3.0f);
+    chevrons.startNewSubPath (cx - 3.0f, cy + 3.0f); chevrons.lineTo (cx, cy + 6.0f); chevrons.lineTo (cx + 3.0f, cy + 3.0f);
+    g.setColour (Theme::cream.withAlpha (0.55f));
+    g.strokePath (chevrons, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
+bool SpeedStrip::onKey (juce::Point<int> p) const
+{
+    return p.x >= (int) hintX - 4;
 }
 
 bool SpeedStrip::onSlider (juce::Point<int> p) const
@@ -468,20 +488,37 @@ bool SpeedStrip::onSlider (juce::Point<int> p) const
     return p.x >= (int) track.getX() - 7 && p.x <= (int) track.getRight() + 7 && p.y < 18;
 }
 
+void SpeedStrip::mouseMove (const juce::MouseEvent& e)
+{
+    setMouseCursor (onKey (e.getPosition()) ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
+}
+
 void SpeedStrip::mouseDown (const juce::MouseEvent& e)
 {
-    dragging = onSlider (e.getPosition());
+    draggingKey = onKey (e.getPosition());
+    keyDragFrom = pitch;
+    dragging = ! draggingKey && onSlider (e.getPosition());
     if (dragging) set (speedAt ((float) e.x, track.getX(), track.getRight()), true);
 }
 
 void SpeedStrip::mouseDrag (const juce::MouseEvent& e)
 {
+    if (draggingKey)   // 6 px a semitone, up is higher
+        setKey (juce::jlimit (-12, 12, keyDragFrom - e.getDistanceFromDragStartY() / 6), true);
     if (dragging) set (speedAt ((float) e.x, track.getX(), track.getRight()), true);
 }
 
 void SpeedStrip::mouseDoubleClick (const juce::MouseEvent& e)
 {
-    if (onSlider (e.getPosition())) set (1.0, true);
+    if (onKey (e.getPosition())) setKey (0, true);
+    else if (onSlider (e.getPosition())) set (1.0, true);
+}
+
+void StemsScreen::setSpeed (double v)
+{
+    if (juce::exactlyEqual (v, speedStrip.getSpeed())) return;
+    speedStrip.setSpeed (v);
+    repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle's BPM follows the speed
 }
 
 juce::String beatsText (double beats)
@@ -508,7 +545,8 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
     addAndMakeVisible (newSong);
     addAndMakeVisible (playButton);
     addAndMakeVisible (speedStrip);
-    speedStrip.onChange = [this] (double s) { if (onSpeed != nullptr) onSpeed (s); };
+    speedStrip.onChange = [this] (double s) { repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16); if (onSpeed != nullptr) onSpeed (s); };
+    speedStrip.onPitch = [this] (int st) { if (onPitch != nullptr) onPitch (st); };
 }
 
 StemsScreen::~StemsScreen()
@@ -1006,7 +1044,7 @@ void StemsScreen::paint (juce::Graphics& g)
         const auto x = 19.0f + 36.0f + 12.0f, w = (float) loopButton.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
         text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
         auto subtitle = timeText;
-        if (tempo.bpm > 0.0) subtitle << dot << juce::roundToInt (tempo.bpm) << " BPM";
+        if (tempo.bpm > 0.0) subtitle << dot << juce::roundToInt (tempo.bpm * speedStrip.getSpeed()) << " BPM";   // the tempo you hear
         if (loopOn)
         {
             subtitle << dot << "loop " << mmss (loopRange.getStart() * length)
@@ -1166,7 +1204,7 @@ namespace
         { { Icons::play, "Play or pause", "Every stem plays together, in sync", { key ("Space") } },
           { Icons::jump, "Jump and scrub", "Click the waves to jump there, drag to scrub", { mouse ("Click"), mouse ("Drag") } },
           { Icons::home, "Back to the start", "Back to 0:00, or to the loop's start while looping", { key ("Home") } },
-          { Icons::speed, "Change the speed", "Drag the Speed strip; the key stays the same", { mouse ("Speed"), orWord, mouse ("Reset") } } },
+          { Icons::speed, "Speed and key", "Drag Speed; drag the key up or down, 12 semitones each way", { mouse ("Speed"), orWord, mouse ("Key") } } },
         { { Icons::file, "Split a song", "Drop it on the panel or click Browse. 6 stems adds guitar and piano", { mouse ("Drop") } },
           { Icons::speakerOff, "Mute a stem", "Click its light; stems 1 to 6 go top to bottom", { mouse ("Light"), orWord, key (oneToSix) } },
           { Icons::speaker, "Solo a stem", "Only that stem plays; do it again to hear them all",

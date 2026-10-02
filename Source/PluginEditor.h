@@ -47,7 +47,7 @@ private:
     void showScreen();                               // the shown screen, or the help sheet in its place
     void applyTheme (const Theme&);
     // Those stems at those gains over the loop (or the song): what to render and its cached dest (none when nothing is heard).
-    RenderJob::Request renderRequest (const std::vector<float>& gains, double speed);
+    RenderJob::Request renderRequest (const std::vector<float>& gains, double speed, int semitones = 0);
     juce::File renderFile (const std::vector<float>& gains, double speed);   // renderRequest's dest, rendered here unless cached
     void prepareMix();                               // at a speed other than 1, renders the mix on mixJob; sets the chip
     void startSplit (const juce::File&);             // cancels mixJob first: it must not hold stems a re-split replaces

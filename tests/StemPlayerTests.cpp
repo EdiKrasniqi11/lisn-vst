@@ -470,6 +470,15 @@ struct StemPlayerTests : juce::UnitTest
         expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 0.0f }, 1.0, { 58.25, 86.5 }),
                       juce::String ("Song - vocals (0.58.25-1.26.50).wav"));
         expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 0.0f, 0.0f }, 1.0, {}), juce::String());
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 1.0f }, 1.0, {}, 3), juce::String ("Song - vocals+drums +3st.wav"));
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 1.0f }, 1.25, {}, -12), juce::String ("Song - vocals+drums x1.25 -12st.wav"));
+        {
+            StemPlayer p;
+            p.setPitch (20);
+            expectEquals (p.getPitch(), 12);
+            p.setPitch (-20);
+            expectEquals (p.getPitch(), -12);
+        }
 
         beginTest ("render keeps the key at other speeds, at the exact length");
         for (const double s : { 0.75, 1.25 })

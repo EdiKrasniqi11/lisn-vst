@@ -90,6 +90,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.onToggleMute = [this] (int i) { proc.player.setMuted (i, ! proc.player.isMuted (i)); };
     stems.onSolo = [this] (int i) { proc.player.solo (i); };
     stems.onSpeed = [this] (double s) { proc.player.setSpeed (s); };
+    stems.onPitch = [this] (int st) { proc.player.setPitch (st); };
     stems.onVolume = [this] (int i, float v) { proc.player.setVolume (i, v); };
     stems.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
     stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
@@ -97,8 +98,9 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.mixFile = [this]   // the mix: what you hear. A stretched mix only comes from mixJob's cache, never rendered here
     {
         const auto speed = proc.player.getSpeed();
-        if (speed == 1.0) return renderFile (proc.player.mixGains(), 1.0);
-        const auto dest = renderRequest (proc.player.mixGains(), speed).dest;
+        const auto pitch = proc.player.getPitch();
+        if (speed == 1.0 && pitch == 0) return renderFile (proc.player.mixGains(), 1.0);
+        const auto dest = renderRequest (proc.player.mixGains(), speed, pitch).dest;
         return dest.existsAsFile() ? dest : juce::File();
     };
     stems.stemFile = [this] (int i)   // single stems are the originals: gain 1, speed 1
@@ -258,6 +260,7 @@ void StemSplitterEditor::tick()
     for (int i = 0; i < stems.numRows(); ++i)
         stems.setVolume (i, player.getVolume (i));
     stems.setSpeed (player.getSpeed());
+    stems.setPitch (player.getPitch());
     stems.setLoop (player.getLoop(), player.isLooping());
     if (s.screen == Screen::Stems)
         prepareMix();
@@ -383,7 +386,7 @@ void StemSplitterEditor::startSplit (const juce::File& input)
     proc.startSplit (input);
 }
 
-RenderJob::Request StemSplitterEditor::renderRequest (const std::vector<float>& gains, double speed)
+RenderJob::Request StemSplitterEditor::renderRequest (const std::vector<float>& gains, double speed, int semitones)
 {
     auto& p = proc.player;
     if (! shown.has_value()) return {};
@@ -393,10 +396,10 @@ RenderJob::Request StemSplitterEditor::renderRequest (const std::vector<float>& 
     const auto len = p.getLengthSeconds();
     const auto loopSec = p.isLooping() ? juce::Range<double> (p.getLoop().getStart() * len, p.getLoop().getEnd() * len)
                                        : juce::Range<double>();
-    const auto name = StemPlayer::renderName (shown->songName, names, gains, speed, loopSec);
+    const auto name = StemPlayer::renderName (shown->songName, names, gains, speed, loopSec, semitones);
     if (name.isEmpty()) return {};
     const auto from = p.isLooping() ? loopSec.getStart() : 0.0, to = p.isLooping() ? loopSec.getEnd() : len;
-    return { files, gains, from, to, speed, stems.getDir().getChildFile ("renders").getChildFile (name) };
+    return { files, gains, from, to, speed, stems.getDir().getChildFile ("renders").getChildFile (name), semitones };
 }
 
 juce::File StemSplitterEditor::renderFile (const std::vector<float>& gains, double speed)
@@ -413,13 +416,14 @@ void StemSplitterEditor::prepareMix()
     auto& p = proc.player;
     const juce::String plain = p.isLooping() ? "Drag loop" : "Drag mix";
     const auto speed = p.getSpeed();
-    if (speed == 1.0)
+    const auto pitch = p.getPitch();
+    if (speed == 1.0 && pitch == 0)
     {
         mixJob.cancel();
         stems.setMixChip (plain, std::nullopt);
         return;
     }
-    const auto r = renderRequest (p.mixGains(), speed);
+    const auto r = renderRequest (p.mixGains(), speed, pitch);
     const auto now = juce::Time::getMillisecondCounterHiRes();
     if (r.dest != mixKey.dest || r.startSec != mixKey.startSec || r.endSec != mixKey.endSec)
     {

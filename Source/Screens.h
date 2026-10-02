@@ -91,8 +91,8 @@ juce::String beatsText (double beats);   // "8 beats", "10.25 beats", "1 beat": 
 
 // The speed row at the bottom of the stems panel (board 2C): icon + "Speed" in the 118 px name column, a slider whose 4 px
 // track fills in the accent colour from the 1x centre to the value (14 px cream thumb) with 0.5x / 0.75x / 1x / 1.25x / 1.5x
-// under it, the value ("1.15x"), "same key" and a small Ghost Reset button. Steps of 0.05, sticks at 1 for 4 px; a
-// double-click on the slider or Reset sets 1. Never takes focus.
+// under it, the value ("1.15x") and the key ("same key", "+3 st"). Steps of 0.05, sticks at 1 for 4 px; a double-click
+// on the slider sets 1. The key drags up or down, -12..12 semitones; a double-click on it sets 0. Never takes focus.
 class SpeedStrip : public juce::Component
 {
 public:
@@ -100,6 +100,9 @@ public:
     void setTheme (const Theme&);
     void setSpeed (double);                      // no callback; repaints only on change
     double getSpeed() const { return speed; }
+    void setPitch (int);                         // no callback; repaints only on change
+    int getPitch() const { return pitch; }
+    std::function<void (int)> onPitch;
     // The slider's value for an x on its track [left, right]: 0.5..1.5 in steps of 0.05; within 4 px of the centre it is 1.
     static double speedAt (float x, float left, float right);
     std::function<void (double)> onChange;
@@ -108,16 +111,21 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
 
 private:
     void set (double, bool report);
+    void setKey (int, bool report);
+    bool onKey (juce::Point<int>) const;         // the key's text
     bool onSlider (juce::Point<int>) const;      // inside the track's x range (plus the thumb's radius) and above the ticks
     Theme theme = themeFor ("dusk");
     double speed = 1.0;
     juce::Rectangle<float> track;                // the slider's track, set in resized()
     float valueX = 0.0f, hintX = 0.0f;           // the value's and the hint's left edges, set in resized()
     bool dragging = false;                       // the press went down on the slider
-    LisnButton reset { "Reset", LisnButton::Style::Ghost };
+    int pitch = 0;
+    int keyDragFrom = 0;                         // the pitch when the press went down on the key
+    bool draggingKey = false;
 };
 
 // StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, the loop band with its handles
@@ -135,7 +143,9 @@ public:
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
     void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
     void setVolume (int row, float v);               // the row's volume bar; no callback, repaints only on change
-    void setSpeed (double v) { speedStrip.setSpeed (v); }   // the speed strip; no callback, repaints only on change
+    void setSpeed (double v);                    // the speed strip and the subtitle's BPM; no callback
+    void setPitch (int st) { speedStrip.setPitch (st); }
+    std::function<void (int)> onPitch;
     SpeedStrip& speedStripControl() { return speedStrip; }   // test hook
     void setAudible (juce::uint32 mask);            // bit i set = row i audible
     // The shared view: the song fractions every row shows (the whole song by default; new stems reset it).

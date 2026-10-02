@@ -58,10 +58,11 @@ namespace
     // the first outputSeekLength samples, process the rest into all but the tail, then flush the tail. A range no longer
     // than that look-ahead is padded with silence to just past it and the output trimmed back to the exact length.
     bool writeStretched (juce::AudioFormatWriter& w, juce::OwnedArray<juce::AudioFormatReader>& readers, const std::vector<float>& levels,
-                         juce::int64 first, juce::int64 last, double speed, double rate, const std::function<bool (float)>& onProgress)
+                         juce::int64 first, juce::int64 last, double speed, int semitones, double rate, const std::function<bool (float)>& onProgress)
     {
         signalsmith::stretch::SignalsmithStretch<float> st;
         st.presetDefault (2, (float) rate);
+        st.setTransposeSemitones ((float) semitones);
         const auto inLen = last - first, outLen = (juce::int64) std::llround ((double) inLen / speed);
         const int seekLen = st.outputSeekLength ((float) speed);
         const auto padded = juce::jmax (inLen, (juce::int64) seekLen + 1);
@@ -247,6 +248,7 @@ void StemPlayer::unload()
     for (auto& m : muted) m = false;
     for (auto& v : volumes) v = 1.0f;
     speed = 1.0;
+    pitch = 0;
     looping = false;
     loop = {};
     loopStart = loopEnd = origin = base = 0;
@@ -371,6 +373,11 @@ void StemPlayer::setSpeed (double s)
     speed = std::round (juce::jlimit (0.5, 1.5, s) * 100.0) / 100.0;   // hundredths, as renderName names it; near 1 is exactly 1
 }
 
+void StemPlayer::setPitch (int semitones)
+{
+    pitch = juce::jlimit (-12, 12, semitones);
+}
+
 void StemPlayer::setLoop (double a, double b)
 {
     // Re-base first: the bounds change below, and the transport must never see a finished stream meanwhile.
@@ -397,10 +404,11 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
     juce::ScopedNoDenormals noDenormals;
     const int total = buffer.getNumSamples(), stems = stemCount.load (std::memory_order_relaxed);
     const double rate = speed.load (std::memory_order_relaxed);
+    const int semitones = pitch.load (std::memory_order_relaxed);
     if (restretch.exchange (false, std::memory_order_relaxed))
         stretching = false;                                                    // a play or seek: at 1x the stems play directly
     bool fadeDirect = false;                                                   // the first chunk after engaging mid-play
-    if (! stretching && ! juce::exactlyEqual (rate, 1.0))
+    if (! stretching && (! juce::exactlyEqual (rate, 1.0) || semitones != 0))
     {
         stretch->st.reset();                                                   // engages; its first ~60 ms fade in
         stretching = true;
@@ -437,6 +445,7 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
         {
             // ponytail: what is heard trails the playhead by the stretcher's latency (~0.1 s). Upgrade path: report the
             // position minus that latency times the speed.
+            stretch->st.setTransposeSemitones ((float) semitones);   // no allocation: it stores a factor
             stretch->st.process (mixIn.getArrayOfReadPointers(), in, mix.getArrayOfWritePointers(), n);
             if (fadeDirect)   // over the stretcher's silent pre-roll, the direct audio that would have played next fades out
             {
@@ -461,7 +470,7 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
 }
 
 bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector<float>& gains, double startSec, double endSec,
-                         double speed, const juce::File& dest, const std::function<bool (float)>& onProgress)
+                         double speed, const juce::File& dest, const std::function<bool (float)>& onProgress, int semitones)
 {
     juce::AudioFormatManager fm;
     fm.registerBasicFormats();
@@ -494,8 +503,9 @@ bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector
         {
             out.release();   // the writer owns the stream now
             const double s = juce::jlimit (0.5, 1.5, speed);
-            ok = juce::exactlyEqual (s, 1.0) ? writeMix (*w, readers, levels, first, last, onProgress)
-                                             : writeStretched (*w, readers, levels, first, last, s, rate, onProgress);
+            const int st = juce::jlimit (-12, 12, semitones);
+            ok = juce::exactlyEqual (s, 1.0) && st == 0 ? writeMix (*w, readers, levels, first, last, onProgress)
+                                                        : writeStretched (*w, readers, levels, first, last, s, st, rate, onProgress);
         }
     }
     if (ok && part.moveFileTo (dest)) return true;   // the move fails if dest is open in another app
@@ -504,7 +514,7 @@ bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector
 }
 
 juce::String StemPlayer::renderName (const juce::String& songFile, const juce::StringArray& stemNames,
-                                     const std::vector<float>& gains, double speed, juce::Range<double> loopSeconds)
+                                     const std::vector<float>& gains, double speed, juce::Range<double> loopSeconds, int semitones)
 {
     juce::StringArray parts;
     for (int i = 0; i < stemNames.size() && i < (int) gains.size(); ++i)
@@ -521,6 +531,7 @@ juce::String StemPlayer::renderName (const juce::String& songFile, const juce::S
     };
     auto name = songFile.upToLastOccurrenceOf (".", false, false) + " - " + parts.joinIntoString ("+");
     if (! juce::exactlyEqual (speed, 1.0)) name << " x" << juce::String (speed, 2);
+    if (semitones != 0) name << " " << (semitones > 0 ? "+" : "") << semitones << "st";
     if (! loopSeconds.isEmpty()) name << " (" << clock (loopSeconds.getStart()) << "-" << clock (loopSeconds.getEnd()) << ")";
     return juce::File::createLegalFileName (name + ".wav");
 }

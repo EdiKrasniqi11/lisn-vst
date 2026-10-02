@@ -28,7 +28,7 @@ void RenderJob::run()
 {
     const auto& r = request;
     const bool ok = StemPlayer::render (r.stems, r.gains, r.startSec, r.endSec, r.speed, r.dest,
-                                        [this] (float f) { progress = f; return ! threadShouldExit(); });
+                                        [this] (float f) { progress = f; return ! threadShouldExit(); }, r.semitones);
     if (ok) progress = 1.0f;
     state = ok ? State::done : threadShouldExit() ? State::idle : State::failed;
 }

@@ -7,7 +7,7 @@
 class RenderJob : private juce::Thread
 {
 public:
-    struct Request { juce::Array<juce::File> stems; std::vector<float> gains; double startSec = 0, endSec = 0, speed = 1.0; juce::File dest; };
+    struct Request { juce::Array<juce::File> stems; std::vector<float> gains; double startSec = 0, endSec = 0, speed = 1.0; juce::File dest; int semitones = 0; };
     enum class State { idle, running, done, failed };
     RenderJob();
     ~RenderJob() override;                       // cancel()
