@@ -325,6 +325,10 @@ struct StemPlayerTests : juce::UnitTest
         juce::Thread::sleep (100);                           // the read-ahead fills (40 stretched blocks read ~25600 samples)
         p.setSpeed (2.0);                                    // clamped
         expectEquals (p.getSpeed(), 1.5);
+        p.setSpeed (0.99999999);                             // rounded to hundredths, as renderName names it
+        expectEquals (p.getSpeed(), 1.0);
+        p.setSpeed (1.234);
+        expectEquals (p.getSpeed(), 1.23);
         p.setSpeed (1.25);
         p.play();
         juce::AudioBuffer<float> heard (1, 512 * 40);
@@ -365,6 +369,28 @@ struct StemPlayerTests : juce::UnitTest
                         "the first block after a resume ramps in");
         pull (0.0f);                                         // stretched, this block would still be in the ~60 ms fade-in
         expectGreaterThan (rms (buf, 0, 512), 0.3f);
+        p.pause();
+        pull (0.0f);
+
+        beginTest ("engaging the stretcher mid-play fades the direct audio out, not to silence");
+        expect (p.load ({ sine }));
+        juce::Thread::sleep (100);                           // the read-ahead fills
+        p.play();
+        for (int k = 0; k < 5; ++k) pull (0.0f);             // 1x: the stems play directly
+        p.setSpeed (1.25);
+        pull (0.0f);                                         // the engaging block: the stretcher is still in its pre-roll
+        expectGreaterThan (rms (buf, 0, 64), 0.2f);
+
+        beginTest ("a loop edit that keeps the playhead does not reset the stretcher");
+        for (int k = 0; k < 20; ++k)                         // ~0.2 s: past the stretcher's fade-in
+        {
+            pull (0.0f);
+            if (k % 10 == 9) juce::Thread::sleep (10);
+        }
+        p.setLoop (0.0, 0.9);                                // the playhead (~0.3 s) is inside, so it stays
+        juce::Thread::sleep (30);                            // the read-ahead refills at the re-based range
+        pull (0.0f);
+        expectGreaterThan (rms (buf, 0, 512), 0.3f);         // a reset drops to the pre-roll; the engage fade-out alone is ~0.2
         p.pause();
         pull (0.0f);
 

@@ -49,8 +49,9 @@ public:
     void addTo (juce::AudioBuffer<float>& buffer);   // audio thread; idle = two relaxed atomic loads, then return
     float takePeak() { return peak.exchange (0.0f); }  // highest mix level since the last call
 
-    // Playback speed 0.5..1.5 (clamped) that keeps the key. At exactly 1 the stems play directly; otherwise every block
-    // goes through a time-stretcher, which stays engaged until the next play() or seek. load() resets it to 1.
+    // Playback speed 0.5..1.5 (clamped, rounded to hundredths) that keeps the key. At exactly 1 the stems play directly;
+    // otherwise every block goes through a time-stretcher, which stays engaged until the next play() or a seek that moves
+    // the playhead (a loop edit that keeps it does not reset the stretcher). load() resets it to 1.
     void setSpeed (double);
     double getSpeed() const { return speed.load(); }
 
@@ -82,7 +83,7 @@ private:
     juce::AudioBuffer<float> scratch, mix, mixIn;   // 2 * maxStems channels for 1.5x a block / stereo, a block / stereo, 1.5x
     std::unique_ptr<Stretch> stretch;
     std::atomic<double> speed { 1.0 };
-    std::atomic<bool> restretch { false };          // play() and seeks: the next block decides the path again
+    std::atomic<bool> restretch { false };          // play(), unload() and moving seeks: the next block decides the path again
     bool stretching = false;                        // audio thread: blocks go through the stretcher
     double carry = 0.0;                             // audio thread: the part of an input sample owed to the next block
     float outGain = 1.0f;                           // audio thread: the stretched output's level at the end of the last block

@@ -254,6 +254,7 @@ void StemPlayer::unload()
     lengthSec = 0;
     readPos = 0;
     reachedEnd = false;   // an end not yet taken belonged to the previous song
+    restretch = true;     // a new song never inherits the stretcher
 }
 
 void StemPlayer::play()
@@ -302,13 +303,15 @@ void StemPlayer::seekSource (juce::int64 songSample, bool loopOn)
     // BufferingAudioSource keeps its buffered audio when a seek lands inside it, and that audio was mapped with the old loop
     // setting. So every seek jumps to a fresh linear range past anything it can have buffered; songPosition() maps it back.
     // base and origin are published before `looping`, so getTotalLength() never falls behind the playing position.
-    const auto fresh = juce::jmax (base.load(), linearPosition()) + 2 * readAheadSamples;
+    const auto linear = linearPosition();
+    const bool moves = songSample != songPosition (linear);   // a loop edit re-bases in place: the stretcher keeps going
+    const auto fresh = juce::jmax (base.load(), linear) + 2 * readAheadSamples;
     base = fresh;
     origin = songSample;
     looping = loopOn;
     transport.setPosition ((double) fresh / sourceRate);   // a no-op until prepare(), which repeats the seek
     readPos = (juce::int64) ((double) fresh * hostRate / sourceRate);
-    restretch = true;
+    if (moves) restretch = true;
 }
 
 void StemPlayer::setPositionFraction (double f)
@@ -365,7 +368,7 @@ std::vector<float> StemPlayer::mixGains() const
 
 void StemPlayer::setSpeed (double s)
 {
-    speed = juce::jlimit (0.5, 1.5, s);
+    speed = std::round (juce::jlimit (0.5, 1.5, s) * 100.0) / 100.0;   // hundredths, as renderName names it; near 1 is exactly 1
 }
 
 void StemPlayer::setLoop (double a, double b)
@@ -396,12 +399,14 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
     const double rate = speed.load (std::memory_order_relaxed);
     if (restretch.exchange (false, std::memory_order_relaxed))
         stretching = false;                                                    // a play or seek: at 1x the stems play directly
+    bool fadeDirect = false;                                                   // the first chunk after engaging mid-play
     if (! stretching && ! juce::exactlyEqual (rate, 1.0))
     {
         stretch->st.reset();                                                   // engages; its first ~60 ms fade in
         stretching = true;
         carry = 0.0;
         outGain = 1.0f;
+        fadeDirect = sounding;
     }
     float blockPeak = 0.0f;
     for (int start = 0; start < total; start += mix.getNumSamples())          // chunks if the host exceeds its block size
@@ -433,6 +438,12 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
             // ponytail: what is heard trails the playhead by the stretcher's latency (~0.1 s). Upgrade path: report the
             // position minus that latency times the speed.
             stretch->st.process (mixIn.getArrayOfReadPointers(), in, mix.getArrayOfWritePointers(), n);
+            if (fadeDirect)   // over the stretcher's silent pre-roll, the direct audio that would have played next fades out
+            {
+                for (int ch = 0; ch < 2; ++ch)
+                    mix.addFromWithRamp (ch, 0, mixIn.getReadPointer (ch), juce::jmin (n, in), 1.0f, 0.0f);
+                fadeDirect = false;
+            }
             const float fade = want ? 1.0f : 0.0f;
             mix.applyGainRamp (0, n, outGain, fade);
             outGain = fade;
