@@ -7,6 +7,16 @@
 // it paints only its own content over the WaveBackground panel. Nothing here takes keyboard focus.
 
 // Main.dc.html header, bounds (24, 16, 712, 44): "LISN StemSplitter", then [Dusk | Midnight] and [4 stems | 6 stems].
+// Board 1A's round Minimise / Close buttons: 32 px, cream@0.18 border, rgba(32,18,27,.55) fill.
+class WindowButton : public juce::Button
+{
+public:
+    explicit WindowButton (bool closeIcon);
+    void paintButton (juce::Graphics&, bool over, bool down) override;
+private:
+    bool close;
+};
+
 class Header : public juce::Component
 {
 public:
@@ -16,13 +26,21 @@ public:
     void setEnabledSwitches (bool);                // disabled pills are drawn at 0.55
     std::function<void (juce::String)> onTheme;    // "dusk" / "midnight"
     std::function<void (bool)> onSixStems;
+    // The desktop app (board 1A): the header is the title bar. It reads "LISN", gets Minimise / Close after the pills,
+    // and a drag on its empty space moves the window.
+    void makeTitleBar (std::function<void()> minimise, std::function<void()> close);
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
 
 private:
     juce::GlyphArrangement title;                  // "LISN StemSplitter", shaped once: the header repaints with every motion frame
     SegmentedPill themePill, stemsPill;
+    WindowButton minimiseButton { false }, closeButton { true };
+    bool titleBar = false;
+    juce::ComponentDragger dragger;
 };
 
 // Empty.dc.html: dashed drop zone, Browse, formats and the stems you'll get.
@@ -71,6 +89,45 @@ private:
 
 juce::String beatsText (double beats);   // "8 beats", "10.25 beats", "1 beat": rounded to a quarter beat
 
+// The row at the bottom of the stems panel (board 5B): a Tempo box ("106 BPM" over "1.15x of 92", or "1.15x" over "Speed"
+// with no tempo) and a Key box ("+0 st" over "Key"), each with up / down chevrons. A vertical drag on a box changes it (up is
+// more), a click on a chevron steps it, a double-click resets it. Tempo steps 1 BPM (0.05x with no tempo), 0.5x..2x; Key steps
+// 1 semitone, -12..12. The mix chip sits at the row's right end (StemsScreen lays it out). Never takes focus.
+class SpeedStrip : public juce::Component
+{
+public:
+    SpeedStrip();
+    void setTheme (const Theme&) {}
+    void setSpeed (double);                      // no callback; repaints only on change
+    double getSpeed() const { return speed; }
+    void setPitch (int);                         // no callback; repaints only on change
+    int getPitch() const { return pitch; }
+    void setBpm (double songBpm);                // the song's own tempo; 0 = unknown (the box shows the speed instead)
+    // The speed for a tempo box value `steps` steps away from `from`: whole BPM when bpm > 0, else 0.05x steps; 0.5..2.
+    static double stepSpeed (double from, int steps, double bpm);
+    std::function<void (double)> onChange;
+    std::function<void (int)> onPitch;
+    juce::Rectangle<int> tempoBox() const { return { 0, 1, 140, 38 }; }
+    juce::Rectangle<int> keyBox() const   { return { 150, 1, 112, 38 }; }
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
+
+private:
+    void set (double, bool report);
+    void setKey (int, bool report);
+    void paintBox (juce::Graphics&, juce::Rectangle<int>, const char* icon, const juce::String& value, const juce::String& caption);
+    enum class Target { none, tempo, key };
+    Target targetAt (juce::Point<int>) const;
+    double speed = 1.0, bpm = 0.0, dragFromSpeed = 1.0;
+    int pitch = 0, dragFromPitch = 0;
+    Target dragging = Target::none;
+    bool moved = false;
+};
+
 // StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, the loop band with its handles
 // over them, and the position strip while zoomed.
 class StemsScreen : public juce::Component
@@ -85,6 +142,11 @@ public:
     juce::File getDir() const { return dir; }
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
     void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
+    void setVolume (int row, float v);               // the row's volume bar; no callback, repaints only on change
+    void setSpeed (double v);                    // the speed strip and the subtitle's BPM; no callback
+    void setPitch (int st) { speedStrip.setPitch (st); }
+    std::function<void (int)> onPitch;
+    SpeedStrip& speedStripControl() { return speedStrip; }   // test hook
     void setAudible (juce::uint32 mask);            // bit i set = row i audible
     // The shared view: the song fractions every row shows (the whole song by default; new stems reset it).
     void setView (juce::Range<double>);             // kept inside 0..1
@@ -112,8 +174,12 @@ public:
     // handle); elsewhere a click seeks, a drag scrubs, and a Ctrl+drag of 4 px or more makes a new loop. Loops go to
     // onSetLoop on release.
     void waveMouse (WaveMouse, double fraction, bool alt, bool ctrl = false);
+    int waveLeft() const;                            // the waveforms' left edge in this screen's coordinates
+    juce::Rectangle<int> stripArea() const;
     int hotEdge() const { return hot; }              // 0 = loop start, 1 = loop end, -1 = none (test hook)
     juce::String chipText() const { return dragChip.getText(); }   // test hook
+    // The Drag mix chip's text ("Drag mix", "Preparing 40%" ...) and progress line; its width follows the text.
+    void setMixChip (const juce::String& text, std::optional<float> progress);
     std::function<void (double, double)> onSetLoop;  // a finished loop drag, a handle trim or defaultLoop (snapped unless Alt)
     std::function<void()> onToggleLoop;
     std::function<juce::File()> mixFile;             // the Drag mix / Drag loop file
@@ -121,6 +187,8 @@ public:
 
     std::function<void()> onNewSong, onPlayPause;
     std::function<void (int)> onToggleMute, onSolo;
+    std::function<void (double)> onSpeed;            // the speed strip moved (0.5..1.5)
+    std::function<void (int, float)> onVolume;       // a row's volume bar moved
     std::function<void (double)> onSeek;             // fraction 0..0.999
 
     void paint (juce::Graphics&) override;
@@ -165,6 +233,7 @@ private:
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };
     DragChip dragChip;
+    SpeedStrip speedStrip;
     LisnButton newSong;
     juce::ThreadPool pool { 1 };                     // last member: its jobs stop before the rows go
 };

@@ -35,7 +35,8 @@ set(LISN_SOURCES
     Source/Controls.cpp
     Source/StemRow.cpp
     Source/UiState.cpp
-    Source/Screens.cpp)
+    Source/Screens.cpp
+    Source/RenderJob.cpp)
 
 juce_add_plugin(StemSplitter
     COMPANY_NAME "LISN"
@@ -73,9 +74,11 @@ target_sources(lisn_tests PRIVATE
     tests/WaveGeometryTests.cpp
     tests/FrostTests.cpp
     tests/WaveBackgroundTests.cpp
+    tests/ControlsTests.cpp
     tests/StemRowTests.cpp
     tests/UiStateTests.cpp
     tests/OpenWithTests.cpp
+    tests/RenderJobTests.cpp
     tests/Snapshots.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE

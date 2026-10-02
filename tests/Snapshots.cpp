@@ -1,8 +1,11 @@
 #include "../Source/PluginEditor.h"
 #include <cstdio>
+#include <map>
 
-// lisn_tests --snapshots <dir>: every screen rendered to PNG from synthetic stems.
-// lisn_tests --bench: motion frame, full paint and processBlock timings; fails when a motion frame averages over 4 ms.
+// lisn_tests --snapshots <dir>: every screen rendered to PNG from synthetic stems; fails unless the intro's last frame
+// equals the plain frame.
+// lisn_tests --bench: motion frame, full paint, intro frame and processBlock timings; fails when a motion or an intro frame
+// averages over 4 ms.
 
 namespace
 {
@@ -136,7 +139,39 @@ int runSnapshots (const juce::File& outDir)
         p.player.setLoop (0.30, 0.45);
         ed.tick();
     };
+    const auto volumes = [] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        const float v[] = { 0.85f, 1.0f, 0.6f, 0.7f, 0.5f, 0.9f };
+        for (int i = 0; i < 6; ++i) p.player.setVolume (i, v[i]);
+        p.player.setMuted (2, true);
+        p.player.setSpeed (1.15);
+        p.player.setPositionFraction (0.4);
+        ed.tick();
+    };
+    const auto volumes6 = [volumes] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        volumes (p, ed);
+        p.player.setMuted (2, false);
+        p.player.setMuted (4, true);
+        p.player.setLoop (0.30, 0.45);
+        ed.tick();
+    };
+    const auto slow = [volumes6] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        volumes6 (p, ed);
+        p.player.setSpeed (0.85);
+        ed.tick();
+    };
+    const auto preparing = [volumes] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        volumes (p, ed);
+        ed.stemsScreen().setMixChip ("Preparing 40%", 0.4f);   // the job's progress, frozen (StemsVst's busy chip)
+    };
     const auto moving = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
+    const auto introAt = [] (float seconds)
+    {
+        return Setup ([seconds] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.setIntroTime (seconds); });
+    };
     const auto helpTab = [] (int tab)
     {
         return Setup ([tab] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.setHelpOpen (true); ed.helpSheet().setTab (tab); });
@@ -155,6 +190,10 @@ int runSnapshots (const juce::File& outDir)
         { "stems6-midnight-muted", "midnight", state (Screen::Stems, true), 1.0f, sixMuted },
         { "stems4-dusk-zoom", "dusk", state (Screen::Stems, false), 1.0f, zoomed },
         { "stems6-midnight-loop", "midnight", state (Screen::Stems, true), 1.0f, sixLooping },
+        { "stems4-dusk-volume", "dusk", state (Screen::Stems, false), 1.0f, volumes },
+        { "stems4-dusk-preparing", "dusk", state (Screen::Stems, false), 1.0f, preparing },
+        { "stems6-midnight-volume", "midnight", state (Screen::Stems, true), 1.0f, volumes6 },
+        { "stems6-midnight-speed", "midnight", state (Screen::Stems, true), 1.0f, slow },
         { "stems4-dusk-zoom@2x", "dusk", state (Screen::Stems, false), 2.0f, zoomed },
         { "error-python-dusk", "dusk", withError (state (Screen::Error, false), ErrorKind::PythonMissing, {}, {}) },
         { "error-demucs-midnight", "midnight", withError (state (Screen::Error, false), ErrorKind::DemucsMissing, {}, "C:\\Python311\\python.exe") },
@@ -166,12 +205,16 @@ int runSnapshots (const juce::File& outDir)
         { "help-stems-midnight", "midnight", state (Screen::Drop, false), 1.0f, helpTab (1) },
         { "help-loop-dusk", "dusk", state (Screen::Drop, false), 1.0f, helpTab (2) },
         { "help-export-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f, helpTab (3) },
+        { "intro-dusk-0.6", "dusk", state (Screen::Drop, false), 1.0f, introAt (0.6f) },
+        { "intro-dusk-end", "dusk", state (Screen::Drop, false), 1.0f, introAt (1.9f) },
     };
 
     int failures = 0;
+    std::map<juce::String, juce::Image> images;
     for (const auto& shot : shots)
     {
         StemSplitterProcessor proc;
+        proc.introShown = true;                      // the shots are at rest unless their Setup sets an intro time
         proc.prepareToPlay (48000.0, 512);
         proc.setTheme (shot.theme);
         proc.setSixStems (shot.state.sixStems);
@@ -184,6 +227,7 @@ int runSnapshots (const juce::File& outDir)
             shot.before (proc, ed);
 
         const auto image = ed.createComponentSnapshot (ed.getLocalBounds(), true, shot.scale);
+        images[shot.name] = image;
         const auto file = outDir.getChildFile (shot.name + ".png");
         file.deleteFile();
         juce::FileOutputStream out (file);
@@ -193,13 +237,72 @@ int runSnapshots (const juce::File& outDir)
             ++failures;
         proc.player.unload();
     }
+
+    // The intro's last frame is the plain frame, pixel for pixel.
+    const auto& end = images["intro-dusk-end"];
+    const auto& rest = images["drop-dusk"];
+    bool same = end.getBounds() == rest.getBounds();
+    for (int y = 0; same && y < end.getHeight(); ++y)
+        for (int x = 0; same && x < end.getWidth(); ++x)
+            if (end.getPixelAt (x, y) != rest.getPixelAt (x, y))
+            {
+                std::printf ("FAIL: intro-dusk-end differs from drop-dusk at (%d, %d): %s vs %s\n", x, y,
+                             end.getPixelAt (x, y).toDisplayString (true).toRawUTF8(), rest.getPixelAt (x, y).toDisplayString (true).toRawUTF8());
+                same = false;
+            }
+    if (same)
+        std::puts ("intro-dusk-end equals drop-dusk pixel for pixel");
+    else
+        ++failures;
     return failures == 0 ? 0 : 1;
 }
 
 int runBench()
 {
     const auto four = makeStems (tempDir().getChildFile ("four"), false);
+    // The first image of a process starts Direct2D/GDI+ (0.25 to 1.4 s). A host or the window's peer pays that anyway, so warm it first:
+    // startup_ms is then our own work.
+    juce::Graphics (juce::Image (juce::Image::ARGB, 8, 8, true)).fillAll (juce::Colours::red);
+    double startupMs = 0.0;
+    // Startup: the editor's construction plus one full paint, for a processor whose state restores a Stems screen.
+    {
+        auto restored = [&] (StemSplitterProcessor& p)
+        {
+            juce::ValueTree v ("StemSplitter");
+            v.setProperty ("input", four.getChildFile ("Travis Snippet.mp3").getFullPathName(), nullptr);
+            v.setProperty ("stems", four.getFullPathName(), nullptr);
+            juce::MemoryBlock mb;
+            if (auto xml = v.createXml()) juce::AudioProcessor::copyXmlToBinary (*xml, mb);
+            p.setStateInformation (mb.getData(), (int) mb.getSize());
+            p.introShown = true;
+            p.prepareToPlay (48000.0, 512);
+        };
+        juce::Image img (juce::Image::ARGB, 760, 500, true, juce::SoftwareImageType());
+        auto startup = [&] (bool paint, bool preload)
+        {
+            StemSplitterProcessor p;
+            restored (p);
+            if (preload)                                 // diagnostic: the load happens outside the timed part
+                p.player.load ({ four.getChildFile ("vocals.wav"), four.getChildFile ("drums.wav"),
+                                four.getChildFile ("bass.wav"), four.getChildFile ("other.wav") });
+            const auto t0 = now();
+            StemSplitterEditor e (p);
+            if (paint)
+            {
+                juce::Graphics g (img);
+                e.paintEntireComponent (g, true);
+            }
+            return now() - t0;
+        };
+        startupMs = startup (true, false);
+        std::printf ("startup_ms=%.1f\nstartup_construct_only_ms=%.1f\nstartup_construct_no_load_ms=%.1f\n",
+                     startupMs, startup (false, false), startup (false, true));
+        if (startupMs > 300.0)
+            std::printf ("FAIL: startup_ms %.1f is over the 300 ms budget\n", startupMs);
+    }
+
     StemSplitterProcessor proc;
+    proc.introShown = true;                          // the intro frames are timed on their own below
     proc.prepareToPlay (48000.0, 512);
     StemSplitterEditor ed (proc);
     UiState s;
@@ -247,6 +350,38 @@ int runBench()
     std::printf ("motion_frame_ms_2x=%.3f\n", averageMs (ed, frameRegion, 2, 120, true));
     std::printf ("background_only_ms=%.3f\n", averageMs (waves, motion, 1, 120, true));
     std::printf ("full_paint_ms=%.3f\n", averageMs (ed, {}, 1, 20, false));
+
+    // Intro frames: 60 full paints over the whole intro (the panel and screen fade from 1.05 s), after 5 warm-ups. Every
+    // intro frame is a full window, so the budget is on the renderer the window paints with (Direct2D); a software full
+    // paint is over 4 ms even at rest (full_paint_ms), so the software figure is printed without a budget.
+    const auto introFrames = [&] (const juce::ImageType& type, double& worst)
+    {
+        juce::Image img (juce::Image::ARGB, 760, 500, true, type);
+        double total = 0.0;
+        worst = 0.0;
+        for (int i = -5; i < 60; ++i)
+        {
+            ed.setIntroTime (1.9f * (float) juce::jmax (0, i) / 60.0f);
+            const auto t0 = now();
+            {
+                juce::Graphics g (img);
+                ed.paintEntireComponent (g, true);
+            }
+            const auto ms = now() - t0;
+            if (i >= 0)
+            {
+                total += ms;
+                worst = juce::jmax (worst, ms);
+            }
+        }
+        ed.setIntroTime ({});
+        return total / 60.0;
+    };
+    double introWorst = 0.0, introSoftwareWorst = 0.0;
+    const auto introMs = introFrames (juce::NativeImageType(), introWorst);
+    const auto introSoftwareMs = introFrames (juce::SoftwareImageType(), introSoftwareWorst);
+    std::printf ("intro_frame_ms=%.3f\nintro_frame_ms_max=%.3f\n", introMs, introWorst);
+    std::printf ("intro_frame_ms_software=%.3f\nintro_frame_ms_software_max=%.3f\n", introSoftwareMs, introSoftwareWorst);
 
     // A zoom step: every row rebuilds its bars from its envelope (the repaint is async and not timed here).
     {
@@ -316,5 +451,7 @@ int runBench()
         std::puts ("FAIL: a playing burst metered no peak");
     if (motionMs > 4.0)
         std::puts ("FAIL: motion_frame_ms is over the 4 ms budget");
-    return metered && motionMs <= 4.0 && stretchUs <= 3200.0 ? 0 : 1;
+    if (introMs > 4.0)
+        std::puts ("FAIL: intro_frame_ms is over the 4 ms budget");
+    return metered && startupMs <= 300.0 && motionMs <= 4.0 && introMs <= 4.0 && stretchUs <= 3200.0 ? 0 : 1;
 }

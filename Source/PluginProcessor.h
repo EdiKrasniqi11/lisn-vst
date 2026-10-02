@@ -34,6 +34,7 @@ public:
 
     SeparationJob job;
     StemPlayer player;
+    bool introShown = false;                 // the opening animation played for this instance (message thread; not saved)
 
     // Settings. The host may save state from any thread, so every access goes through settingsLock.
     juce::String getTheme() const      { const juce::ScopedLock sl (settingsLock); return theme; }

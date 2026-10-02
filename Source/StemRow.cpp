@@ -3,12 +3,13 @@
 
 namespace
 {
-    // StemPlayer.mockup.html row (CSS px): padding 0 10, gap 14; name block 118, light 38, waveform 376 (the old 330 plus the
-    // removed time slot), then the chip.
-    constexpr int padX = 10, nameW = 118, gap = 14, lightSize = 38, waveW = 376, chipH = 34;   // chip: 32 + 1 px border
+    // Board 2C row (CSS px): padding 0 10, gap 14; name block 118, light 38 (30 compact), waveform 376, then the chip.
+    constexpr int padX = 10, nameW = 118, gap = 14, waveW = 376, chipH = 34;   // chip: 32 + 1 px border
     constexpr int lightX = padX + nameW + gap;          // 142
-    constexpr int waveX = lightX + lightSize + gap;     // 194
-    constexpr int chipX = waveX + waveW + gap;          // 584
+    constexpr int volW = 96, volH = 12;                 // the volume bar's hit box (3 px track)
+    int lightSizeFor (bool compact) { return compact ? 30 : 38; }
+    int waveXFor (bool compact)     { return lightX + lightSizeFor (compact) + gap; }   // 194, or 186 compact
+    int chipXFor (bool compact)     { return waveXFor (compact) + waveW + gap; }
 }
 
 juce::String mmss (double seconds)
@@ -110,20 +111,23 @@ StemRow::StemRow (juce::File wav, juce::String key)
     : file (std::move (wav)), stemKey (std::move (key)), name (stemKey.substring (0, 1).toUpperCase() + stemKey.substring (1))
 {
     setWantsKeyboardFocus (false);
-    setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
     lightButton.onToggle = [this] { if (onToggleMute != nullptr) onToggleMute(); };
     lightButton.onSolo = [this] { if (onSolo != nullptr) onSolo(); };
     wave.onMouse = [this] (WaveMouse m, double f, bool alt, bool ctrl) { if (onWaveMouse != nullptr) onWaveMouse (m, f, alt, ctrl); };
     addAndMakeVisible (lightButton);
     addAndMakeVisible (wave);
+    volume.onChange = [this] (float v) { if (onVolume != nullptr) onVolume (v); };
+    addAndMakeVisible (volume);
     setTheme (themeFor ("dusk"));
-    setSize (674, 62);
+    setSize (674, 56);
 }
 
 void StemRow::setTheme (const Theme& t)
 {
     colour = t.stemColour (stemKey);
     wave.setStemColour (colour);
+    volume.setColour (colour);
     repaint();
 }
 
@@ -131,7 +135,7 @@ void StemRow::setCompact (bool sixStems)
 {
     compact = sixStems;
     wave.setBars (barCount());
-    setSize (getWidth(), compact ? 42 : 62);
+    setSize (getWidth(), compact ? 36 : 56);
     resized();   // setSize skips it when the height is unchanged, but the waveform height follows `compact`
 }
 
@@ -151,6 +155,7 @@ void StemRow::setMuted (bool m)
     muted = m;
     lightButton.setMuted (m);
     wave.setAlpha (m ? 0.38f : 1.0f);
+    volume.setAlpha (m ? 0.38f : 1.0f);
     repaint();
 }
 
@@ -159,16 +164,25 @@ void StemRow::setPosition (double fraction)
     wave.setFraction (juce::jlimit (0.0, 1.0, fraction));
 }
 
+void StemRow::setVolume (float v)
+{
+    volume.setValue (v);
+}
+
 juce::Rectangle<int> StemRow::chipBounds() const
 {
-    return { chipX, (getHeight() - chipH) / 2, dragChipWidth ("Drag"), chipH };
+    return { chipXFor (compact), (getHeight() - chipH) / 2, dragChipWidth ("Drag"), chipH };
 }
 
 void StemRow::resized()
 {
-    const int h = getHeight(), waveH = compact ? 26 : 40;
+    const int h = getHeight(), waveH = compact ? 24 : 36, lightSize = lightSizeFor (compact);
     lightButton.setBounds (lightX, (h - lightSize) / 2, lightSize, lightSize);
-    wave.setBounds (waveX, (h - waveH) / 2 - WaveformView::margin, waveW, waveH + 2 * WaveformView::margin);
+    // Name (14 / 13) + 7 / 6 + the 3 px track, centred as one column: the track's centre is 22.5 / 20.5 below the column's top.
+    const int colH = compact ? 13 + 6 + 3 : 14 + 7 + 3;
+    const float trackMid = (float) (h - colH) / 2.0f + (float) colH - 1.5f;
+    volume.setBounds (padX + 4 + 10, juce::roundToInt (trackMid - volH / 2.0f), volW, volH);
+    wave.setBounds (waveXFor (compact), (h - waveH) / 2 - WaveformView::margin, waveW, waveH + 2 * WaveformView::margin);
 }
 
 void StemRow::paint (juce::Graphics& g)
@@ -181,17 +195,15 @@ void StemRow::paint (juce::Graphics& g)
     g.setColour (colour.withMultipliedAlpha (a));
     g.fillRoundedRectangle (bar, 2.0f);
 
-    // Name (Bold 14) over the file name (11, cream 0.6), line-height 1.2, 1 px apart, centred as one column, 10 px after the bar.
-    const auto nameH = 14.0f * 1.2f, fileH = 11.0f * 1.2f, top = (h - (nameH + 1.0f + fileH)) / 2.0f;
+    // Name (Bold 14, 13 compact; line-height 1) over the volume bar (7 / 6 px below, 3 px track), centred as one column,
+    // 10 px after the colour bar.
+    const auto nameH = compact ? 13.0f : 14.0f, colH = nameH + (compact ? 6.0f : 7.0f) + 3.0f, top = (h - colH) / 2.0f;
     const auto textX = bar.getRight() + 10.0f, textW = (float) (padX + nameW) - textX;
     g.setColour (Theme::cream.withAlpha (a));
-    g.setFont (Fonts::body (14.0f, 700));
+    g.setFont (Fonts::body (nameH, 700));
     g.drawText (name, juce::Rectangle<float> (textX, top, textW, nameH), juce::Justification::centredLeft, true);
-    g.setColour (Theme::cream.withAlpha (0.6f * a));
-    g.setFont (Fonts::body (11.0f));
-    g.drawText (file.getFileName(), juce::Rectangle<float> (textX, top + nameH + 1.0f, textW, fileH), juce::Justification::centredLeft, true);
 
-    if (g.clipRegionIntersects ({ chipX, 0, getWidth() - chipX, getHeight() }))
+    if (const auto chipX = chipXFor (compact); g.clipRegionIntersects ({ chipX, 0, getWidth() - chipX, getHeight() }))
         drawDragChip (g, chipBounds().toFloat(), "Drag");
 }
 

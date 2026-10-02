@@ -93,7 +93,7 @@ int LisnButton::preferredWidth() const
 void LisnButton::paintButton (juce::Graphics& g, bool, bool)
 {
     const auto r = getLocalBounds().toFloat();
-    const auto radius = style == Style::Soft ? 8.0f : 10.0f;
+    const auto radius = style == Style::Soft ? 8.0f : corner;
     g.setColour (tint.has_value() ? tint->withAlpha (0.22f)
                                   : style == Style::Primary ? Theme::cream : Theme::cream.withAlpha (style == Style::Ghost ? 0.06f : 0.12f));
     g.fillRoundedRectangle (r, radius);
@@ -121,11 +121,20 @@ int dragChipWidth (const juce::String& text)
     return (int) std::ceil (1 + 8 + 16 + 6 + juce::GlyphArrangement::getStringWidth (chipFont(), text) + 12 + 1);
 }
 
-void drawDragChip (juce::Graphics& g, juce::Rectangle<float> chip, const juce::String& text)
+void drawDragChip (juce::Graphics& g, juce::Rectangle<float> chip, const juce::String& text, std::optional<float> progress)
 {
     drawDashedRoundedRect (g, chip.reduced (0.5f), 9.5f, 1.0f, 3.0f, 3.0f, Theme::cream.withAlpha (0.3f));
+    if (progress.has_value())
+    {
+        const juce::Graphics::ScopedSaveState save (g);
+        juce::Path shape;
+        shape.addRoundedRectangle (chip, 10.0f);     // overflow hidden: the line follows the rounded corners
+        g.reduceClipRegion (shape);
+        g.setColour (Theme::cream);
+        g.fillRect (chip.withTop (chip.getBottom() - 2.0f).withWidth (chip.getWidth() * juce::jlimit (0.0f, 1.0f, *progress)));
+    }
     const juce::Rectangle<float> grip (chip.getX() + 9.0f, chip.getCentreY() - 8.0f, 16.0f, 16.0f);
-    g.setColour (Theme::cream.withAlpha (0.82f));
+    g.setColour (Theme::cream.withAlpha (progress.has_value() ? 0.6f : 0.82f));
     strokeIcon (g, Icons::grip, grip, 3.0f);
     g.setFont (chipFont());
     g.drawText (text, chip.withLeft (grip.getRight() + 6.0f), juce::Justification::centredLeft, false);
@@ -134,7 +143,8 @@ void drawDragChip (juce::Graphics& g, juce::Rectangle<float> chip, const juce::S
 DragChip::DragChip()
 {
     setWantsKeyboardFocus (false);
-    setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+    // Not DraggingHandCursor: JUCE decodes a GIF to make it, 130 to 170 ms on the window's first paint (startup bench).
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
 void DragChip::setText (const juce::String& t)
@@ -142,9 +152,17 @@ void DragChip::setText (const juce::String& t)
     if (t != text) { text = t; repaint(); }
 }
 
+void DragChip::setProgress (std::optional<float> p)
+{
+    if (p == progress) return;
+    progress = p;
+    setMouseCursor (p.has_value() ? juce::MouseCursor::WaitCursor : juce::MouseCursor::PointingHandCursor);
+    repaint();
+}
+
 void DragChip::mouseDrag (const juce::MouseEvent& e)
 {
-    if (dragStarted || e.getDistanceFromDragStart() <= 4 || fileToDrag == nullptr)
+    if (dragStarted || progress.has_value() || e.getDistanceFromDragStart() <= 4 || fileToDrag == nullptr)
         return;
     dragStarted = true;   // once per gesture
     const auto f = fileToDrag();
@@ -230,7 +248,63 @@ void MuteLight::paintButton (juce::Graphics& g, bool, bool)
     g.setColour (Theme::cream.withAlpha (0.22f));
     g.drawEllipse (r.reduced (0.5f), 1.0f);
     g.setColour (muted ? Theme::cream.withAlpha (0.5f) : Theme::cream);
-    strokeIcon (g, muted ? Icons::speakerOff : Icons::speaker, r.withSizeKeepingCentre (18.0f, 18.0f), 2.0f);
+    const auto icon = r.getWidth() < 38.0f ? 15.0f : 18.0f;   // board 2C: 18 in the 38 light, 15 in the 30 one
+    strokeIcon (g, muted ? Icons::speakerOff : Icons::speaker, r.withSizeKeepingCentre (icon, icon), 2.0f);
+}
+
+VolumeBar::VolumeBar()
+{
+    setWantsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void VolumeBar::setColour (juce::Colour c)
+{
+    if (c != colour) { colour = c; repaint(); }
+}
+
+void VolumeBar::setValue (float v)
+{
+    v = juce::jlimit (0.0f, 1.0f, v);
+    if (juce::exactlyEqual (v, value)) return;
+    value = v;
+    repaint();
+}
+
+float VolumeBar::valueAt (float x, float width)
+{
+    return juce::jlimit (0.0f, 1.0f, (x - 5.0f) / juce::jmax (1.0f, width - 10.0f));
+}
+
+void VolumeBar::reset()
+{
+    value = 1.0f;
+    repaint();
+    if (onChange != nullptr) onChange (1.0f);
+}
+
+void VolumeBar::setFromMouse (const juce::MouseEvent& e)
+{
+    value = valueAt (e.position.x, (float) getWidth());
+    repaint();
+    if (onChange != nullptr) onChange (value);
+}
+
+void VolumeBar::mouseDown (const juce::MouseEvent& e)        { setFromMouse (e); }
+void VolumeBar::mouseDrag (const juce::MouseEvent& e)        { setFromMouse (e); }
+void VolumeBar::mouseDoubleClick (const juce::MouseEvent&)   { reset(); }
+
+void VolumeBar::paint (juce::Graphics& g)
+{
+    const auto w = (float) getWidth(), cy = (float) getHeight() / 2.0f, endX = 5.0f + value * (w - 10.0f);
+    g.setColour (Theme::cream.withAlpha (0.16f));
+    g.fillRoundedRectangle (0.0f, cy - 1.5f, w, 3.0f, 1.5f);   // the full width; only the thumb travel is inset
+    g.setColour (colour);
+    g.fillRoundedRectangle (0.0f, cy - 1.5f, endX, 3.0f, 1.5f);
+    g.setColour (juce::Colour (0x73000000));
+    g.fillEllipse (juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ endX, cy + 1.0f }));
+    g.setColour (Theme::cream);
+    g.fillEllipse (juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ endX, cy }));
 }
 
 void drawDashedRoundedRect (juce::Graphics& g, juce::Rectangle<float> r, float radius, float thickness, float dash, float gap, juce::Colour c)

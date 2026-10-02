@@ -323,12 +323,12 @@ struct StemPlayerTests : juce::UnitTest
         p.prepare (48000, 512);
         expect (p.load ({ sine }));
         juce::Thread::sleep (100);                           // the read-ahead fills (40 stretched blocks read ~25600 samples)
-        p.setSpeed (2.0);                                    // clamped
-        expectEquals (p.getSpeed(), 1.5);
-        p.setSpeed (0.99999999);                             // rounded to hundredths, as renderName names it
+        p.setSpeed (3.0);                                    // clamped
+        expectEquals (p.getSpeed(), 2.0);
+        p.setSpeed (0.99999999);                             // rounded to 4 decimals, as renderName names it
         expectEquals (p.getSpeed(), 1.0);
-        p.setSpeed (1.234);
-        expectEquals (p.getSpeed(), 1.23);
+        p.setSpeed (1.23456);
+        expectEquals (p.getSpeed(), 1.2346);
         p.setSpeed (1.25);
         p.play();
         juce::AudioBuffer<float> heard (1, 512 * 40);
@@ -470,6 +470,15 @@ struct StemPlayerTests : juce::UnitTest
         expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 0.0f }, 1.0, { 58.25, 86.5 }),
                       juce::String ("Song - vocals (0.58.25-1.26.50).wav"));
         expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 0.0f, 0.0f }, 1.0, {}), juce::String());
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 1.0f }, 1.0, {}, 3), juce::String ("Song - vocals+drums +3st.wav"));
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 1.0f }, 1.25, {}, -12), juce::String ("Song - vocals+drums x1.25 -12st.wav"));
+        {
+            StemPlayer p;
+            p.setPitch (20);
+            expectEquals (p.getPitch(), 12);
+            p.setPitch (-20);
+            expectEquals (p.getPitch(), -12);
+        }
 
         beginTest ("render keeps the key at other speeds, at the exact length");
         for (const double s : { 0.75, 1.25 })

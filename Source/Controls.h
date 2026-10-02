@@ -37,6 +37,7 @@ public:
     float iconSize = 16.0f, iconStroke = 2.0f;
     int height = 34;
     float padLeft = 16.0f, padRight = 16.0f, fontSize = 13.0f;
+    float corner = 10.0f;                        // Soft is always 8
     float borderAlpha = 0.22f;                   // Ghost only (0.3 for Cancel and the error buttons)
     std::optional<juce::Colour> tint;            // Ghost "on" state: fill tint@0.22, border tint (the Loop button)
 
@@ -88,11 +89,35 @@ private:
     bool muted = false;
 };
 
+// The volume bar under a stem's name (board 2C): a 3 px track (cream@0.16) filled in the stem colour up to the volume, with a
+// 10 px cream thumb. Drag (or click) sets 0..1; double-click resets to 1. Never takes focus.
+class VolumeBar : public juce::Component
+{
+public:
+    VolumeBar();
+    void setColour (juce::Colour);
+    void setValue (float);                       // 0..1, no callback; repaints only when it changes
+    float getValue() const { return value; }
+    static float valueAt (float x, float width); // 0..1 for an x in the component: (x - 5) / (width - 10), clamped (the thumb's radius)
+    void reset();                                // to 1 and calls onChange: what a double-click does
+    std::function<void (float)> onChange;        // from the mouse only
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+
+private:
+    void setFromMouse (const juce::MouseEvent&);
+    juce::Colour colour = Theme::cream;
+    float value = 1.0f;
+};
+
 void drawDashedRoundedRect (juce::Graphics&, juce::Rectangle<float>, float radius, float thickness, float dash, float gap, juce::Colour);
 
 // The dashed "Drag" chip of the mockups: 1 px dashed border (dash 3, gap 3) at cream 0.3, radius 10, grip 16 px stroke 3,
 // 6 px, text Bold 12 at cream 0.82. chipWidth gives the width for `text` (padding 0 12 0 8 plus the border).
-void drawDragChip (juce::Graphics&, juce::Rectangle<float> bounds, const juce::String& text);
+// With a progress (StemsVst's .chip.busy): grip and text at cream 0.6, a 2 px cream line along the bottom at that fraction.
+void drawDragChip (juce::Graphics&, juce::Rectangle<float> bounds, const juce::String& text, std::optional<float> progress = {});
 int dragChipWidth (const juce::String& text);
 
 // A standalone drag chip: dragging it drops fileToDrag() (when it exists) onto a DAW track.
@@ -102,12 +127,15 @@ public:
     DragChip();
     void setText (const juce::String&);          // repaints; size it with dragChipWidth (text) x 34
     juce::String getText() const { return text; }
+    bool isPreparing() const { return progress.has_value(); }
+    void setProgress (std::optional<float>);     // while set: the busy chip (a progress line, the wait cursor) and no drag
     std::function<juce::File()> fileToDrag;
-    void paint (juce::Graphics& g) override { drawDragChip (g, getLocalBounds().toFloat(), text); }
+    void paint (juce::Graphics& g) override { drawDragChip (g, getLocalBounds().toFloat(), text, progress); }
     void mouseDown (const juce::MouseEvent&) override { dragStarted = false; }
     void mouseDrag (const juce::MouseEvent&) override;
 
 private:
     juce::String text { "Drag mix" };
+    std::optional<float> progress;
     bool dragStarted = false;
 };

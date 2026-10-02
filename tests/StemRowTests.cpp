@@ -51,12 +51,17 @@ struct StemRowTests : juce::UnitTest
 
         beginTest ("layout");
         StemRow row (juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("vocals.wav"), "vocals");
-        row.setSize (674, 62);
+        row.setSize (674, 56);
         expectEquals (row.light().getX(), 142);
         expectEquals (row.light().getWidth(), 38);
         expectEquals (row.waveform().getX(), 194);
         expectEquals (row.waveform().getWidth(), 376);
-        expectEquals (row.waveform().getHeight(), 40 + 10);
+        expectEquals (row.waveform().getHeight(), 36 + 10);
+        expectEquals (row.getHeight(), 56);
+        expectEquals (row.volumeBar().getWidth(), 96);
+        expectEquals (row.volumeBar().getHeight(), 12);
+        expectEquals (row.volumeBar().getX(), 24);
+        expect (row.volumeBar().getBottom() <= row.getHeight() && row.volumeBar().getY() > 20);
         expectLessOrEqual (row.chipBounds().getRight(), 664);
         expectEquals (row.chipBounds().getHeight(), 34);
         expectEquals (row.barCount(), 104);
@@ -65,11 +70,11 @@ struct StemRowTests : juce::UnitTest
         {
             const auto img = render (row);
             const auto c = themeFor ("dusk").stemColour ("vocals");
-            const auto at = img.getPixelAt (12, 31);                        // the 4 x 30 bar at x 10, centred in 62
+            const auto at = img.getPixelAt (12, 28);                        // the 4 x 30 bar at x 10, centred in 56
             expectWithinAbsoluteError ((int) at.getRed(), (int) c.getRed(), 3);
             expectWithinAbsoluteError ((int) at.getGreen(), (int) c.getGreen(), 3);
             expectWithinAbsoluteError ((int) at.getBlue(), (int) c.getBlue(), 3);
-            expectEquals ((int) img.getPixelAt (18, 31).getAlpha(), 0);     // the old tinted badge covered x 10-42
+            expectEquals ((int) img.getPixelAt (18, 28).getAlpha(), 0);     // the old tinted badge covered x 10-42
         }
 
         beginTest ("no keyboard focus");
@@ -81,11 +86,25 @@ struct StemRowTests : juce::UnitTest
 
         beginTest ("compact");
         row.setCompact (true);
-        expectEquals (row.getHeight(), 42);
-        expectEquals (row.waveform().getHeight(), 26 + 10);
+        expectEquals (row.getHeight(), 36);
+        expectEquals (row.light().getWidth(), 30);
+        expectEquals (row.waveform().getX(), 186);
+        expectEquals (row.waveform().getHeight(), 24 + 10);
         expectEquals (row.barCount(), 96);
         row.setCompact (false);
-        expectEquals (row.getHeight(), 62);
+        expectEquals (row.getHeight(), 56);
+        expectEquals (row.waveform().getX(), 194);
+
+        beginTest ("volume bar: setVolume is silent, the mouse reports");
+        {
+            float got = -1.0f;
+            row.onVolume = [&] (float v) { got = v; };
+            row.setVolume (0.4f);
+            expectEquals (got, -1.0f);
+            expectEquals (row.volumeBar().getValue(), 0.4f);
+            row.volumeBar().reset();
+            expectEquals (got, 1.0f);
+        }
 
         beginTest ("any envelope size");
         row.setEnvelope ({ 0.5f });

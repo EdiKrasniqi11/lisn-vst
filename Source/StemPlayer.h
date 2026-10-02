@@ -50,23 +50,26 @@ public:
     void addTo (juce::AudioBuffer<float>& buffer);   // audio thread; idle = two relaxed atomic loads, then return
     float takePeak() { return peak.exchange (0.0f); }  // highest mix level since the last call
 
-    // Playback speed 0.5..1.5 (clamped, rounded to hundredths) that keeps the key. At exactly 1 the stems play directly;
+    // Playback speed 0.5..2 (clamped, rounded to 4 decimals) that keeps the key. At exactly 1 the stems play directly;
     // otherwise every block goes through a time-stretcher, which stays engaged until the next play() or a seek that moves
     // the playhead (a loop edit that keeps it does not reset the stretcher). load() resets it to 1.
     void setSpeed (double);
     double getSpeed() const { return speed.load(); }
+    // Pitch shift in semitones, -12..12 (clamped). Not 0 sends the stems through the stretcher like a speed other than 1.
+    void setPitch (int semitones);
+    int getPitch() const { return pitch.load(); }
 
     // Every stem with a gain above 0, scaled by it, summed over [startSec, endSec) into a 24-bit stereo WAV at the stems'
     // rate. Always writes, replacing dest; callers cache by name (the editor's renderFile does). onProgress gets 0..1 after
     // each chunk; returning false cancels. False, with no dest.part left, if no gain is above 0, the range
-    // is empty, a file is unreadable, a write fails, dest cannot be replaced (open in another app) or it was cancelled. A speed other than 1 (0.5..1.5) time-stretches it, keeping the key, to (endSec - startSec) / speed long.
+    // is empty, a file is unreadable, a write fails, dest cannot be replaced (open in another app) or it was cancelled. A speed other than 1 (0.5..2) time-stretches it, keeping the key, to (endSec - startSec) / speed long.
     static bool render (const juce::Array<juce::File>& stems, const std::vector<float>& gains, double startSec, double endSec,
-                        double speed, const juce::File& dest, const std::function<bool (float)>& onProgress = {});
+                        double speed, const juce::File& dest, const std::function<bool (float)>& onProgress = {}, int semitones = 0);
 
     // A render's cached file name: "<song> - <stem>[ <volume %>]+..."; " x<speed>" when not 1; " (m.ss.cc-m.ss.cc)" for a
     // loop (empty loopSeconds = the whole song). Empty when no gain is above 0.
     static juce::String renderName (const juce::String& songFile, const juce::StringArray& stemNames,
-                                    const std::vector<float>& gains, double speed, juce::Range<double> loopSeconds);
+                                    const std::vector<float>& gains, double speed, juce::Range<double> loopSeconds, int semitones = 0);
 
 private:
     static constexpr int readAheadSamples = 32768;
@@ -81,9 +84,10 @@ private:
     juce::TimeSliceThread readAhead { "LISN player read-ahead" };
     std::unique_ptr<Stack> stack;
     juce::AudioTransportSource transport;
-    juce::AudioBuffer<float> scratch, mix, mixIn;   // 2 * maxStems channels for 1.5x a block / stereo, a block / stereo, 1.5x
+    juce::AudioBuffer<float> scratch, mix, mixIn;   // 2 * maxStems channels for 2x a block / stereo, a block / stereo, 2x
     std::unique_ptr<Stretch> stretch;
     std::atomic<double> speed { 1.0 };
+    std::atomic<int> pitch { 0 };
     std::atomic<bool> restretch { false };          // play(), unload() and moving seeks: the next block decides the path again
     bool stretching = false;                        // audio thread: blocks go through the stretcher
     double carry = 0.0;                             // audio thread: the part of an input sample owed to the next block

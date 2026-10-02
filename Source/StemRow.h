@@ -49,12 +49,14 @@ class StemRow : public juce::Component
 public:
     StemRow (juce::File wav, juce::String stemKey);  // stemKey = lower-case file name without extension
     void setTheme (const Theme&);
-    void setCompact (bool sixStems);                 // rows 42 / waveform 26 when true, 62 / 40 when false (sets the height)
+    void setCompact (bool sixStems);                 // rows 36 / waveform 24 / light 30 when true, 56 / 36 / 38 when false (sets the height)
     void setEnvelope (std::vector<float> envelope);  // the stem's 100 Hz peak envelope (levels 0..1)
     void setView (juce::Range<double>);              // the song fractions the waveform shows
     void setMuted (bool);                            // dims the name and waveform, swaps the light's icon
     void setPosition (double fraction);              // the shared playhead; no repaint (the screen repaints the strip)
+    void setVolume (float);                          // the volume bar (0..1); no callback
     std::function<void()> onToggleMute, onSolo;
+    std::function<void (float)> onVolume;            // the volume bar's mouse
     std::function<void (WaveMouse, double, bool, bool)> onWaveMouse;   // the waveform's mouse, as song fractions
     std::function<juce::File()> dragFile;            // what a drag drops; unset = the stem file
     juce::File getFile() const { return file; }
@@ -70,6 +72,7 @@ public:
     // test hooks
     MuteLight& light() { return lightButton; }
     WaveformView& waveform() { return wave; }
+    VolumeBar& volumeBar() { return volume; }
     juce::Rectangle<int> chipBounds() const;
 
 private:
@@ -78,5 +81,6 @@ private:
     juce::Colour colour;
     bool compact = false, muted = false, dragStarted = false;
     MuteLight lightButton;
+    VolumeBar volume;
     WaveformView wave;
 };

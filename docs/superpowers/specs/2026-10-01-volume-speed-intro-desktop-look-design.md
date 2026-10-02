@@ -98,14 +98,14 @@ All of them are in this spec. Volume, speed and the opening animation are **shar
 - The subtitle is unchanged.
 
 ### Opening animation (`WaveBackground` plus the editor), board 4A
-- **Waves:** `WaveBackground::setIntro (float seconds)`. Each of the 5 wave layers starts a full width off-screen, from alternating sides, and eases to its resting offset over 1.25 s, with an ease-out like `cubic-bezier(.22,1,.36,1)`. Each layer starts 0.08 s after the one behind it.
+- **Waves:** `WaveBackground::setIntro (float seconds)`. Each of the 5 wave layers starts 820 px (the width plus 60) off-screen, from alternating sides, and eases to its resting offset over 1.25 s, with an ease-out like `cubic-bezier(.22,1,.36,1)`. Each layer starts 0.06 s after the one behind it (board 4A).
 - **Panel:** fades in and rises 18 px over 0.7 s from 1.05 s. Its image's alpha is drawn by `WaveBackground`.
-- **Header and screen:** the editor's header and current screen fade in over 0.6 s from 1.3 s (`setAlpha`). The whole intro takes about 1.9 s.
+- **Header and screen:** the screen sits in the panel and fades and rises with it (board 4A). The header and the info button fade in over 0.6 s from 1.3 s (`setAlpha`). The panel's `scale(.985)` is dropped: scaled frames cost 18-23 ms. The whole intro takes about 1.9 s.
 - **Frame rate:** a `juce::VBlankAttachment` drives the intro at the display rate. After the intro it is removed and the editor's 30 Hz timer carries on as now. Intro frames only blit the cached layers at offsets, so the bench's motion-frame budget (4 ms) applies to them too.
 - **When it plays:** the processor's `introShown` flag (not saved in the state) is set on the first editor. Later editors for that processor start at the end state.
   - A mouse click during the intro jumps to the end.
   - On Windows, `SystemParametersInfo (SPI_GETCLIENTAREAANIMATION)` false skips it.
-- **Instant window:** the editor's constructor no longer loads the restored song into the player. It is loaded on the first timer tick after the first paint, during the intro. This replaces today's about 3.7 s blank start.
+- **Instant window:** startup_ms (editor construction plus a full paint, Direct2D warmed) at or under 300 ms. Measured: the restored song's load is about 10 ms and stays in the constructor; the cost was the drag chips' `DraggingHandCursor` (about 150 ms warm), so they use the pointing hand. The cold Direct2D start (0.25 to 1.4 s) belongs to the platform.
 
 ### Help sheet
 The layout is unchanged: four tips per tab, with new text.

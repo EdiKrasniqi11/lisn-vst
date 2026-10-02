@@ -114,17 +114,77 @@ void Header::setEnabledSwitches (bool on)
     }
 }
 
+void Header::makeTitleBar (std::function<void()> minimise, std::function<void()> close)
+{
+    titleBar = true;
+    title.clear();
+    title.addLineOfText (tracked (Fonts::display (22.0f), 0.08f), "LISN", 0.0f, 30.25f);
+    minimiseButton.onClick = std::move (minimise);
+    closeButton.onClick = std::move (close);
+    addAndMakeVisible (minimiseButton);
+    addAndMakeVisible (closeButton);
+    resized();
+    repaint();
+}
+
 void Header::paint (juce::Graphics& g)
 {
     g.setColour (Theme::cream);
     title.draw (g);
+    if (titleBar)   // the 1 px separator between the pills and the window buttons
+    {
+        g.setColour (Theme::cream.withAlpha (0.24f));
+        g.fillRect (minimiseButton.getX() - 11, 11, 1, 22);
+    }
 }
 
 void Header::resized()
 {
+    auto right = getWidth();
+    if (titleBar)   // board 1A: pills, 8 + 2 px, separator, 2 + 8 px, Minimise, 8 px, Close
+    {
+        closeButton.setBounds (right - 32, 6, 32, 32);
+        minimiseButton.setBounds (closeButton.getX() - 8 - 32, 6, 32, 32);
+        right = minimiseButton.getX() - 21;
+    }
     const auto w = stemsPill.preferredWidth();
-    stemsPill.setBounds (getWidth() - w, 3, w, 38);
+    stemsPill.setBounds (right - w, 3, w, 38);
     themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);
+}
+
+void Header::mouseDown (const juce::MouseEvent& e)
+{
+    if (auto* top = getTopLevelComponent(); titleBar && top != nullptr)
+        dragger.startDraggingComponent (top, e.getEventRelativeTo (top));
+}
+
+void Header::mouseDrag (const juce::MouseEvent& e)
+{
+    if (auto* top = getTopLevelComponent(); titleBar && top != nullptr)
+        dragger.dragComponent (top, e.getEventRelativeTo (top), nullptr);
+}
+
+WindowButton::WindowButton (bool closeIcon) : juce::Button (closeIcon ? "Close" : "Minimise"), close (closeIcon)
+{
+    setWantsKeyboardFocus (false);
+    setMouseClickGrabsKeyboardFocus (false);
+}
+
+void WindowButton::paintButton (juce::Graphics& g, bool over, bool down)
+{
+    const auto r = getLocalBounds().toFloat().reduced (0.5f);
+    g.setColour (juce::Colour (32, 18, 27).withAlpha (down ? 0.85f : over ? 0.72f : 0.55f));
+    g.fillEllipse (r);
+    g.setColour (Theme::cream.withAlpha (over ? 0.36f : 0.18f));
+    g.drawEllipse (r, 1.0f);
+
+    juce::Path icon;   // the board's 14 px icons on a 24 grid: "M6 12h12" and "M7 7l10 10M17 7 7 17"
+    if (close) { icon.startNewSubPath (7, 7); icon.lineTo (17, 17); icon.startNewSubPath (17, 7); icon.lineTo (7, 17); }
+    else       { icon.startNewSubPath (6, 12); icon.lineTo (18, 12); }
+    const auto s = 14.0f / 24.0f;
+    icon.applyTransform (juce::AffineTransform::scale (s).translated (r.getCentreX() - 7.0f, r.getCentreY() - 7.0f));
+    g.setColour (Theme::cream);
+    g.strokePath (icon, juce::PathStrokeType (2.0f * s, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
 //==============================================================================
@@ -312,14 +372,147 @@ void SplittingScreen::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (4 rows end at 352, 6 at 351),
-// position strip at 375.
+// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (4 rows end at 74+4*56+3*8=322, 6 at 74+6*36+5*6=320),
+// zoom position strip at 326, divider at 332, speed strip at 343.
 
 namespace
 {
-    constexpr int waveLeft = 19 + 194, waveWidth = 376;   // the waveforms: rows at x 19, waveform at row x 194
-    constexpr float stripY = 375.0f;                      // the position strip (4 tall) while zoomed, in the old footer's slot
-    const juce::Rectangle<int> stripArea { waveLeft - 2, 372, waveWidth + 4, 10 };   // with the loop ticks
+    constexpr int waveWidth = 376;                        // the waveforms; their left edge is StemsScreen::waveLeft()
+    constexpr float stripY = 326.0f;                      // the position strip (4 tall) while zoomed, between the last row and the divider
+}
+
+//==============================================================================
+SpeedStrip::SpeedStrip()
+{
+    setWantsKeyboardFocus (false);
+    setMouseClickGrabsKeyboardFocus (false);
+}
+
+void SpeedStrip::setSpeed (double v)
+{
+    set (juce::jlimit (0.5, 2.0, v), false);
+}
+
+void SpeedStrip::setPitch (int st)
+{
+    setKey (juce::jlimit (-12, 12, st), false);
+}
+
+void SpeedStrip::setBpm (double b)
+{
+    if (juce::exactlyEqual (b, bpm)) return;
+    bpm = b;
+    repaint();
+}
+
+double SpeedStrip::stepSpeed (double from, int steps, double bpm)
+{
+    if (bpm > 0.0)
+        return juce::jlimit (0.5, 2.0, (double) (juce::roundToInt (bpm * from) + steps) / bpm);
+    return juce::jlimit (0.5, 2.0, std::round (from * 20.0 + steps) / 20.0);
+}
+
+void SpeedStrip::setKey (int st, bool report)
+{
+    if (st == pitch) return;
+    pitch = st;
+    repaint();
+    if (report && onPitch != nullptr) onPitch (st);
+}
+
+void SpeedStrip::set (double v, bool report)
+{
+    if (juce::exactlyEqual (v, speed)) return;
+    speed = v;
+    repaint();
+    if (report && onChange != nullptr) onChange (v);
+}
+
+void SpeedStrip::paintBox (juce::Graphics& g, juce::Rectangle<int> box, const char* icon, const juce::String& value, const juce::String& caption)
+{
+    if (! g.clipRegionIntersects (box)) return;
+    const auto r = box.toFloat().reduced (0.5f);
+    g.setColour (Theme::cream.withAlpha (0.06f));
+    g.fillRoundedRectangle (r, 10.0f);
+    g.setColour (Theme::cream.withAlpha (0.22f));
+    g.drawRoundedRectangle (r, 10.0f, 1.0f);
+
+    g.setColour (Theme::cream);
+    strokeIcon (g, icon, { r.getX() + 10.0f, r.getCentreY() - 8.0f, 16.0f, 16.0f }, 2.0f);
+    const auto tx = r.getX() + 34.0f, tw = r.getRight() - 28.0f - tx;
+    text (g, Fonts::body (14.0f, 700), Theme::cream, value, { tx, r.getCentreY() - 13.0f, tw, 15.0f }, juce::Justification::centredLeft);
+    text (g, Fonts::body (10.0f), Theme::cream.withAlpha (0.55f), caption, { tx, r.getCentreY() + 3.0f, tw, 11.0f }, juce::Justification::centredLeft);
+
+    // The chevron column: a 1 px divider, then up over down.
+    const auto cx = r.getRight() - 14.0f;
+    g.setColour (Theme::cream.withAlpha (0.14f));
+    g.fillRect (r.getRight() - 27.0f, r.getY() + 6.0f, 1.0f, r.getHeight() - 12.0f);
+    g.setColour (Theme::cream.withAlpha (0.75f));
+    strokeIcon (g, "M7 14l5-5 5 5", { cx - 7.0f, r.getCentreY() - 15.0f, 14.0f, 14.0f }, 2.0f);
+    strokeIcon (g, "M7 10l5 5 5-5", { cx - 7.0f, r.getCentreY() + 1.0f, 14.0f, 14.0f }, 2.0f);
+}
+
+void SpeedStrip::paint (juce::Graphics& g)
+{
+    const auto times = juce::String (juce::CharPointer_UTF8 ("\xc3\x97"));
+    const auto speedText = juce::String (speed, 2) + times;
+    if (bpm > 0.0)
+        paintBox (g, tempoBox(), Icons::speed, juce::String (juce::roundToInt (bpm * speed)) + " BPM",
+                  speedText + " of " + juce::String (juce::roundToInt (bpm)));
+    else
+        paintBox (g, tempoBox(), Icons::speed, speedText, "Speed");
+    paintBox (g, keyBox(), Icons::note, (pitch >= 0 ? "+" : "") + juce::String (pitch) + " st", "Key");
+}
+
+SpeedStrip::Target SpeedStrip::targetAt (juce::Point<int> p) const
+{
+    return tempoBox().contains (p) ? Target::tempo : keyBox().contains (p) ? Target::key : Target::none;
+}
+
+void SpeedStrip::mouseMove (const juce::MouseEvent& e)
+{
+    setMouseCursor (targetAt (e.getPosition()) != Target::none ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
+}
+
+void SpeedStrip::mouseDown (const juce::MouseEvent& e)
+{
+    dragging = targetAt (e.getPosition());
+    dragFromSpeed = speed;
+    dragFromPitch = pitch;
+    moved = false;
+}
+
+void SpeedStrip::mouseDrag (const juce::MouseEvent& e)
+{
+    const auto steps = -e.getDistanceFromDragStartY() / 4;   // 4 px a step, up is more
+    if (steps != 0) moved = true;
+    if (dragging == Target::tempo) set (stepSpeed (dragFromSpeed, steps, bpm), true);
+    if (dragging == Target::key)   setKey (juce::jlimit (-12, 12, dragFromPitch + steps), true);
+}
+
+void SpeedStrip::mouseUp (const juce::MouseEvent& e)
+{
+    // A click (no drag) on a box's chevron column steps it: the upper half up, the lower half down.
+    const auto box = dragging == Target::tempo ? tempoBox() : keyBox();
+    if (dragging != Target::none && ! moved && e.getNumberOfClicks() == 1 && e.x >= box.getRight() - 27)
+    {
+        const int step = e.y < box.getCentreY() ? 1 : -1;
+        if (dragging == Target::tempo) set (stepSpeed (speed, step, bpm), true);
+        else                           setKey (juce::jlimit (-12, 12, pitch + step), true);
+    }
+    dragging = Target::none;
+}
+
+void SpeedStrip::mouseDoubleClick (const juce::MouseEvent& e)
+{
+    const auto t = targetAt (e.getPosition());
+    if (t == Target::tempo && e.x < tempoBox().getRight() - 27) set (1.0, true);
+    if (t == Target::key && e.x < keyBox().getRight() - 27)     setKey (0, true);
+}
+
+void StemsScreen::setSpeed (double v)
+{
+    speedStrip.setSpeed (v);
 }
 
 juce::String beatsText (double beats)
@@ -345,6 +538,9 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
     addAndMakeVisible (dragChip);
     addAndMakeVisible (newSong);
     addAndMakeVisible (playButton);
+    addAndMakeVisible (speedStrip);
+    speedStrip.onChange = [this] (double s) { if (onSpeed != nullptr) onSpeed (s); };
+    speedStrip.onPitch = [this] (int st) { if (onPitch != nullptr) onPitch (st); };
 }
 
 StemsScreen::~StemsScreen()
@@ -357,6 +553,7 @@ void StemsScreen::setTheme (const Theme& t)
     theme = t;
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     loopButton.repaint();
+    speedStrip.setTheme (t);
     for (auto* r : rows)
         r->setTheme (t);
     repaint();
@@ -378,6 +575,7 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     loopRange = dragBand = {};
     loopOn = false;
     tempo = {};
+    speedStrip.setBpm (0.0);
     playButton.setPlaying (false);
     rows.clear();
 
@@ -390,6 +588,7 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
         row->setCompact (files.size() > 4);
         row->onToggleMute = [this, i] { if (onToggleMute != nullptr) onToggleMute (i); };
         row->onSolo = [this, i] { if (onSolo != nullptr) onSolo (i); };
+        row->onVolume = [this, i] (float v) { if (onVolume != nullptr) onVolume (i, v); };
         row->onWaveMouse = [this] (WaveMouse m, double f, bool alt, bool ctrl) { waveMouse (m, f, alt, ctrl); };
         row->dragFile = [this, i] { return stemFile != nullptr ? stemFile (i) : fileOf (i); };
         addAndMakeVisible (row);
@@ -453,20 +652,30 @@ juce::Range<int> StemsScreen::waveSpan() const
     return { rows.getFirst()->getY() + first.getY(), rows.getLast()->getY() + last.getBottom() };
 }
 
+int StemsScreen::waveLeft() const   // rows sit at x 19; the waveform is at row x 194 (186 in 6-stem rows)
+{
+    return 19 + (rows.isEmpty() ? 194 : rows.getFirst()->waveform().getX());
+}
+
+juce::Rectangle<int> StemsScreen::stripArea() const   // with the loop ticks
+{
+    return { waveLeft() - 2, 323, waveWidth + 4, 10 };
+}
+
 int StemsScreen::headX (double f) const
 {
-    return waveLeft + juce::roundToInt ((f - view.getStart()) / view.getLength() * waveWidth);
+    return waveLeft() + juce::roundToInt ((f - view.getStart()) / view.getLength() * waveWidth);
 }
 
 double StemsScreen::fractionAt (float x) const
 {
-    return view.getStart() + (x - (float) waveLeft) / (double) waveWidth * view.getLength();
+    return view.getStart() + (x - (float) waveLeft()) / (double) waveWidth * view.getLength();
 }
 
 juce::Rectangle<int> StemsScreen::waveSpanArea() const   // the waveforms plus the tabs above them
 {
     const auto span = waveSpan();
-    return { waveLeft - 9, span.getStart() - 13, waveWidth + 18, span.getLength() + 13 };
+    return { waveLeft() - 9, span.getStart() - 13, waveWidth + 18, span.getLength() + 13 };
 }
 
 juce::Rectangle<int> StemsScreen::loopArea (juce::Range<double> r) const   // the band, its edges and tabs (a hot tab's ring)
@@ -479,7 +688,8 @@ juce::Rectangle<int> StemsScreen::loopArea (juce::Range<double> r) const   // th
 void StemsScreen::setTempo (Tempo t)
 {
     tempo = t;
-    repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle shows the BPM
+    speedStrip.setBpm (t.bpm);                       // the Tempo box shows it
+    repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle's loop beats
 }
 
 double StemsScreen::gridStep() const
@@ -582,7 +792,7 @@ void StemsScreen::tabMouse (WaveMouse m, const juce::MouseEvent& e)
     const auto ours = m == WaveMouse::drag || m == WaveMouse::up ? tabDown : inside;
     if (m == WaveMouse::up) tabDown = false;
     if (ours)
-        waveMouse (m, fractionAt ((float) juce::jlimit (waveLeft, waveLeft + waveWidth, e.x)), e.mods.isAltDown(),
+        waveMouse (m, fractionAt ((float) juce::jlimit (waveLeft(), waveLeft() + waveWidth, e.x)), e.mods.isAltDown(),
                    e.mods.isCtrlDown());
     else
         waveMouse (WaveMouse::exit, 0.0, false);
@@ -603,10 +813,17 @@ void StemsScreen::setLoop (juce::Range<double> range, bool on)
     if (! on) setHot (-1);
     repaint (loopArea (loopOn ? loopRange : juce::Range<double>()));   // the new band
     repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle shows the loop
-    repaint (stripArea);                             // the strip's loop ticks
+    repaint (stripArea());                             // the strip's loop ticks
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     loopButton.repaint();
-    dragChip.setText (loopOn ? "Drag loop" : "Drag mix");
+    setMixChip (loopOn ? "Drag loop" : "Drag mix", std::nullopt);
+}
+
+void StemsScreen::setMixChip (const juce::String& text, std::optional<float> progress)
+{
+    dragChip.setProgress (progress);
+    if (text == dragChip.getText()) return;
+    dragChip.setText (text);
     resized();                                       // the chip width follows its text
 }
 
@@ -659,7 +876,7 @@ void StemsScreen::setPlayback (bool isPlaying, double f, double len)
         const auto span = waveSpan();
         const auto from = hasHead ? juce::jmin (lastHead, x) : x, to = hasHead ? juce::jmax (lastHead, x) : x;
         const auto area = juce::Rectangle<int>::leftTopRightBottom (from - 2, span.getStart(), to + 2, span.getEnd())
-                              .getIntersection ({ waveLeft - 2, span.getStart(), waveWidth + 4, span.getLength() });
+                              .getIntersection ({ waveLeft() - 2, span.getStart(), waveWidth + 4, span.getLength() });
         lastHead = x;
         hasHead = true;
         if (! area.isEmpty())
@@ -682,6 +899,11 @@ void StemsScreen::setPlayback (bool isPlaying, double f, double len)
         changed = true;
     }
     repaintCount += changed ? 1 : 0;
+}
+
+void StemsScreen::setVolume (int i, float v)
+{
+    if (juce::isPositiveAndBelow (i, rows.size())) rows[i]->setVolume (v);
 }
 
 void StemsScreen::setAudible (juce::uint32 mask)
@@ -717,7 +939,7 @@ void StemsScreen::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWh
     // trackpad's many small events move fast. Upgrade path: scale the step by the delta.
     const auto p = e.getEventRelativeTo (this).position;
     const auto span = waveSpan();
-    if (rows.isEmpty() || p.x < (float) waveLeft || p.x > (float) (waveLeft + waveWidth)
+    if (rows.isEmpty() || p.x < (float) waveLeft() || p.x > (float) (waveLeft() + waveWidth)
         || p.y < (float) span.getStart() || p.y > (float) span.getEnd())
         return;
     if (e.mods.isCtrlDown())
@@ -736,7 +958,7 @@ void StemsScreen::paintOverChildren (juce::Graphics& g)
     if (rows.isEmpty()) return;
     const auto span = waveSpan();
     const auto top = (float) span.getStart(), h = (float) span.getLength();
-    const int right = waveLeft + waveWidth;
+    const int right = waveLeft() + waveWidth;
 
     // Grid (LoopHandles.mockup.html): a line per beat at cream 0.16, per bar at 0.34, while beats are 8 px or more apart.
     if (tempo.bpm > 0.0 && length > 0.0)
@@ -757,13 +979,13 @@ void StemsScreen::paintOverChildren (juce::Graphics& g)
     {
         // Clipped to the view: an edge outside it isn't drawn, nor is its tab.
         const auto x0 = headX (band.getStart()), x1 = headX (band.getEnd());
-        const auto a = juce::jlimit (waveLeft, right, x0), b = juce::jlimit (waveLeft, right, x1);
+        const auto a = juce::jlimit (waveLeft(), right, x0), b = juce::jlimit (waveLeft(), right, x1);
         g.setColour (Theme::cream.withAlpha (0.10f));
         g.fillRect ((float) a, top, (float) (b - a), h);
         for (int edge = 0; edge < 2; ++edge)
         {
             const auto x = (float) (edge == 0 ? x0 : x1);
-            if (x < (float) waveLeft || x > (float) right) continue;
+            if (x < (float) waveLeft() || x > (float) right) continue;
             g.setColour (Theme::cream);
             g.fillRect (x - 1.0f, top, 2.0f, h);
             // The grab tab: 10 x 18, radius 4, top 8 px above the band, two ink grip lines; hovered or dragged it grows to
@@ -786,7 +1008,7 @@ void StemsScreen::paintOverChildren (juce::Graphics& g)
         }
     }
 
-    if (! hasHead || lastHead < waveLeft || lastHead > right) return;   // no playhead yet, or it's outside the view
+    if (! hasHead || lastHead < waveLeft() || lastHead > right) return;   // no playhead yet, or it's outside the view
     g.setColour (Theme::cream);
     g.fillRoundedRectangle ((float) lastHead - 1.0f, top, 2.0f, h, 1.0f);
 }
@@ -796,14 +1018,16 @@ void StemsScreen::resized()
     playButton.setBounds (19, 17, 36, 36);
     const auto w = newSong.preferredWidth();
     newSong.setBounds (19 + 674 - w, 18, w, newSong.height);
-    const auto chipW = dragChipWidth (dragChip.getText());
-    dragChip.setBounds (newSong.getX() - 8 - chipW, 18, chipW, 34);
-    loopButton.setBounds (dragChip.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
+    // While preparing, the chip keeps its widest width so the changing percent doesn't nudge the Loop button.
+    const auto chipW = dragChipWidth (dragChip.isPreparing() ? juce::String ("Preparing 100%") : dragChip.getText());
+    loopButton.setBounds (newSong.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
+    speedStrip.setBounds (19 + 10, 339, 674 - 20, 40);                               // board 5B: Tempo and Key boxes...
+    dragChip.setBounds (19 + 674 - 10 - chipW, 339 + 2, chipW, 36);                  // ...and the mix chip at the right end
     auto y = 74;
     for (auto* r : rows)
     {
         r->setBounds (19, y, 674, r->getHeight());
-        y += r->getHeight() + (rows.size() > 4 ? 5 : 10);
+        y += r->getHeight() + (rows.size() > 4 ? 6 : 8);
     }
 }
 
@@ -816,7 +1040,6 @@ void StemsScreen::paint (juce::Graphics& g)
         const auto x = 19.0f + 36.0f + 12.0f, w = (float) loopButton.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
         text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
         auto subtitle = timeText;
-        if (tempo.bpm > 0.0) subtitle << dot << juce::roundToInt (tempo.bpm) << " BPM";
         if (loopOn)
         {
             subtitle << dot << "loop " << mmss (loopRange.getStart() * length)
@@ -829,20 +1052,21 @@ void StemsScreen::paint (juce::Graphics& g)
 
     g.setColour (Theme::cream.withAlpha (0.12f));
     g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
+    if (g.clipRegionIntersects ({ 19, 332, 674, 1 })) g.fillRect (19.0f, 332.0f, 674.0f, 1.0f);
 
     // Position strip (only while zoomed): where the view sits in the song, the loop edges in the accent colour.
-    if (view.getLength() < 1.0 && g.clipRegionIntersects (stripArea))
+    if (view.getLength() < 1.0 && g.clipRegionIntersects (stripArea()))
     {
         g.setColour (Theme::cream.withAlpha (0.10f));
-        g.fillRoundedRectangle ((float) waveLeft, stripY, (float) waveWidth, 4.0f, 2.0f);
+        g.fillRoundedRectangle ((float) waveLeft(), stripY, (float) waveWidth, 4.0f, 2.0f);
         g.setColour (Theme::cream.withAlpha (0.55f));
-        g.fillRoundedRectangle ((float) waveLeft + (float) view.getStart() * waveWidth, stripY,
+        g.fillRoundedRectangle ((float) waveLeft() + (float) view.getStart() * waveWidth, stripY,
                                 juce::jmax (2.0f, (float) view.getLength() * waveWidth), 4.0f, 2.0f);
         if (loopOn)
         {
             g.setColour (theme.accent());
             for (const auto f : { loopRange.getStart(), loopRange.getEnd() })
-                g.fillRect ((float) waveLeft + (float) f * waveWidth - 1.0f, stripY - 2.0f, 2.0f, 8.0f);
+                g.fillRect ((float) waveLeft() + (float) f * waveWidth - 1.0f, stripY - 2.0f, 2.0f, 8.0f);
         }
     }
 }
@@ -975,19 +1199,19 @@ namespace
         { { Icons::play, "Play or pause", "Every stem plays together, in sync", { key ("Space") } },
           { Icons::jump, "Jump and scrub", "Click the waves to jump there, drag to scrub", { mouse ("Click"), mouse ("Drag") } },
           { Icons::home, "Back to the start", "Back to 0:00, or to the loop's start while looping", { key ("Home") } },
-          { Icons::zoom, "Zoom and scroll", "Zoom around the mouse; the wheel alone scrolls", { key ("Ctrl"), plusWord, mouse ("Wheel") } } },
+          { Icons::speed, "Tempo and key", "Drag either box up or down; double-click it to reset", { mouse ("Tempo"), orWord, mouse ("Key") } } },
         { { Icons::file, "Split a song", "Drop it on the panel or click Browse. 6 stems adds guitar and piano", { mouse ("Drop") } },
           { Icons::speakerOff, "Mute a stem", "Click its light; stems 1 to 6 go top to bottom", { mouse ("Light"), orWord, key (oneToSix) } },
           { Icons::speaker, "Solo a stem", "Only that stem plays; do it again to hear them all",
             { mouse ("Right-click"), orWord, key ("Shift"), plusWord, key (oneToSix) } },
-          { Icons::plus, "New song", "Start over with another song", { mouse ("New song") } } },
+          { Icons::volume, "Set a stem's volume", "Drag the bar under its name; double-click for 100%", { mouse ("Drag bar") } } },
         { { Icons::loop, "Make a loop", "Ctrl+drag across the waves; the edges snap to the beat", { key ("Ctrl"), plusWord, mouse ("Drag") } },
           { Icons::trim, "Trim it", "Drag either handle; hold Alt to go off the grid",
             { mouse ("Handle"), orWord, key ("Alt"), plusWord, mouse ("Drag") } },
           { Icons::toggle, "Loop on or off", "With no loop yet, you get 4 bars at the playhead", { key ("L"), orWord, mouse ("Loop") } },
-          { Icons::grid, "Finer steps", "Zoomed in, the grid is quarter beats; zoomed out, bars", { key ("Ctrl"), plusWord, mouse ("Wheel") } } },
+          { Icons::zoom, "Zoom for finer steps", "Zoom around the mouse; the grid goes down to quarter beats", { key ("Ctrl"), plusWord, mouse ("Wheel") } } },
         { { Icons::grip, "Drag a stem", "Drag its row onto any track in FL", { mouse ("Drag row") } },
-          { Icons::layers, "Drag the mix", "Every stem you hear, as one WAV", { mouse ("Drag mix") } },
+          { Icons::layers, "Drag the mix", "Every stem you hear, with its volume and the speed, as one WAV", { mouse ("Drag mix") } },
           { Icons::loop, "Just the loop", "While looping, every drag gives only the loop", { key ("L"), plusWord, mouse ("Drag") } },
           { Icons::speakerOff, "Leave stems out", "Muted stems stay out of the mix", { key (oneToSix), plusWord, mouse ("Drag mix") } } } };
 

@@ -1,8 +1,62 @@
 #include "PluginEditor.h"
+#if JUCE_WINDOWS
+ #ifndef NOMINMAX
+  #define NOMINMAX
+ #endif
+ #ifndef WIN32_LEAN_AND_MEAN
+  #define WIN32_LEAN_AND_MEAN
+ #endif
+ #include <windows.h>
+#endif
 
 namespace
 {
     const juce::Rectangle<int> panel { 24, 76, 712, 400 };
+    constexpr float introEnd = 1.9f;                 // the header's fade ends: 1.3 s + 0.6 s
+
+    bool introEnabled()                              // Windows' "Animation effects" setting
+    {
+       #if JUCE_WINDOWS
+        BOOL on = FALSE;
+        return SystemParametersInfoW (SPI_GETCLIENTAREAANIMATION, 0, &on, 0) && on;
+       #else
+        return true;
+       #endif
+    }
+
+    // A component's image while the intro fades and moves it. Its own alpha or transform changes repaint it whole
+    // (invalidateAll) and keep the image; a child's repaint (invalidate) redraws it. ponytail: the component's own
+    // whole repaints (e.g. a theme change) wait for the intro's end. Upgrade path: invalidate it from applyTheme.
+    struct FadeCache : juce::CachedComponentImage
+    {
+        explicit FadeCache (juce::Component& c) : owner (c) {}
+
+        void paint (juce::Graphics& g) override
+        {
+            const auto scale = g.getInternalContext().getPhysicalPixelScaleFactor();
+            const auto size = (owner.getLocalBounds().toFloat() * scale).getSmallestIntegerContainer();
+            if (dirty || image.getBounds() != size)
+            {
+                image = juce::Image (juce::Image::ARGB, juce::jmax (1, size.getWidth()), juce::jmax (1, size.getHeight()), true,
+                                     *g.getInternalContext().getPreferredImageTypeForTemporaryImages());
+                juce::Graphics ig (image);
+                ig.addTransform (juce::AffineTransform::scale (scale));
+                owner.paintEntireComponent (ig, true);
+                dirty = false;
+            }
+            if (owner.getAlpha() <= 0.0f)
+                return;
+            g.setOpacity (owner.getAlpha());
+            g.drawImageTransformed (image, juce::AffineTransform::scale (1.0f / scale));
+        }
+        bool invalidateAll() override { return true; }
+        bool invalidate (const juce::Rectangle<int>&) override { dirty = true; return true; }
+        void releaseResources() override { image = {}; }
+
+        juce::Component& owner;
+        juce::Image image;
+        bool dirty = true;
+    };
     const char* const audioPatterns = "*.wav;*.mp3;*.flac;*.aif;*.aiff;*.ogg";
 }
 
@@ -14,15 +68,17 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     addMouseListener (this, true);
     addAndMakeVisible (waves);
     addAndMakeVisible (header);
+    panelContent.setInterceptsMouseClicks (false, true);
+    addAndMakeVisible (panelContent);
     for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error, &help })
-        addChildComponent (s);
+        panelContent.addChildComponent (s);
     addAndMakeVisible (info);
 
     header.onTheme = [this] (juce::String id) { proc.setTheme (id); applyTheme (themeFor (id)); };
-    header.onSixStems = [this] (bool six) { proc.setSixStems (six); };
+    header.onSixStems = [this] (bool six) { mixJob.cancel(); proc.setSixStems (six); };   // which may re-split
     info.onClick = [this] { setHelpOpen (! helpOpen); };
     help.onClose = [this] { setHelpOpen (false); };
-    const auto browse = [this] { choose ("Choose a song", audioPatterns, [this] (const juce::File& f) { proc.startSplit (f); }); };
+    const auto browse = [this] { choose ("Choose a song", audioPatterns, [this] (const juce::File& f) { startSplit (f); }); };
     drop.onBrowse = browse;
     stems.onNewSong = browse;
     splitting.onCancel = [this] { proc.job.cancel(); };
@@ -33,10 +89,20 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     };
     stems.onToggleMute = [this] (int i) { proc.player.setMuted (i, ! proc.player.isMuted (i)); };
     stems.onSolo = [this] (int i) { proc.player.solo (i); };
+    stems.onSpeed = [this] (double s) { proc.player.setSpeed (s); };
+    stems.onPitch = [this] (int st) { proc.player.setPitch (st); };
+    stems.onVolume = [this] (int i, float v) { proc.player.setVolume (i, v); };
     stems.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
     stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
     stems.onToggleLoop = [this] { proc.player.setLooping (! proc.player.isLooping()); };
-    stems.mixFile = [this] { return renderFile (proc.player.mixGains(), proc.player.getSpeed()); };   // the mix: what you hear
+    stems.mixFile = [this]   // the mix: what you hear. A stretched mix only comes from mixJob's cache, never rendered here
+    {
+        const auto speed = proc.player.getSpeed();
+        const auto pitch = proc.player.getPitch();
+        if (speed == 1.0 && pitch == 0) return renderFile (proc.player.mixGains(), 1.0);
+        const auto dest = renderRequest (proc.player.mixGains(), speed, pitch).dest;
+        return dest.existsAsFile() ? dest : juce::File();
+    };
     stems.stemFile = [this] (int i)   // single stems are the originals: gain 1, speed 1
     {
         if (! proc.player.isLooping()) return stems.fileOf (i);
@@ -44,19 +110,62 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
         if (juce::isPositiveAndBelow (i, (int) one.size())) one[(size_t) i] = 1.0f;
         return renderFile (one, 1.0);
     };
-    error.onRetry = [this] { proc.startSplit (proc.getLastInput()); };
+    error.onRetry = [this] { startSplit (proc.getLastInput()); };
     error.onFindPython = [this]
     {
         choose ("Find python.exe", "*.exe", [this] (const juce::File& f)
         {
             proc.setPythonPath (f.getFullPathName());
-            proc.startSplit (proc.getLastInput());
+            startSplit (proc.getLastInput());
         });
     };
 
     setSize (760, 500);
     tick();   // first screen and theme before the window shows
+    if (! proc.introShown && introEnabled())
+    {
+        setIntroTime (0.0f);
+        introFrames = std::make_unique<juce::VBlankAttachment> (this, [this] { advanceIntro(); });
+    }
     startTimerHz (30);
+}
+
+void StemSplitterEditor::setIntroTime (std::optional<float> seconds)
+{
+    if (seconds.has_value() && *seconds >= introEnd)
+        seconds.reset();
+    if (seconds.has_value() != introPlaying)
+    {
+        // While it plays, the header and the panel's content fade and move as images (no repaint per frame).
+        introPlaying = seconds.has_value();
+        for (auto* c : std::initializer_list<juce::Component*> { &header, &panelContent })
+            c->setCachedComponentImage (introPlaying ? new FadeCache (*c) : nullptr);
+        // Clicks reach the editor (which skips the intro) instead of a control that is still faded out.
+        header.setInterceptsMouseClicks (! introPlaying, ! introPlaying);
+        panelContent.setInterceptsMouseClicks (false, ! introPlaying);
+        info.setInterceptsMouseClicks (! introPlaying, false);
+    }
+    waves.setIntro (seconds);
+    // Board 4A: the screen sits in the panel and moves with it; the header and the info button fade in last (CSS `ease`).
+    const auto t = seconds.value_or (introEnd);
+    const auto fade = WaveBackground::cubicBezier (0.25f, 0.1f, 0.25f, 1.0f, (t - 1.3f) / 0.6f);
+    header.setAlpha (fade);
+    info.setAlpha (fade);
+    panelContent.setAlpha (WaveBackground::panelIntro (t));
+    panelContent.setTransform (juce::AffineTransform::translation (0.0f, (float) WaveBackground::panelDrop (t)));
+}
+
+void StemSplitterEditor::advanceIntro()
+{
+    if (! introPlaying)
+        return;
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    if (introStart == 0.0)
+    {
+        introStart = now;
+        proc.introShown = true;                     // spent on the first frame shown, not on a view the host never shows
+    }
+    setIntroTime ((float) ((now - introStart) / 1000.0));
 }
 
 StemSplitterEditor::~StemSplitterEditor()
@@ -68,13 +177,16 @@ void StemSplitterEditor::resized()
 {
     waves.setBounds (getLocalBounds());
     header.setBounds (24, 16, 712, 44);
+    panelContent.setBounds (panel);
     for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &error, &help })
-        s->setBounds (panel);
+        s->setBounds (panel.withZeroOrigin());
     info.setBounds (716, 476, 24, 24);   // its 16 px ring centred under the panel's right edge, in the 24 px bottom margin
 }
 
 void StemSplitterEditor::mouseDown (const juce::MouseEvent&)
 {
+    if (introPlaying)                                // a click skips the intro
+        setIntroTime ({});
     grabKeyboardFocus();
 }
 
@@ -124,6 +236,8 @@ bool StemSplitterEditor::keyStateChanged (bool isKeyDown)
 
 void StemSplitterEditor::tick()
 {
+    if (! introPlaying)
+        introFrames.reset();
     proc.syncWithJob();
     const auto s = forced.has_value() ? *forced : uiStateFor (proc);
     if (! shown.has_value() || ! s.sameScreenAs (*shown))
@@ -143,7 +257,13 @@ void StemSplitterEditor::tick()
         player.setPositionFraction (0.0);
     stems.setPlayback (player.isPlaying(), player.getPositionFraction(), player.getLengthSeconds());
     stems.setAudible (player.audibleMask());
+    for (int i = 0; i < stems.numRows(); ++i)
+        stems.setVolume (i, player.getVolume (i));
+    stems.setSpeed (player.getSpeed());
+    stems.setPitch (player.getPitch());
     stems.setLoop (player.getLoop(), player.isLooping());
+    if (s.screen == Screen::Stems)
+        prepareMix();
 
     // Beat motion: fast attack, slow release; after the player stops the waves settle and stop.
     const auto now = juce::Time::getMillisecondCounterHiRes();
@@ -185,11 +305,15 @@ void StemSplitterEditor::show (const UiState& s)
 
     if (s.screen != Screen::Stems)
     {
+        mixJob.cancel();
         proc.player.unload();
         unloadableDir = {};
     }
     else if (s.stemDir != stems.getDir())
+    {
+        mixJob.cancel();
         stems.setStems (s.stemDir, s.songName);
+    }
 }
 
 void StemSplitterEditor::setHelpOpen (bool open)
@@ -253,10 +377,16 @@ void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
 {
     setHelpOpen (false);
     drop.setHighlighted (false);
-    proc.startSplit (juce::File (files[0]));
+    startSplit (juce::File (files[0]));
 }
 
-juce::File StemSplitterEditor::renderFile (const std::vector<float>& gains, double speed)
+void StemSplitterEditor::startSplit (const juce::File& input)
+{
+    mixJob.cancel();
+    proc.startSplit (input);
+}
+
+RenderJob::Request StemSplitterEditor::renderRequest (const std::vector<float>& gains, double speed, int semitones)
 {
     auto& p = proc.player;
     if (! shown.has_value()) return {};
@@ -266,12 +396,63 @@ juce::File StemSplitterEditor::renderFile (const std::vector<float>& gains, doub
     const auto len = p.getLengthSeconds();
     const auto loopSec = p.isLooping() ? juce::Range<double> (p.getLoop().getStart() * len, p.getLoop().getEnd() * len)
                                        : juce::Range<double>();
-    const auto name = StemPlayer::renderName (shown->songName, names, gains, speed, loopSec);
+    const auto name = StemPlayer::renderName (shown->songName, names, gains, speed, loopSec, semitones);
     if (name.isEmpty()) return {};
-    const auto dest = stems.getDir().getChildFile ("renders").getChildFile (name);
-    if (dest.existsAsFile()) return dest;            // renders are cached by name (FL keeps pointing at them)
     const auto from = p.isLooping() ? loopSec.getStart() : 0.0, to = p.isLooping() ? loopSec.getEnd() : len;
-    // ponytail: renders on the drag gesture (a loop takes milliseconds, a whole song under a second). Upgrade path: render
-    // in the background whenever the mutes or the loop change.
-    return StemPlayer::render (files, gains, from, to, speed, dest) ? dest : juce::File();
+    return { files, gains, from, to, speed, stems.getDir().getChildFile ("renders").getChildFile (name), semitones };
+}
+
+juce::File StemSplitterEditor::renderFile (const std::vector<float>& gains, double speed)
+{
+    const auto r = renderRequest (gains, speed);
+    if (r.dest == juce::File() || r.dest.existsAsFile()) return r.dest;   // cached by name (FL keeps pointing at them)
+    // ponytail: at speed 1 this renders on the drag gesture (a loop takes milliseconds, a whole song under a second).
+    // Upgrade path: mixJob for these too.
+    return StemPlayer::render (r.stems, r.gains, r.startSec, r.endSec, r.speed, r.dest) ? r.dest : juce::File();
+}
+
+void StemSplitterEditor::prepareMix()
+{
+    auto& p = proc.player;
+    const juce::String plain = p.isLooping() ? "Drag loop" : "Drag mix";
+    const auto speed = p.getSpeed();
+    const auto pitch = p.getPitch();
+    if (speed == 1.0 && pitch == 0)
+    {
+        mixJob.cancel();
+        stems.setMixChip (plain, std::nullopt);
+        return;
+    }
+    const auto r = renderRequest (p.mixGains(), speed, pitch);
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    if (r.dest != mixKey.dest || r.startSec != mixKey.startSec || r.endSec != mixKey.endSec)
+    {
+        mixKey = r;
+        mixKeySince = now;
+    }
+    if (r.dest == juce::File())                      // every stem muted: nothing to drag
+    {
+        stems.setMixChip (plain, std::nullopt);
+        return;
+    }
+    const bool exists = r.dest.existsAsFile();
+    const auto busyOrFailed = [this, &r]
+    {
+        const auto st = mixJob.getState();
+        return mixJob.getDest() == r.dest && (st == RenderJob::State::running || st == RenderJob::State::failed);
+    };
+    // A failed render isn't retried while it stays the job's last one (another render or a cancel clears it).
+    if (! exists && now - mixKeySince >= 500.0 && ! busyOrFailed())
+        mixJob.start (r);
+
+    const bool mine = mixJob.getDest() == r.dest;
+    const auto state = mixJob.getState();
+    if (mine && state == RenderJob::State::running)
+        stems.setMixChip ("Preparing " + juce::String (juce::roundToInt (mixJob.getProgress() * 100.0f)) + "%", mixJob.getProgress());
+    else if (mine && state == RenderJob::State::failed)
+        stems.setMixChip ("Can't prepare", std::nullopt);
+    else if (exists)
+        stems.setMixChip (plain, std::nullopt);
+    else
+        stems.setMixChip ("Preparing 0%", 0.0f);
 }

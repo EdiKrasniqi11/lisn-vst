@@ -7,6 +7,19 @@
 #include <juce_audio_plugin_client/juce_audio_plugin_client.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #include "OpenWith.h"
+#include "PluginEditor.h"
+
+#if JUCE_WINDOWS
+ #ifndef NOMINMAX
+  #define NOMINMAX
+ #endif
+ #ifndef WIN32_LEAN_AND_MEAN
+  #define WIN32_LEAN_AND_MEAN
+ #endif
+ #include <windows.h>
+ #include <dwmapi.h>
+ #pragma comment (lib, "dwmapi")
+#endif
 
 namespace
 {
@@ -16,13 +29,32 @@ public:
     MainWindow (const juce::String& name, juce::AudioProcessorEditor* editor)
         : DocumentWindow (name, juce::Colours::black, minimiseButton | closeButton)
     {
-        setUsingNativeTitleBar (true);
+        // Board 1A: no Windows title bar; the editor's header is the title bar (drag to move, Minimise / Close).
+        setUsingNativeTitleBar (false);
+        setTitleBarHeight (0);
         setResizable (false, false);
+        setDropShadowEnabled (true);
         setContentOwned (editor, true);   // the window deletes the editor, before the holder deletes the processor
         centreWithSize (getWidth(), getHeight());
+        if (auto* lisn = dynamic_cast<StemSplitterEditor*> (editor))
+            lisn->makeTitleBar ([this] { setMinimised (true); }, [this] { closeButtonPressed(); });
     }
 
+    juce::BorderSize<int> getBorderThickness() const override { return {}; }
+    juce::BorderSize<int> getContentComponentBorder() const override { return {}; }
     void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
+
+    void visibilityChanged() override   // Windows 11 rounds the frameless window's corners like other apps
+    {
+        DocumentWindow::visibilityChanged();
+       #if JUCE_WINDOWS
+        if (auto* peer = getPeer())
+        {
+            const DWORD round = 2;   // DWMWCP_ROUND; older Windows ignores the attribute
+            DwmSetWindowAttribute ((HWND) peer->getNativeHandle(), 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &round, sizeof (round));
+        }
+       #endif
+    }
 };
 
 class LisnApp : public juce::JUCEApplication
