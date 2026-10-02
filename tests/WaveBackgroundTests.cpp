@@ -104,6 +104,31 @@ struct WaveBackgroundTests : juce::UnitTest
         expectEquals (alphaAt (WaveBackground::shapeMask (s, window, 1.0f), out), 0);
         expectGreaterThan (peak, 250);
         expectGreaterThan (alphaAt (shadow, out) * 10, peak, "alpha " + juce::String (alphaAt (shadow, out)));
+
+        // Board 4A (Intro.dc.html): translateX(-/+820px) on a 760 px stage, 1.25 s, delays 0.06 s apart.
+        beginTest ("intro: layers start off-screen (width + 60) from alternating sides and land at rest");
+        expectEquals (WaveBackground::introOffset (0, 0.0f, 760.0f).x, -820.0f);
+        expectEquals (WaveBackground::introOffset (1, 0.0f, 760.0f).x, 820.0f);
+        expectEquals (WaveBackground::introOffset (2, 0.0f, 760.0f).x, -820.0f);
+        expectEquals (WaveBackground::introOffset (4, 0.24f, 760.0f).x, -820.0f);   // layer 4 has not started yet
+        for (int i = 0; i < 5; ++i)
+        {
+            expectEquals (WaveBackground::introOffset (i, 1.25f + 0.06f * (float) i, 760.0f).x, 0.0f);
+            expectEquals (WaveBackground::introOffset (i, 0.3f, 760.0f).y, 0.0f);
+        }
+        expect (std::abs (WaveBackground::introOffset (0, 0.6f, 760.0f).x) < 0.2f * 820.0f);   // ease-out: mostly in by half time
+
+        beginTest ("intro: the panel fades from 1.05 s over 0.7 s");
+        expectEquals (WaveBackground::panelIntro (1.0f), 0.0f);
+        expectEquals (WaveBackground::panelIntro (1.75f), 1.0f);
+        expect (WaveBackground::panelIntro (1.4f) > 0.6f && WaveBackground::panelIntro (1.4f) < 1.0f);
+        expectEquals (WaveBackground::panelDrop (1.05f), 18);
+        expectEquals (WaveBackground::panelDrop (1.75f), 0);
+
+        beginTest ("intro: CSS cubic-bezier easing");
+        expectEquals (WaveBackground::cubicBezier (0.25f, 0.1f, 0.25f, 1.0f, 0.0f), 0.0f);
+        expectEquals (WaveBackground::cubicBezier (0.25f, 0.1f, 0.25f, 1.0f, 1.0f), 1.0f);
+        expectWithinAbsoluteError (WaveBackground::cubicBezier (0.25f, 0.1f, 0.25f, 1.0f, 0.5f), 0.8024f, 0.002f);   // CSS `ease`
     }
 };
 

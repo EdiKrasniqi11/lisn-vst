@@ -65,6 +65,16 @@ namespace
 
 WaveBackground::WaveBackground()
 {
+    // The intro's bands: for a layer flowing in from the right, all but the next layer's region (3 px in from its edge,
+    // so no seam shows where they meet).
+    for (size_t i = 0; i + 1 < kLayers.size(); ++i)
+        if (introOffset ((int) i, 0.0f, 0.0f).x > 0.0f)
+        {
+            const auto& next = kLayers[i + 1];
+            bands[i].addRectangle (-20000.0f, -20000.0f, 40000.0f, 40000.0f);
+            bands[i].addPath (WaveGeometry::layerPath (next, next.phase, 0.0f), juce::AffineTransform::translation (-3.0f, 0.0f));
+            bands[i].setUsingNonZeroWinding (false);
+        }
     setOpaque (true);
     setInterceptsMouseClicks (false, false);
     setWantsKeyboardFocus (false);
@@ -130,6 +140,51 @@ juce::RectangleList<int> WaveBackground::motionRegion() const
     return region;
 }
 
+float WaveBackground::cubicBezier (float x1, float y1, float x2, float y2, float x)
+{
+    if (x <= 0.0f) return 0.0f;
+    if (x >= 1.0f) return 1.0f;
+    const auto b = [] (float p1, float p2, float t) { return 3.0f * t * (1.0f - t) * ((1.0f - t) * p1 + t * p2) + t * t * t; };
+    float lo = 0.0f, hi = 1.0f;                            // x (t) is monotonic for x1, x2 in 0..1: bisect for t
+    for (int i = 0; i < 24; ++i)
+    {
+        const auto mid = 0.5f * (lo + hi);
+        (b (x1, x2, mid) < x ? lo : hi) = mid;
+    }
+    return b (y1, y2, 0.5f * (lo + hi));
+}
+
+namespace
+{
+    float easeOut (float x) { return WaveBackground::cubicBezier (0.22f, 1.0f, 0.36f, 1.0f, x); }   // the board's ease-out
+}
+
+juce::Point<float> WaveBackground::introOffset (int layer, float seconds, float width)
+{
+    const auto p = easeOut ((seconds - 0.06f * (float) layer) / 1.25f);
+    return { (layer % 2 == 0 ? -1.0f : 1.0f) * (width + 60.0f) * (1.0f - p), 0.0f };
+}
+
+float WaveBackground::panelIntro (float seconds)
+{
+    return easeOut ((seconds - 1.05f) / 0.7f);
+}
+
+int WaveBackground::panelDrop (float seconds)
+{
+    // ponytail: the board's scale(.985) is left out and the rise is snapped to whole px, so the panel and the cached
+    // screen are plain blits (a scaled frame cost 18-23 ms in the bench). Upgrade path: the scale on a GPU-only path.
+    return juce::roundToInt (18.0f * (1.0f - panelIntro (seconds)));
+}
+
+void WaveBackground::setIntro (std::optional<float> seconds)
+{
+    if (seconds == intro)
+        return;
+    intro = seconds;
+    repaint();
+}
+
 void WaveBackground::paint (juce::Graphics& g)
 {
     // JUCE 8.0.4 has no "preferred image type" query: window paints and snapshots use the native (Direct2D) context,
@@ -150,8 +205,12 @@ void WaveBackground::paint (juce::Graphics& g)
             // Covers the window for every offset: up to one wavelength (+40) along the edge and push along the normal.
             const auto& s = kLayers[i];
             const auto base = window.expanded (40.0f);
-            const auto area = base.getUnion (base - WaveGeometry::direction (s) * (s.wavelength + 40.0f))
-                                  .getUnion (base - WaveGeometry::normal (s) * s.push);
+            auto area = base.getUnion (base - WaveGeometry::direction (s) * (s.wavelength + 40.0f))
+                            .getUnion (base - WaveGeometry::normal (s) * s.push);
+            // A layer flowing in from the left shows its right part: out to its edge's widest point (xBottom, the
+            // wave and the push) and its shadow. (One from the right shows its left part: solid, filled in paint.)
+            if (introOffset ((int) i, 0.0f, window.getWidth()).x < 0.0f)
+                area = area.withRight (juce::jmax (area.getRight(), s.xBottom + s.amp + s.push + 12.0f + 3.0f * layerSigma));
             shapes[i] = shapeMask (s, area, scale);
             shadows[i] = shadowMask (s, area, scale);
         }
@@ -227,15 +286,47 @@ void WaveBackground::paint (juce::Graphics& g)
     offsets = snappedOffsets (flow, pulse, scale);
     {
         juce::Graphics::ScopedSaveState save (g);
-        if (! panel.isEmpty())   // the panel image is opaque inside its rounded rect: nothing to draw under it but the corners
+        if (! panel.isEmpty() && ! intro.has_value())   // the panel image is opaque inside its rounded rect: nothing to draw under it but the corners
         {
             g.excludeClipRegion (panel.reduced (juce::roundToInt (std::ceil (radius)), 0));
             g.excludeClipRegion (panel.reduced (0, juce::roundToInt (std::ceil (radius))));
         }
         g.fillAll (theme.ground);
         for (size_t i = 0; i < kLayers.size(); ++i)
-            drawMask (g, composites[i], offsets[i], scale, false);
+        {
+            auto o = offsets[i];
+            if (intro.has_value())
+                o += (introOffset ((int) i, *intro, window.getWidth()) * scale).roundToInt();
+            if (o.x <= offsets[i].x || bands[i].isEmpty())
+            {
+                drawMask (g, composites[i], o, scale, false);
+                continue;
+            }
+            // Flowing in from the right (board 4A's R shapes): only the band right of the next layer's edge, so a wavy
+            // edge leads. The layer is solid left of its shape mask, over its shadow there.
+            const auto shift = o.toFloat() / scale;
+            const auto& next = kLayers[i + 1];
+            if (! g.clipRegionIntersects (window.withLeft (next.xTop - next.amp - next.push - 3.0f + shift.x).toNearestInt()))
+                continue;
+            juce::Graphics::ScopedSaveState band (g);
+            g.reduceClipRegion (bands[i], juce::AffineTransform::translation (shift));
+            drawMask (g, composites[i], o, scale, false);
+            g.setColour (theme.layers[i]);
+            g.fillRect (window.withRight ((float) (shapes[i].origin.x + o.x) / scale));
+        }
     }
-    if (! panel.isEmpty())
+    if (panel.isEmpty())
+        return;
+    if (! intro.has_value())
+    {
         drawMask (g, panelImage, {}, scale, false);
+    }
+    else if (const auto k = panelIntro (*intro); k > 0.0f)
+    {
+        // CSS opacity + transform on the whole panel, shadow included. The frost stays the resting background's,
+        // which is right once the panel lands.
+        juce::Graphics::ScopedSaveState save (g);
+        g.setOpacity (k);
+        drawMask (g, panelImage, { 0, juce::roundToInt ((float) panelDrop (*intro) * scale) }, scale, false);
+    }
 }

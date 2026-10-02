@@ -32,12 +32,15 @@ public:
     // test hooks
     void forceState (const UiState& s) { forced = s; }   // the timer then shows this instead of uiStateFor (proc)
     void tick();                                     // one timer step
+    // The opening animation's state at `seconds` (board 4A); none, or 1.9 s and later, is the end state and stops it.
+    void setIntroTime (std::optional<float> seconds);
     WaveBackground& background() { return waves; }
     StemsScreen& stemsScreen() { return stems; }
     HelpSheet& helpSheet() { return help; }
 
 private:
     void timerCallback() override { tick(); }
+    void advanceIntro();                             // one display frame of the intro
     void show (const UiState&);
     void showScreen();                               // the shown screen, or the help sheet in its place
     void applyTheme (const Theme&);
@@ -51,6 +54,7 @@ private:
     StemSplitterProcessor& proc;
     WaveBackground waves;
     Header header;
+    juce::Component panelContent;                    // holds the screens; the intro fades and lowers it, not them (keeps their caches)
     DropScreen drop;
     SplittingScreen splitting;
     StemsScreen stems;
@@ -63,6 +67,9 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
     float flow = 0.0f, pulse = 0.0f;                 // wave motion
     double lastTick = 0.0;
+    std::unique_ptr<juce::VBlankAttachment> introFrames;   // drives the intro; tick() drops it once it ends (not in its own callback)
+    bool introPlaying = false;
+    double introStart = 0.0;                         // ms of its first frame; 0 = no frame yet (the window may not show at once)
     juce::File unloadableDir;                        // a stem dir the player failed to load (not retried every tick)
     RenderJob::Request mixKey;                       // the mix settings of the last tick (dest, from, to)
     double mixKeySince = 0.0;                        // when they last changed (ms); a render starts once they settle for 0.5 s
