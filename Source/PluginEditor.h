@@ -40,7 +40,7 @@ private:
     void show (const UiState&);
     void showScreen();                               // the shown screen, or the help sheet in its place
     void applyTheme (const Theme&);
-    juce::File renderFile (juce::uint32 mask);   // the audible stems over the loop (or the song) as a cached WAV
+    juce::File renderFile (const std::vector<float>& gains, double speed);   // those stems at those gains over the loop (or the song), cached
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
     StemSplitterProcessor& proc;

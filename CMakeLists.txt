@@ -1,10 +1,18 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.24)
 project(StemSplitter VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 
 include(FetchContent)
 FetchContent_Declare(JUCE GIT_REPOSITORY https://github.com/juce-framework/JUCE.git GIT_TAG 8.0.15 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(JUCE)
+
+# Signalsmith Stretch (MIT): keep-the-key time-stretch for the speed control. Linear (MIT) is its FFT library, declared
+# first at a pinned commit so Stretch's own CMakeLists uses this one instead of fetching its tag.
+FetchContent_Declare(signalsmith-linear GIT_REPOSITORY https://github.com/Signalsmith-Audio/linear.git
+    GIT_TAG de55e6a50ffcf6f8f43f649692d94691c7025151)   # 0.6.4
+FetchContent_Declare(signalsmith-stretch GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
+    GIT_TAG a670068d9aeb64913331d5cc29337b19a457a7df)   # 1.4.0
+FetchContent_MakeAvailable(signalsmith-linear signalsmith-stretch)
 
 juce_add_binary_data(LisnFonts SOURCES
     Resources/fonts/Unbounded-Bold.ttf
@@ -49,7 +57,7 @@ target_compile_definitions(StemSplitter PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
 
 target_link_libraries(StemSplitter
-    PRIVATE LisnFonts juce::juce_audio_utils
+    PRIVATE LisnFonts juce::juce_audio_utils signalsmith-stretch
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 juce_add_console_app(lisn_tests PRODUCT_NAME "lisn_tests")
@@ -75,7 +83,7 @@ target_compile_definitions(lisn_tests PRIVATE
     "JucePlugin_Name=\"LISN StemSplitter\"")
 
 target_link_libraries(lisn_tests PRIVATE
-    LisnFonts juce::juce_audio_utils juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+    LisnFonts juce::juce_audio_utils signalsmith-stretch juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 enable_testing()
 add_executable(progress_test tests/progress_test.cpp)

@@ -1,5 +1,7 @@
 #include "../Source/StemPlayer.h"
 #include <thread>
+#include <algorithm>
+#include <cmath>
 
 struct StemPlayerTests : juce::UnitTest
 {
@@ -99,6 +101,29 @@ struct StemPlayerTests : juce::UnitTest
         pull (0.0f);
         pull (0.0f);
         expectGreaterThan (rms (buf, 0, 512), 0.2f);
+
+        beginTest ("volume is heard within one block");
+        expectEquals (p.getVolume (0), 1.0f);
+        pull (0.0f);
+        const float full = rms (buf, 0, 512);
+        p.setVolume (0, 0.5f);
+        pull (0.0f);                                         // the ramp block
+        pull (0.0f);
+        expectWithinAbsoluteError (rms (buf, 0, 512), full * 0.5f, full * 0.1f);
+        p.setVolume (0, 2.0f);                               // clamped to 1
+        expectEquals (p.getVolume (0), 1.0f);
+        pull (0.0f);
+        pull (0.0f);
+        expectWithinAbsoluteError (rms (buf, 0, 512), full, full * 0.1f);
+        expectEquals (p.getVolume (99), 1.0f);               // out of range
+
+        beginTest ("mixGains");
+        p.setVolume (0, 0.25f);
+        expect (p.mixGains() == std::vector<float> { 0.25f });
+        p.setMuted (0, true);
+        expect (p.mixGains() == std::vector<float> { 0.0f });
+        p.setMuted (0, false);
+        p.setVolume (0, 1.0f);
 
         beginTest ("pause");
         expectLessThan (msTaken ([&] { p.pause(); }), 20.0);
@@ -269,6 +294,9 @@ struct StemPlayerTests : juce::UnitTest
         expectLessThan (msTaken ([&] { p.play(); }), 20.0, "play");
         expectLessThan (msTaken ([&] { p.setMuted (1, true); }), 20.0, "mute");
         expectLessThan (msTaken ([&] { p.setLoop (0.2, 0.4); }), 20.0, "loop");
+        expectLessThan (msTaken ([&] { p.setSpeed (1.2); }), 20.0, "speed");
+        expectLessThan (msTaken ([&] { p.setVolume (0, 0.5f); }), 20.0, "volume");
+        juce::Thread::sleep (30);                            // a few stretched blocks run on the audio thread
         expectLessThan (msTaken ([&] { expect (p.load ({ sine, sine })); }), 100.0, "load");
         expectLessThan (msTaken ([&] { p.unload(); }), 20.0, "unload");
         running = false;
@@ -284,12 +312,94 @@ struct StemPlayerTests : juce::UnitTest
         p.addTo (big);
         expectGreaterThan (rms (big, 768, 256), 0.2f);
 
+        beginTest ("load resets the volumes and the speed");
+        p.setVolume (0, 0.3f);
+        p.setSpeed (1.3);
+        expect (p.load ({ sine }));
+        expectEquals (p.getVolume (0), 1.0f);
+        expectEquals (p.getSpeed(), 1.0);
+
+        beginTest ("speed keeps the key and moves the playhead faster");
+        p.prepare (48000, 512);
+        expect (p.load ({ sine }));
+        juce::Thread::sleep (100);                           // the read-ahead fills (40 stretched blocks read ~25600 samples)
+        p.setSpeed (2.0);                                    // clamped
+        expectEquals (p.getSpeed(), 1.5);
+        p.setSpeed (0.99999999);                             // rounded to hundredths, as renderName names it
+        expectEquals (p.getSpeed(), 1.0);
+        p.setSpeed (1.234);
+        expectEquals (p.getSpeed(), 1.23);
+        p.setSpeed (1.25);
+        p.play();
+        juce::AudioBuffer<float> heard (1, 512 * 40);
+        for (int k = 0; k < 40; ++k)
+        {
+            pull (0.0f);
+            heard.copyFrom (0, k * 512, buf, 0, 0, 512);
+            if (k % 10 == 9) juce::Thread::sleep (10);       // lets the read-ahead keep up with the faster reads
+        }
+        expectWithinAbsoluteError (p.getPositionFraction() * p.getLengthSeconds(), 40 * 512 / 48000.0 * 1.25, 0.02);
+        {
+            const int from = 9600, len = 40 * 512 - from;        // after the stretcher's ~60 ms fade-in
+            bool finite = true;
+            for (int i = from; i < from + len; ++i) finite = finite && std::isfinite (heard.getSample (0, i));
+            expect (finite, "NaN or inf in the stretched output");
+            const float level = rms (heard, from, len);
+            expect (level > 0.354f * 0.891f && level < 0.354f * 1.122f, "rms " + juce::String (level));   // within 1 dB
+            int crossings = 0;
+            for (int i = from + 1; i < from + len; ++i)
+                crossings += (heard.getSample (0, i - 1) < 0.0f) != (heard.getSample (0, i) < 0.0f);
+            expectWithinAbsoluteError (crossings / 2.0 / (len / 48000.0), 440.0, 4.4);
+        }
+
+        beginTest ("pause fades the stretched output");
+        p.pause();
+        pull (0.0f);                                         // the fade-out block
+        expectLessThan (rms (buf, 384, 128), rms (buf, 0, 128));
+        pull (0.0f);
+        expect (allEqual (buf, 0.0f));
+
+        beginTest ("at 1x after a seek the stems play directly again");
+        p.setSpeed (1.0);
+        p.setPositionFraction (0.0);
+        p.play();
+        juce::Thread::sleep (30);
+        pull (0.0f);
+        expectLessThan (rms (buf, 0, 64), rms (buf, 448, 64) / 4,    // a sine from phase 0 already has a smaller head, so a plain "<" cannot tell a ramp from a step
+                        "the first block after a resume ramps in");
+        pull (0.0f);                                         // stretched, this block would still be in the ~60 ms fade-in
+        expectGreaterThan (rms (buf, 0, 512), 0.3f);
+        p.pause();
+        pull (0.0f);
+
+        beginTest ("engaging the stretcher mid-play fades the direct audio out, not to silence");
+        expect (p.load ({ sine }));
+        juce::Thread::sleep (100);                           // the read-ahead fills
+        p.play();
+        for (int k = 0; k < 5; ++k) pull (0.0f);             // 1x: the stems play directly
+        p.setSpeed (1.25);
+        pull (0.0f);                                         // the engaging block: the stretcher is still in its pre-roll
+        expectGreaterThan (rms (buf, 0, 64), 0.2f);
+
+        beginTest ("a loop edit that keeps the playhead does not reset the stretcher");
+        for (int k = 0; k < 20; ++k)                         // ~0.2 s: past the stretcher's fade-in
+        {
+            pull (0.0f);
+            if (k % 10 == 9) juce::Thread::sleep (10);
+        }
+        p.setLoop (0.0, 0.9);                                // the playhead (~0.3 s) is inside, so it stays
+        juce::Thread::sleep (30);                            // the read-ahead refills at the re-based range
+        pull (0.0f);
+        expectGreaterThan (rms (buf, 0, 512), 0.3f);         // a reset drops to the pre-roll; the engage fade-out alone is ~0.2
+        p.pause();
+        pull (0.0f);
+
         beginTest ("render");
         const auto a = dir.getChildFile ("a.wav"), b = dir.getChildFile ("b.wav");
         writeWav (a, 1.0, [] (int, int i) { return (float) (0.3 * std::sin (0.04 * i)); });
         writeWav (b, 1.0, [] (int, int i) { return (float) (0.2 * std::sin (0.07 * i)); });
         const auto both = dir.getChildFile ("renders").getChildFile ("both.wav");
-        expect (StemPlayer::render ({ a, b }, 0b11, 0.25, 0.75, both));
+        expect (StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.25, 0.75, 1.0, both));
         juce::AudioFormatManager fm;
         fm.registerBasicFormats();
         {
@@ -310,13 +420,98 @@ struct StemPlayerTests : juce::UnitTest
                 expectLessThan (worst, 1e-4f);
             }
         }
-        const auto modified = both.getLastModificationTime();
-        juce::Thread::sleep (20);
-        expect (StemPlayer::render ({ a, b }, 0b11, 0.25, 0.75, both));   // cached by name: not rewritten
-        expect (both.getLastModificationTime() == modified);
-        expect (! StemPlayer::render ({ a, b }, 0, 0.0, 1.0, dir.getChildFile ("none.wav")));
-        expect (! StemPlayer::render ({ a, b }, 0b01, 0.5, 0.5, dir.getChildFile ("empty-range.wav")));
+        expect (! StemPlayer::render ({ a, b }, { 0.0f, 0.0f }, 0.0, 1.0, 1.0, dir.getChildFile ("none.wav")));
+        expect (! StemPlayer::render ({ a, b }, { 1.0f, 0.0f }, 0.5, 0.5, 1.0, dir.getChildFile ("empty-range.wav")));
         expect (! dir.getChildFile ("none.wav").exists() && ! dir.getChildFile ("empty-range.wav").exists());
+
+        beginTest ("render applies the gains, and rendering again overwrites");
+        expect (StemPlayer::render ({ a, b }, { 0.5f, 1.0f }, 0.25, 0.75, 1.0, both));   // callers cache by name, render never does
+        {
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (both));
+            expect (r != nullptr);
+            if (r != nullptr)
+            {
+                juce::AudioBuffer<float> got (2, 22050);
+                r->read (&got, 0, 22050, 0, true, true);
+                float worst = 0.0f;
+                for (int i = 0; i < 22050; ++i)
+                {
+                    const int s = 11025 + i;
+                    const float want = (float) (0.5 * 0.3 * std::sin (0.04 * s) + 0.2 * std::sin (0.07 * s));
+                    worst = juce::jmax (worst, std::abs (got.getSample (0, i) - want), std::abs (got.getSample (1, i) - want));
+                }
+                expectLessThan (worst, 1e-4f);
+            }
+        }
+
+        beginTest ("render reports progress and can be cancelled");
+        std::vector<float> seen;
+        expect (StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.0, 1.0, 1.0, dir.getChildFile ("renders").getChildFile ("progress.wav"),
+                                    [&] (float f) { seen.push_back (f); return true; }));
+        expect (! seen.empty() && juce::exactlyEqual (seen.back(), 1.0f) && std::is_sorted (seen.begin(), seen.end()));
+        const auto cancelled = dir.getChildFile ("renders").getChildFile ("cancelled.wav");
+        expect (! StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.0, 1.0, 1.0, cancelled, [] (float) { return false; }));
+        expect (! cancelled.exists() && ! cancelled.getSiblingFile ("cancelled.wav.part").exists());
+
+        beginTest ("a render that cannot replace dest leaves no .part");
+        const auto held = dir.getChildFile ("renders").getChildFile ("held.wav");
+        {
+            juce::FileOutputStream hold (held);                  // open in another app: the rename cannot replace it
+            expect (hold.openedOk());
+            expect (! StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.0, 1.0, 1.0, held));
+        }
+        expect (! held.getSiblingFile ("held.wav.part").exists());
+
+        beginTest ("renderName");
+        const juce::StringArray stemNames { "vocals", "drums" };
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 1.0f }, 1.0, {}), juce::String ("Song - vocals+drums.wav"));
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 0.85f, 0.0f }, 1.0, {}), juce::String ("Song - vocals 85.wav"));
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 1.0f }, 1.25, {}), juce::String ("Song - vocals+drums x1.25.wav"));
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 1.0f, 0.0f }, 1.0, { 58.25, 86.5 }),
+                      juce::String ("Song - vocals (0.58.25-1.26.50).wav"));
+        expectEquals (StemPlayer::renderName ("Song.mp3", stemNames, { 0.0f, 0.0f }, 1.0, {}), juce::String());
+
+        beginTest ("render keeps the key at other speeds, at the exact length");
+        for (const double s : { 0.75, 1.25 })
+        {
+            const auto out = dir.getChildFile ("renders").getChildFile ("tone x" + juce::String (s, 2) + ".wav");
+            expect (StemPlayer::render ({ sine }, { 1.0f }, 0.0, 2.0, s, out), "render at " + juce::String (s));
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (out));
+            expect (r != nullptr);
+            if (r == nullptr) continue;
+            expectWithinAbsoluteError ((double) r->lengthInSamples, 2.0 * 44100.0 / s, 1.0);
+            const int len = (int) r->lengthInSamples;
+            juce::AudioBuffer<float> got (2, len);
+            r->read (&got, 0, len, 0, true, true);
+            const int from = len / 4, n = len / 2;           // the middle, away from the edges
+            int crossings = 0;
+            for (int i = from + 1; i < from + n; ++i)
+                crossings += (got.getSample (0, i - 1) < 0.0f) != (got.getSample (0, i) < 0.0f);
+            expectWithinAbsoluteError (crossings / 2.0 / (n / 44100.0), 440.0, 4.4);
+            const float level = rms (got, from, n);
+            expect (level > 0.354f * 0.891f && level < 0.354f * 1.122f, "rms " + juce::String (level));
+        }
+
+        beginTest ("a cancelled stretched render leaves no file");
+        const auto cut = dir.getChildFile ("renders").getChildFile ("cut.wav");
+        int calls = 0;
+        expect (! StemPlayer::render ({ sine }, { 1.0f }, 0.0, 2.0, 1.25, cut, [&] (float) { return ++calls < 2; }));
+        expect (! cut.exists() && ! cut.getSiblingFile ("cut.wav.part").exists());
+
+        beginTest ("a tiny range still stretches to the exact length");
+        const auto tiny = dir.getChildFile ("renders").getChildFile ("tiny.wav");
+        expect (StemPlayer::render ({ sine }, { 1.0f }, 0.5, 0.6, 1.25, tiny));
+        {
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (tiny));
+            expect (r != nullptr);
+            if (r != nullptr)
+            {
+                expectEquals ((int) r->lengthInSamples, 3528);   // llround (4410 / 1.25)
+                juce::AudioBuffer<float> got (2, 3528);
+                r->read (&got, 0, 3528, 0, true, true);
+                expectGreaterThan (rms (got, 200, 1500), 0.2f);   // stretched audio, not silence
+            }
+        }
 
         p.unload();   // releases the files so the temp dir can go
         dir.deleteRecursively();

@@ -2,6 +2,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <array>
 #include <atomic>
+#include <vector>
 
 // Plays every stem of a song in lockstep through the plugin's output, on top of the audio passing through.
 // Message thread: load/unload/play/pause/seek/mutes/loop/queries. Audio thread: addTo(). UI: takePeak()/takeReachedEnd().
@@ -36,6 +37,10 @@ public:
     bool isMuted (int stem) const;
     void solo (int stem);                       // FL: only this stem on; if it already is the only one on, all on
     juce::uint32 audibleMask() const;           // bit i set = stem i audible
+    void setVolume (int stem, float level);     // 0..1 (clamped), heard within one block (stretching: after its ~0.1 s
+                                                // latency); load() resets every stem to 1
+    float getVolume (int stem) const;           // 1 for a stem out of range
+    std::vector<float> mixGains() const;        // per loaded stem: its volume, or 0 while muted (what a mix renders)
 
     void setLoop (double startFraction, double endFraction);   // sets the range and switches looping on
     void setLooping (bool);                     // keeps the range; turning it on jumps into the loop if outside it
@@ -45,14 +50,28 @@ public:
     void addTo (juce::AudioBuffer<float>& buffer);   // audio thread; idle = two relaxed atomic loads, then return
     float takePeak() { return peak.exchange (0.0f); }  // highest mix level since the last call
 
-    // The stems in audibleMask summed over [startSec, endSec) into a 24-bit stereo WAV at the stems' rate. Reuses dest if it
-    // already exists (renders are cached by name). False if nothing is audible, the range is empty or a file is unreadable.
-    static bool render (const juce::Array<juce::File>& stems, juce::uint32 audibleMask, double startSec, double endSec,
-                        const juce::File& dest);
+    // Playback speed 0.5..1.5 (clamped, rounded to hundredths) that keeps the key. At exactly 1 the stems play directly;
+    // otherwise every block goes through a time-stretcher, which stays engaged until the next play() or a seek that moves
+    // the playhead (a loop edit that keeps it does not reset the stretcher). load() resets it to 1.
+    void setSpeed (double);
+    double getSpeed() const { return speed.load(); }
+
+    // Every stem with a gain above 0, scaled by it, summed over [startSec, endSec) into a 24-bit stereo WAV at the stems'
+    // rate. Always writes, replacing dest; callers cache by name (the editor's renderFile does). onProgress gets 0..1 after
+    // each chunk; returning false cancels. False, with no dest.part left, if no gain is above 0, the range
+    // is empty, a file is unreadable, a write fails, dest cannot be replaced (open in another app) or it was cancelled. A speed other than 1 (0.5..1.5) time-stretches it, keeping the key, to (endSec - startSec) / speed long.
+    static bool render (const juce::Array<juce::File>& stems, const std::vector<float>& gains, double startSec, double endSec,
+                        double speed, const juce::File& dest, const std::function<bool (float)>& onProgress = {});
+
+    // A render's cached file name: "<song> - <stem>[ <volume %>]+..."; " x<speed>" when not 1; " (m.ss.cc-m.ss.cc)" for a
+    // loop (empty loopSeconds = the whole song). Empty when no gain is above 0.
+    static juce::String renderName (const juce::String& songFile, const juce::StringArray& stemNames,
+                                    const std::vector<float>& gains, double speed, juce::Range<double> loopSeconds);
 
 private:
     static constexpr int readAheadSamples = 32768;
     class Stack;
+    struct Stretch;                             // the time-stretcher (StemPlayer.cpp), configured in prepare()
     juce::int64 songPosition (juce::int64 linear) const;   // read-ahead position -> song position (loop-wrapped)
     bool wraps() const;                                     // looping, and playback started before the loop end
     juce::int64 linearPosition() const;                     // the audio thread's position, in source samples
@@ -62,9 +81,16 @@ private:
     juce::TimeSliceThread readAhead { "LISN player read-ahead" };
     std::unique_ptr<Stack> stack;
     juce::AudioTransportSource transport;
-    juce::AudioBuffer<float> scratch, mix;      // 2 * maxStems channels / stereo, sized in prepare()
+    juce::AudioBuffer<float> scratch, mix, mixIn;   // 2 * maxStems channels for 1.5x a block / stereo, a block / stereo, 1.5x
+    std::unique_ptr<Stretch> stretch;
+    std::atomic<double> speed { 1.0 };
+    std::atomic<bool> restretch { false };          // play(), unload() and moving seeks: the next block decides the path again
+    bool stretching = false;                        // audio thread: blocks go through the stretcher
+    double carry = 0.0;                             // audio thread: the part of an input sample owed to the next block
+    float outGain = 1.0f;                           // audio thread: the stretched output's level at the end of the last block
     juce::Array<juce::File> files;
     std::array<std::atomic<bool>, maxStems> muted {};
+    std::array<std::atomic<float>, maxStems> volumes;   // 0..1 per stem; 1 after construction and load()
     std::array<float, maxStems> gains {};       // audio thread: each stem's gain at the end of the last block
     std::atomic<int> stemCount { 0 };
     std::atomic<bool> wanted { false }, prepared { false }, reachedEnd { false }, looping { false };
