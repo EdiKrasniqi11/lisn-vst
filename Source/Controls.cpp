@@ -161,7 +161,7 @@ void DragChip::setProgress (std::optional<float> p)
 
 void DragChip::mouseDrag (const juce::MouseEvent& e)
 {
-    if (progress.has_value() || e.getDistanceFromDragStart() <= 4 || fileToDrag == nullptr)
+    if (dragStarted || progress.has_value() || e.getDistanceFromDragStart() <= 4 || fileToDrag == nullptr)
         return;
     dragStarted = true;   // once per gesture
     const auto f = fileToDrag();

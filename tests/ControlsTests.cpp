@@ -47,6 +47,28 @@ struct ControlsTests : juce::UnitTest
                                                   &strip, &strip, juce::Time::getCurrentTime(), { 300.0f, 10.0f }, juce::Time::getCurrentTime(), 2, false));
         expectEquals (heard, 1.0);
         expectEquals (strip.getSpeed(), 1.0);
+
+        beginTest ("a DragChip asks for its file once per gesture, and never while busy");
+        DragChip chip;
+        chip.setSize (120, 34);
+        int asked = 0;
+        chip.fileToDrag = [&] { ++asked; return juce::File(); };   // no file: nothing is actually dragged
+        auto at = [&] (float x)
+        {
+            const auto now = juce::Time::getCurrentTime();
+            return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { x, 17.0f }, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                     &chip, &chip, now, { 10.0f, 17.0f }, now, 1, true);
+        };
+        chip.mouseDown (at (10.0f));
+        chip.mouseDrag (at (12.0f));                 // within 4 px
+        expectEquals (asked, 0);
+        chip.mouseDrag (at (20.0f));
+        chip.mouseDrag (at (30.0f));                 // the same gesture
+        expectEquals (asked, 1);
+        chip.setProgress (0.4f);
+        chip.mouseDown (at (10.0f));
+        chip.mouseDrag (at (30.0f));
+        expectEquals (asked, 1);
     }
 };
 
