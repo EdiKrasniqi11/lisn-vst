@@ -121,11 +121,20 @@ int dragChipWidth (const juce::String& text)
     return (int) std::ceil (1 + 8 + 16 + 6 + juce::GlyphArrangement::getStringWidth (chipFont(), text) + 12 + 1);
 }
 
-void drawDragChip (juce::Graphics& g, juce::Rectangle<float> chip, const juce::String& text)
+void drawDragChip (juce::Graphics& g, juce::Rectangle<float> chip, const juce::String& text, std::optional<float> progress)
 {
     drawDashedRoundedRect (g, chip.reduced (0.5f), 9.5f, 1.0f, 3.0f, 3.0f, Theme::cream.withAlpha (0.3f));
+    if (progress.has_value())
+    {
+        const juce::Graphics::ScopedSaveState save (g);
+        juce::Path shape;
+        shape.addRoundedRectangle (chip, 10.0f);     // overflow hidden: the line follows the rounded corners
+        g.reduceClipRegion (shape);
+        g.setColour (Theme::cream);
+        g.fillRect (chip.withTop (chip.getBottom() - 2.0f).withWidth (chip.getWidth() * juce::jlimit (0.0f, 1.0f, *progress)));
+    }
     const juce::Rectangle<float> grip (chip.getX() + 9.0f, chip.getCentreY() - 8.0f, 16.0f, 16.0f);
-    g.setColour (Theme::cream.withAlpha (0.82f));
+    g.setColour (Theme::cream.withAlpha (progress.has_value() ? 0.6f : 0.82f));
     strokeIcon (g, Icons::grip, grip, 3.0f);
     g.setFont (chipFont());
     g.drawText (text, chip.withLeft (grip.getRight() + 6.0f), juce::Justification::centredLeft, false);
@@ -142,9 +151,17 @@ void DragChip::setText (const juce::String& t)
     if (t != text) { text = t; repaint(); }
 }
 
+void DragChip::setProgress (std::optional<float> p)
+{
+    if (p == progress) return;
+    progress = p;
+    setMouseCursor (p.has_value() ? juce::MouseCursor::WaitCursor : juce::MouseCursor::DraggingHandCursor);
+    repaint();
+}
+
 void DragChip::mouseDrag (const juce::MouseEvent& e)
 {
-    if (dragStarted || e.getDistanceFromDragStart() <= 4 || fileToDrag == nullptr)
+    if (progress.has_value() || e.getDistanceFromDragStart() <= 4 || fileToDrag == nullptr)
         return;
     dragStarted = true;   // once per gesture
     const auto f = fileToDrag();

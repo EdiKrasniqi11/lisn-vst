@@ -173,6 +173,39 @@ struct UiStateTests : juce::UnitTest
             four.getChildFile ("renders").deleteRecursively();
         }
 
+        beginTest ("at a speed other than 1, Drag mix prepares the stretched mix in the background");
+        {
+            StemSplitterProcessor proc;
+            proc.prepareToPlay (48000.0, 512);
+            StemSplitterEditor ed (proc);
+            UiState s;
+            s.screen = Screen::Stems;
+            s.stemDir = four;
+            s.songName = "Song.mp3";
+            ed.forceState (s);
+            ed.tick();
+            auto& screen = ed.stemsScreen();
+            proc.player.setSpeed (1.25);
+            ed.tick();
+            expect (! screen.mixFile().exists());            // nothing cached yet, and no render on the message thread
+            juce::Thread::sleep (600);
+            ed.tick();
+            expect (screen.chipText().startsWith ("Preparing"), screen.chipText());
+            for (int i = 0; i < 500 && screen.chipText() != "Drag mix"; ++i) { juce::Thread::sleep (10); ed.tick(); }
+            expectEquals (screen.chipText(), juce::String ("Drag mix"));
+            juce::StringArray names;
+            for (const auto& f : proc.player.getFiles()) names.add (f.getFileNameWithoutExtension());
+            const auto cached = four.getChildFile ("renders")
+                                    .getChildFile (StemPlayer::renderName ("Song.mp3", names, proc.player.mixGains(), 1.25, {}));
+            expect (cached.existsAsFile(), cached.getFullPathName());
+            expect (screen.mixFile() == cached);
+
+            proc.player.setSpeed (1.0);
+            ed.tick();
+            expectEquals (screen.chipText(), juce::String ("Drag mix"));
+            four.getChildFile ("renders").deleteRecursively();
+        }
+
         beginTest ("keys: Space, L, 1-6, Shift+1-6, Home on the Stems screen; everything else goes to the host");
         {
             StemSplitterProcessor proc;

@@ -722,7 +722,14 @@ void StemsScreen::setLoop (juce::Range<double> range, bool on)
     repaint (stripArea());                             // the strip's loop ticks
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     loopButton.repaint();
-    dragChip.setText (loopOn ? "Drag loop" : "Drag mix");
+    setMixChip (loopOn ? "Drag loop" : "Drag mix", std::nullopt);
+}
+
+void StemsScreen::setMixChip (const juce::String& text, std::optional<float> progress)
+{
+    dragChip.setProgress (progress);
+    if (text == dragChip.getText()) return;
+    dragChip.setText (text);
     resized();                                       // the chip width follows its text
 }
 

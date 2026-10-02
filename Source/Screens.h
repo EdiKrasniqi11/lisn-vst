@@ -150,6 +150,8 @@ public:
     juce::Rectangle<int> stripArea() const;
     int hotEdge() const { return hot; }              // 0 = loop start, 1 = loop end, -1 = none (test hook)
     juce::String chipText() const { return dragChip.getText(); }   // test hook
+    // The Drag mix chip's text ("Drag mix", "Preparing 40%" ...) and progress line; its width follows the text.
+    void setMixChip (const juce::String& text, std::optional<float> progress);
     std::function<void (double, double)> onSetLoop;  // a finished loop drag, a handle trim or defaultLoop (snapped unless Alt)
     std::function<void()> onToggleLoop;
     std::function<juce::File()> mixFile;             // the Drag mix / Drag loop file

@@ -1,5 +1,6 @@
 #pragma once
 #include "PluginProcessor.h"
+#include "RenderJob.h"
 #include "Screens.h"
 #include "UiState.h"
 #include "WaveBackground.h"
@@ -40,7 +41,11 @@ private:
     void show (const UiState&);
     void showScreen();                               // the shown screen, or the help sheet in its place
     void applyTheme (const Theme&);
-    juce::File renderFile (const std::vector<float>& gains, double speed);   // those stems at those gains over the loop (or the song), cached
+    // Those stems at those gains over the loop (or the song): what to render and its cached dest (none when nothing is heard).
+    RenderJob::Request renderRequest (const std::vector<float>& gains, double speed);
+    juce::File renderFile (const std::vector<float>& gains, double speed);   // renderRequest's dest, rendered here unless cached
+    void prepareMix();                               // at a speed other than 1, renders the mix on mixJob; sets the chip
+    void startSplit (const juce::File&);             // cancels mixJob first: it must not hold stems a re-split replaces
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
     StemSplitterProcessor& proc;
@@ -59,6 +64,9 @@ private:
     float flow = 0.0f, pulse = 0.0f;                 // wave motion
     double lastTick = 0.0;
     juce::File unloadableDir;                        // a stem dir the player failed to load (not retried every tick)
+    RenderJob::Request mixKey;                       // the mix settings of the last tick (dest, from, to)
+    double mixKeySince = 0.0;                        // when they last changed (ms); a render starts once they settle for 0.5 s
+    RenderJob mixJob;                                // last: it stops before anything it reads goes
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemSplitterEditor)
 };

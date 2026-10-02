@@ -159,6 +159,11 @@ int runSnapshots (const juce::File& outDir)
         p.player.setSpeed (0.85);
         ed.tick();
     };
+    const auto preparing = [volumes] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        volumes (p, ed);
+        ed.stemsScreen().setMixChip ("Preparing 40%", 0.4f);   // the job's progress, frozen (StemsVst's busy chip)
+    };
     const auto moving = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
     const auto helpTab = [] (int tab)
     {
@@ -179,6 +184,7 @@ int runSnapshots (const juce::File& outDir)
         { "stems4-dusk-zoom", "dusk", state (Screen::Stems, false), 1.0f, zoomed },
         { "stems6-midnight-loop", "midnight", state (Screen::Stems, true), 1.0f, sixLooping },
         { "stems4-dusk-volume", "dusk", state (Screen::Stems, false), 1.0f, volumes },
+        { "stems4-dusk-preparing", "dusk", state (Screen::Stems, false), 1.0f, preparing },
         { "stems6-midnight-volume", "midnight", state (Screen::Stems, true), 1.0f, volumes6 },
         { "stems6-midnight-speed", "midnight", state (Screen::Stems, true), 1.0f, slow },
         { "stems4-dusk-zoom@2x", "dusk", state (Screen::Stems, false), 2.0f, zoomed },

@@ -116,7 +116,8 @@ void drawDashedRoundedRect (juce::Graphics&, juce::Rectangle<float>, float radiu
 
 // The dashed "Drag" chip of the mockups: 1 px dashed border (dash 3, gap 3) at cream 0.3, radius 10, grip 16 px stroke 3,
 // 6 px, text Bold 12 at cream 0.82. chipWidth gives the width for `text` (padding 0 12 0 8 plus the border).
-void drawDragChip (juce::Graphics&, juce::Rectangle<float> bounds, const juce::String& text);
+// With a progress (StemsVst's .chip.busy): grip and text at cream 0.6, a 2 px cream line along the bottom at that fraction.
+void drawDragChip (juce::Graphics&, juce::Rectangle<float> bounds, const juce::String& text, std::optional<float> progress = {});
 int dragChipWidth (const juce::String& text);
 
 // A standalone drag chip: dragging it drops fileToDrag() (when it exists) onto a DAW track.
@@ -126,12 +127,14 @@ public:
     DragChip();
     void setText (const juce::String&);          // repaints; size it with dragChipWidth (text) x 34
     juce::String getText() const { return text; }
+    void setProgress (std::optional<float>);     // while set: the busy chip (a progress line, the wait cursor) and no drag
     std::function<juce::File()> fileToDrag;
-    void paint (juce::Graphics& g) override { drawDragChip (g, getLocalBounds().toFloat(), text); }
+    void paint (juce::Graphics& g) override { drawDragChip (g, getLocalBounds().toFloat(), text, progress); }
     void mouseDown (const juce::MouseEvent&) override { dragStarted = false; }
     void mouseDrag (const juce::MouseEvent&) override;
 
 private:
     juce::String text { "Drag mix" };
+    std::optional<float> progress;
     bool dragStarted = false;
 };
