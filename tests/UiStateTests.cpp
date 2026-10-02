@@ -63,6 +63,7 @@ struct UiStateTests : juce::UnitTest
             for (const auto& s : { drop, splitting, stems4, stems6, python, demucs, failed })
             {
                 StemSplitterProcessor proc;
+                proc.introShown = true;   // no intro: tests start at rest
                 StemSplitterEditor ed (proc);
                 ed.forceState (s);
                 ed.tick();
@@ -89,6 +90,7 @@ struct UiStateTests : juce::UnitTest
         {
             StemSplitterProcessor proc;
             proc.prepareToPlay (48000.0, 512);
+            proc.introShown = true;   // no intro: tests start at rest
             StemSplitterEditor ed (proc);
             UiState s;
             s.screen = Screen::Stems;
@@ -132,6 +134,7 @@ struct UiStateTests : juce::UnitTest
         {
             StemSplitterProcessor proc;
             proc.prepareToPlay (48000.0, 512);
+            proc.introShown = true;   // no intro: tests start at rest
             StemSplitterEditor ed (proc);
             UiState s;
             s.screen = Screen::Stems;
@@ -177,6 +180,7 @@ struct UiStateTests : juce::UnitTest
         {
             StemSplitterProcessor proc;
             proc.prepareToPlay (48000.0, 512);
+            proc.introShown = true;   // no intro: tests start at rest
             StemSplitterEditor ed (proc);
             UiState s;
             s.screen = Screen::Stems;
@@ -210,6 +214,7 @@ struct UiStateTests : juce::UnitTest
         {
             StemSplitterProcessor proc;
             proc.prepareToPlay (48000.0, 512);
+            proc.introShown = true;   // no intro: tests start at rest
             StemSplitterEditor ed (proc);
             UiState s;
             s.screen = Screen::Stems;
@@ -566,6 +571,7 @@ struct UiStateTests : juce::UnitTest
         beginTest ("switching 6 to 4 stems drops the old rows, player files and peaks");
         {
             StemSplitterProcessor proc;
+            proc.introShown = true;   // no intro: tests start at rest
             StemSplitterEditor ed (proc);
             UiState s;
             s.screen = Screen::Stems;
@@ -591,6 +597,7 @@ struct UiStateTests : juce::UnitTest
         beginTest ("the info button opens the help sheet in place of the screen; the x or the info button closes it");
         {
             StemSplitterProcessor proc;
+            proc.introShown = true;   // no intro: tests start at rest
             StemSplitterEditor ed (proc);
             UiState s;                                               // the Drop screen
             ed.forceState (s);
@@ -633,6 +640,7 @@ struct UiStateTests : juce::UnitTest
             {                                                        // the keys still work with the sheet open
                 StemSplitterProcessor keyProc;
                 keyProc.prepareToPlay (48000.0, 512);
+                keyProc.introShown = true;   // no intro: tests start at rest
                 StemSplitterEditor keyEd (keyProc);
                 UiState ks;
                 ks.screen = Screen::Stems;

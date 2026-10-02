@@ -139,6 +139,10 @@ void StemSplitterEditor::setIntroTime (std::optional<float> seconds)
         introPlaying = seconds.has_value();
         for (auto* c : std::initializer_list<juce::Component*> { &header, &panelContent })
             c->setCachedComponentImage (introPlaying ? new FadeCache (*c) : nullptr);
+        // Clicks reach the editor (which skips the intro) instead of a control that is still faded out.
+        header.setInterceptsMouseClicks (! introPlaying, ! introPlaying);
+        panelContent.setInterceptsMouseClicks (false, ! introPlaying);
+        info.setInterceptsMouseClicks (! introPlaying, false);
     }
     waves.setIntro (seconds);
     // Board 4A: the screen sits in the panel and moves with it; the header and the info button fade in last (CSS `ease`).

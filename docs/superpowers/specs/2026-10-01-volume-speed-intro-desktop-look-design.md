@@ -98,9 +98,9 @@ All of them are in this spec. Volume, speed and the opening animation are **shar
 - The subtitle is unchanged.
 
 ### Opening animation (`WaveBackground` plus the editor), board 4A
-- **Waves:** `WaveBackground::setIntro (float seconds)`. Each of the 5 wave layers starts a full width off-screen, from alternating sides, and eases to its resting offset over 1.25 s, with an ease-out like `cubic-bezier(.22,1,.36,1)`. Each layer starts 0.08 s after the one behind it.
+- **Waves:** `WaveBackground::setIntro (float seconds)`. Each of the 5 wave layers starts 820 px (the width plus 60) off-screen, from alternating sides, and eases to its resting offset over 1.25 s, with an ease-out like `cubic-bezier(.22,1,.36,1)`. Each layer starts 0.06 s after the one behind it (board 4A).
 - **Panel:** fades in and rises 18 px over 0.7 s from 1.05 s. Its image's alpha is drawn by `WaveBackground`.
-- **Header and screen:** the editor's header and current screen fade in over 0.6 s from 1.3 s (`setAlpha`). The whole intro takes about 1.9 s.
+- **Header and screen:** the screen sits in the panel and fades and rises with it (board 4A). The header and the info button fade in over 0.6 s from 1.3 s (`setAlpha`). The panel's `scale(.985)` is dropped: scaled frames cost 18-23 ms. The whole intro takes about 1.9 s.
 - **Frame rate:** a `juce::VBlankAttachment` drives the intro at the display rate. After the intro it is removed and the editor's 30 Hz timer carries on as now. Intro frames only blit the cached layers at offsets, so the bench's motion-frame budget (4 ms) applies to them too.
 - **When it plays:** the processor's `introShown` flag (not saved in the state) is set on the first editor. Later editors for that processor start at the end state.
   - A mouse click during the intro jumps to the end.
