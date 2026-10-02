@@ -260,6 +260,9 @@ int runSnapshots (const juce::File& outDir)
 int runBench()
 {
     const auto four = makeStems (tempDir().getChildFile ("four"), false);
+    // The first image of a process starts Direct2D/GDI+ (0.25 to 1.4 s). A host or the window's peer pays that anyway, so warm it first:
+    // startup_ms is then our own work.
+    juce::Graphics (juce::Image (juce::Image::ARGB, 8, 8, true)).fillAll (juce::Colours::red);
     double startupMs = 0.0;
     // Startup: the editor's construction plus one full paint, for a processor whose state restores a Stems screen.
     {
