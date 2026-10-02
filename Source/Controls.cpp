@@ -23,7 +23,7 @@ SegmentedPill::SegmentedPill (juce::StringArray itemTexts) : items (std::move (i
     prefWidth = items.isEmpty() ? (int) (2 * pillInset) : (int) std::ceil (itemRects.getLast().getRight() + pillInset);
 
     setWantsKeyboardFocus (false);
-    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);   // not DraggingHandCursor: JUCE decodes a GIF for it, 1.4 s cold (GDI+ start-up)
     setBufferedToImage (true);   // the header repaints with every motion frame; the pill itself rarely changes
 }
 
@@ -143,7 +143,7 @@ void drawDragChip (juce::Graphics& g, juce::Rectangle<float> chip, const juce::S
 DragChip::DragChip()
 {
     setWantsKeyboardFocus (false);
-    setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
 void DragChip::setText (const juce::String& t)
@@ -155,7 +155,7 @@ void DragChip::setProgress (std::optional<float> p)
 {
     if (p == progress) return;
     progress = p;
-    setMouseCursor (p.has_value() ? juce::MouseCursor::WaitCursor : juce::MouseCursor::DraggingHandCursor);
+    setMouseCursor (p.has_value() ? juce::MouseCursor::WaitCursor : juce::MouseCursor::PointingHandCursor);
     repaint();
 }
 

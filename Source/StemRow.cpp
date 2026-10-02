@@ -111,7 +111,7 @@ StemRow::StemRow (juce::File wav, juce::String key)
     : file (std::move (wav)), stemKey (std::move (key)), name (stemKey.substring (0, 1).toUpperCase() + stemKey.substring (1))
 {
     setWantsKeyboardFocus (false);
-    setMouseCursor (juce::MouseCursor::DraggingHandCursor);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
     lightButton.onToggle = [this] { if (onToggleMute != nullptr) onToggleMute(); };
     lightButton.onSolo = [this] { if (onSolo != nullptr) onSolo(); };
     wave.onMouse = [this] (WaveMouse m, double f, bool alt, bool ctrl) { if (onWaveMouse != nullptr) onWaveMouse (m, f, alt, ctrl); };

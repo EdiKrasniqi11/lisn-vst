@@ -260,6 +260,44 @@ int runSnapshots (const juce::File& outDir)
 int runBench()
 {
     const auto four = makeStems (tempDir().getChildFile ("four"), false);
+    double startupMs = 0.0;
+    // Startup: the editor's construction plus one full paint, for a processor whose state restores a Stems screen.
+    {
+        auto restored = [&] (StemSplitterProcessor& p)
+        {
+            juce::ValueTree v ("StemSplitter");
+            v.setProperty ("input", four.getChildFile ("Travis Snippet.mp3").getFullPathName(), nullptr);
+            v.setProperty ("stems", four.getFullPathName(), nullptr);
+            juce::MemoryBlock mb;
+            if (auto xml = v.createXml()) juce::AudioProcessor::copyXmlToBinary (*xml, mb);
+            p.setStateInformation (mb.getData(), (int) mb.getSize());
+            p.introShown = true;
+            p.prepareToPlay (48000.0, 512);
+        };
+        juce::Image img (juce::Image::ARGB, 760, 500, true, juce::SoftwareImageType());
+        auto startup = [&] (bool paint, bool preload)
+        {
+            StemSplitterProcessor p;
+            restored (p);
+            if (preload)                                 // diagnostic: the load happens outside the timed part
+                p.player.load ({ four.getChildFile ("vocals.wav"), four.getChildFile ("drums.wav"),
+                                four.getChildFile ("bass.wav"), four.getChildFile ("other.wav") });
+            const auto t0 = now();
+            StemSplitterEditor e (p);
+            if (paint)
+            {
+                juce::Graphics g (img);
+                e.paintEntireComponent (g, true);
+            }
+            return now() - t0;
+        };
+        startupMs = startup (true, false);
+        std::printf ("startup_ms=%.1f\nstartup_construct_only_ms=%.1f\nstartup_construct_no_load_ms=%.1f\n",
+                     startupMs, startup (false, false), startup (false, true));
+        if (startupMs > 300.0)
+            std::printf ("FAIL: startup_ms %.1f is over the 300 ms budget\n", startupMs);
+    }
+
     StemSplitterProcessor proc;
     proc.introShown = true;                          // the intro frames are timed on their own below
     proc.prepareToPlay (48000.0, 512);
@@ -412,5 +450,5 @@ int runBench()
         std::puts ("FAIL: motion_frame_ms is over the 4 ms budget");
     if (introMs > 4.0)
         std::puts ("FAIL: intro_frame_ms is over the 4 ms budget");
-    return metered && motionMs <= 4.0 && introMs <= 4.0 && stretchUs <= 3200.0 ? 0 : 1;
+    return metered && startupMs <= 300.0 && motionMs <= 4.0 && introMs <= 4.0 && stretchUs <= 3200.0 ? 0 : 1;
 }
