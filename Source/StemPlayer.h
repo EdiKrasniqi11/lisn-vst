@@ -37,7 +37,8 @@ public:
     bool isMuted (int stem) const;
     void solo (int stem);                       // FL: only this stem on; if it already is the only one on, all on
     juce::uint32 audibleMask() const;           // bit i set = stem i audible
-    void setVolume (int stem, float level);     // 0..1 (clamped), heard within one block; load() resets every stem to 1
+    void setVolume (int stem, float level);     // 0..1 (clamped), heard within one block (stretching: after its ~0.1 s
+                                                // latency); load() resets every stem to 1
     float getVolume (int stem) const;           // 1 for a stem out of range
     std::vector<float> mixGains() const;        // per loaded stem: its volume, or 0 while muted (what a mix renders)
 
