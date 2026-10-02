@@ -55,9 +55,9 @@ public:
     double getSpeed() const { return speed.load(); }
 
     // Every stem with a gain above 0, scaled by it, summed over [startSec, endSec) into a 24-bit stereo WAV at the stems'
-    // rate. Reuses dest if it already exists (renders are cached by name). onProgress gets 0..1 after each chunk; returning
-    // false cancels. False, with no dest and no dest.part left, if no gain is above 0, the range is empty, a file is
-    // unreadable, a write fails or it was cancelled. A speed other than 1 (0.5..1.5) time-stretches it, keeping the key, to (endSec - startSec) / speed long.
+    // rate. Always writes, replacing dest; callers cache by name (the editor's renderFile does). onProgress gets 0..1 after
+    // each chunk; returning false cancels. False, with no dest.part left, if no gain is above 0, the range
+    // is empty, a file is unreadable, a write fails, dest cannot be replaced (open in another app) or it was cancelled. A speed other than 1 (0.5..1.5) time-stretches it, keeping the key, to (endSec - startSec) / speed long.
     static bool render (const juce::Array<juce::File>& stems, const std::vector<float>& gains, double startSec, double endSec,
                         double speed, const juce::File& dest, const std::function<bool (float)>& onProgress = {});
 

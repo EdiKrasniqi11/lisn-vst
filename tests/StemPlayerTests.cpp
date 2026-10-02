@@ -394,19 +394,14 @@ struct StemPlayerTests : juce::UnitTest
                 expectLessThan (worst, 1e-4f);
             }
         }
-        const auto modified = both.getLastModificationTime();
-        juce::Thread::sleep (20);
-        expect (StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.25, 0.75, 1.0, both));   // cached by name: not rewritten
-        expect (both.getLastModificationTime() == modified);
         expect (! StemPlayer::render ({ a, b }, { 0.0f, 0.0f }, 0.0, 1.0, 1.0, dir.getChildFile ("none.wav")));
         expect (! StemPlayer::render ({ a, b }, { 1.0f, 0.0f }, 0.5, 0.5, 1.0, dir.getChildFile ("empty-range.wav")));
         expect (! dir.getChildFile ("none.wav").exists() && ! dir.getChildFile ("empty-range.wav").exists());
 
-        beginTest ("render applies the gains");
-        const auto half = dir.getChildFile ("renders").getChildFile ("half.wav");
-        expect (StemPlayer::render ({ a, b }, { 0.5f, 1.0f }, 0.25, 0.75, 1.0, half));
+        beginTest ("render applies the gains, and rendering again overwrites");
+        expect (StemPlayer::render ({ a, b }, { 0.5f, 1.0f }, 0.25, 0.75, 1.0, both));   // callers cache by name, render never does
         {
-            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (half));
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (both));
             expect (r != nullptr);
             if (r != nullptr)
             {
@@ -431,6 +426,15 @@ struct StemPlayerTests : juce::UnitTest
         const auto cancelled = dir.getChildFile ("renders").getChildFile ("cancelled.wav");
         expect (! StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.0, 1.0, 1.0, cancelled, [] (float) { return false; }));
         expect (! cancelled.exists() && ! cancelled.getSiblingFile ("cancelled.wav.part").exists());
+
+        beginTest ("a render that cannot replace dest leaves no .part");
+        const auto held = dir.getChildFile ("renders").getChildFile ("held.wav");
+        {
+            juce::FileOutputStream hold (held);                  // open in another app: the rename cannot replace it
+            expect (hold.openedOk());
+            expect (! StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.0, 1.0, 1.0, held));
+        }
+        expect (! held.getSiblingFile ("held.wav.part").exists());
 
         beginTest ("renderName");
         const juce::StringArray stemNames { "vocals", "drums" };

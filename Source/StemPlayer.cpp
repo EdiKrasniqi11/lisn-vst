@@ -452,7 +452,6 @@ void StemPlayer::addTo (juce::AudioBuffer<float>& buffer)
 bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector<float>& gains, double startSec, double endSec,
                          double speed, const juce::File& dest, const std::function<bool (float)>& onProgress)
 {
-    if (dest.existsAsFile()) return true;            // renders are cached by name (FL keeps pointing at them)
     juce::AudioFormatManager fm;
     fm.registerBasicFormats();
     juce::OwnedArray<juce::AudioFormatReader> readers;
@@ -488,12 +487,9 @@ bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector
                                              : writeStretched (*w, readers, levels, first, last, s, rate, onProgress);
         }
     }
-    if (! ok)
-    {
-        part.deleteFile();
-        return false;
-    }
-    return part.moveFileTo (dest);
+    if (ok && part.moveFileTo (dest)) return true;   // the move fails if dest is open in another app
+    part.deleteFile();
+    return false;
 }
 
 juce::String StemPlayer::renderName (const juce::String& songFile, const juce::StringArray& stemNames,

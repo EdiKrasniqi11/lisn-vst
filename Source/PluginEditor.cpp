@@ -269,6 +269,7 @@ juce::File StemSplitterEditor::renderFile (const std::vector<float>& gains, doub
     const auto name = StemPlayer::renderName (shown->songName, names, gains, speed, loopSec);
     if (name.isEmpty()) return {};
     const auto dest = stems.getDir().getChildFile ("renders").getChildFile (name);
+    if (dest.existsAsFile()) return dest;            // renders are cached by name (FL keeps pointing at them)
     const auto from = p.isLooping() ? loopSec.getStart() : 0.0, to = p.isLooping() ? loopSec.getEnd() : len;
     // ponytail: renders on the drag gesture (a loop takes milliseconds, a whole song under a second). Upgrade path: render
     // in the background whenever the mutes or the loop change.
