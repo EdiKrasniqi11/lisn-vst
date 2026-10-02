@@ -178,7 +178,7 @@ void StemPlayer::prepare (double sampleRate, int maxBlockSize)
 {
     prepared = false;
     const auto song = stack != nullptr ? songPosition (linearPosition()) : 0;   // before hostRate changes
-    const int block = juce::jmax (1, maxBlockSize), inMax = (int) std::ceil (block * 1.5) + 1;   // a stretched block reads up to 1.5x
+    const int block = juce::jmax (1, maxBlockSize), inMax = (int) std::ceil (block * 2.0) + 1;   // a stretched block reads up to 2x
     scratch.setSize (2 * maxStems, inMax);
     mix.setSize (2, block);
     mixIn.setSize (2, inMax);
@@ -193,7 +193,7 @@ void StemPlayer::prepare (double sampleRate, int maxBlockSize)
     carry = 0.0;
     outGain = 1.0f;
     hostRate = sampleRate;
-    // The transport is prepared for the largest read, a stretched block's 1.5x, so its resampler's ring never grows on the audio thread.
+    // The transport is prepared for the largest read, a stretched block's 2x, so its resampler's ring never grows on the audio thread.
     transport.prepareToPlay (inMax, sampleRate);
     transport.prepareToPlay (inMax, sampleRate);          // again: sizes the resampler for the ratio the first call set
     if (stack != nullptr)
@@ -370,7 +370,7 @@ std::vector<float> StemPlayer::mixGains() const
 
 void StemPlayer::setSpeed (double s)
 {
-    speed = std::round (juce::jlimit (0.5, 1.5, s) * 100.0) / 100.0;   // hundredths, as renderName names it; near 1 is exactly 1
+    speed = std::round (juce::jlimit (0.5, 2.0, s) * 10000.0) / 10000.0;   // 4 decimals (whole BPM steps land exactly), as renderName names it
 }
 
 void StemPlayer::setPitch (int semitones)
@@ -502,7 +502,7 @@ bool StemPlayer::render (const juce::Array<juce::File>& stems, const std::vector
         if (w != nullptr)
         {
             out.release();   // the writer owns the stream now
-            const double s = juce::jlimit (0.5, 1.5, speed);
+            const double s = juce::jlimit (0.5, 2.0, speed);
             const int st = juce::jlimit (-12, 12, semitones);
             ok = juce::exactlyEqual (s, 1.0) && st == 0 ? writeMix (*w, readers, levels, first, last, onProgress)
                                                         : writeStretched (*w, readers, levels, first, last, s, st, rate, onProgress);
@@ -530,7 +530,7 @@ juce::String StemPlayer::renderName (const juce::String& songFile, const juce::S
         return juce::String (cs / 6000) + "." + juce::String (cs / 100 % 60).paddedLeft ('0', 2) + "." + juce::String (cs % 100).paddedLeft ('0', 2);
     };
     auto name = songFile.upToLastOccurrenceOf (".", false, false) + " - " + parts.joinIntoString ("+");
-    if (! juce::exactlyEqual (speed, 1.0)) name << " x" << juce::String (speed, 2);
+    if (! juce::exactlyEqual (speed, 1.0)) name << " x" << juce::String (speed, 4).trimCharactersAtEnd ("0");
     if (semitones != 0) name << " " << (semitones > 0 ? "+" : "") << semitones << "st";
     if (! loopSeconds.isEmpty()) name << " (" << clock (loopSeconds.getStart()) << "-" << clock (loopSeconds.getEnd()) << ")";
     return juce::File::createLegalFileName (name + ".wav");

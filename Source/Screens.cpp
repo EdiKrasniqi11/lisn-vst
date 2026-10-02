@@ -388,20 +388,28 @@ SpeedStrip::SpeedStrip()
     setMouseClickGrabsKeyboardFocus (false);
 }
 
-void SpeedStrip::setTheme (const Theme& t)
-{
-    theme = t;
-    repaint();
-}
-
 void SpeedStrip::setSpeed (double v)
 {
-    set (juce::jlimit (0.5, 1.5, v), false);
+    set (juce::jlimit (0.5, 2.0, v), false);
 }
 
 void SpeedStrip::setPitch (int st)
 {
     setKey (juce::jlimit (-12, 12, st), false);
+}
+
+void SpeedStrip::setBpm (double b)
+{
+    if (juce::exactlyEqual (b, bpm)) return;
+    bpm = b;
+    repaint();
+}
+
+double SpeedStrip::stepSpeed (double from, int steps, double bpm)
+{
+    if (bpm > 0.0)
+        return juce::jlimit (0.5, 2.0, (double) (juce::roundToInt (bpm * from) + steps) / bpm);
+    return juce::jlimit (0.5, 2.0, std::round (from * 20.0 + steps) / 20.0);
 }
 
 void SpeedStrip::setKey (int st, bool report)
@@ -420,105 +428,91 @@ void SpeedStrip::set (double v, bool report)
     if (report && onChange != nullptr) onChange (v);
 }
 
-double SpeedStrip::speedAt (float x, float left, float right)
+void SpeedStrip::paintBox (juce::Graphics& g, juce::Rectangle<int> box, const char* icon, const juce::String& value, const juce::String& caption)
 {
-    const auto centre = (left + right) / 2.0f;
-    if (std::abs (x - centre) <= 4.0f) return 1.0;
-    const auto raw = 0.5 + juce::jlimit (0.0, 1.0, (double) (x - left) / (double) (right - left));
-    return juce::jlimit (0.5, 1.5, std::round (raw * 20.0) / 20.0);
-}
+    if (! g.clipRegionIntersects (box)) return;
+    const auto r = box.toFloat().reduced (0.5f);
+    g.setColour (Theme::cream.withAlpha (0.06f));
+    g.fillRoundedRectangle (r, 10.0f);
+    g.setColour (Theme::cream.withAlpha (0.22f));
+    g.drawRoundedRectangle (r, 10.0f, 1.0f);
 
-void SpeedStrip::resized()
-{
-    hintX = (float) getWidth() - 10.0f - 12.0f - (float) juce::GlyphArrangement::getStringWidth (Fonts::body (11.0f), "same key");
-    valueX = hintX - 12.0f - 48.0f;
-    track = { 10.0f + 118.0f + 12.0f, 6.0f, valueX - 12.0f - (10.0f + 118.0f + 12.0f), 4.0f };
+    g.setColour (Theme::cream);
+    strokeIcon (g, icon, { r.getX() + 10.0f, r.getCentreY() - 8.0f, 16.0f, 16.0f }, 2.0f);
+    const auto tx = r.getX() + 34.0f, tw = r.getRight() - 28.0f - tx;
+    text (g, Fonts::body (14.0f, 700), Theme::cream, value, { tx, r.getCentreY() - 13.0f, tw, 15.0f }, juce::Justification::centredLeft);
+    text (g, Fonts::body (10.0f), Theme::cream.withAlpha (0.55f), caption, { tx, r.getCentreY() + 3.0f, tw, 11.0f }, juce::Justification::centredLeft);
+
+    // The chevron column: a 1 px divider, then up over down.
+    const auto cx = r.getRight() - 14.0f;
+    g.setColour (Theme::cream.withAlpha (0.14f));
+    g.fillRect (r.getRight() - 27.0f, r.getY() + 6.0f, 1.0f, r.getHeight() - 12.0f);
+    g.setColour (Theme::cream.withAlpha (0.75f));
+    strokeIcon (g, "M7 14l5-5 5 5", { cx - 7.0f, r.getCentreY() - 15.0f, 14.0f, 14.0f }, 2.0f);
+    strokeIcon (g, "M7 10l5 5 5-5", { cx - 7.0f, r.getCentreY() + 1.0f, 14.0f, 14.0f }, 2.0f);
 }
 
 void SpeedStrip::paint (juce::Graphics& g)
 {
-    const auto h = (float) getHeight();
     const auto times = juce::String (juce::CharPointer_UTF8 ("\xc3\x97"));
-    g.setColour (Theme::cream);
-    strokeIcon (g, Icons::speed, { 10.0f, (h - 16.0f) / 2.0f, 16.0f, 16.0f }, 2.0f);
-    text (g, Fonts::body (13.0f, 700), Theme::cream, "Speed", { 10.0f + 16.0f + 6.0f, 0.0f, 118.0f - 22.0f, h }, juce::Justification::centredLeft);
-
-    const auto centre = track.getCentreX();
-    const auto x = track.getX() + (float) (speed - 0.5) * track.getWidth();
-    g.setColour (Theme::cream.withAlpha (0.16f));
-    g.fillRoundedRectangle (track, 2.0f);
-    g.setColour (theme.accent());
-    g.fillRoundedRectangle (juce::Rectangle<float> (juce::jmin (x, centre), track.getY(), std::abs (x - centre), track.getHeight()), 2.0f);
-    g.setColour (juce::Colour (0x73000000));
-    g.fillEllipse (juce::Rectangle<float> (14.0f, 14.0f).withCentre ({ x, track.getCentreY() + 1.0f }));
-    g.setColour (Theme::cream);
-    g.fillEllipse (juce::Rectangle<float> (14.0f, 14.0f).withCentre ({ x, track.getCentreY() }));
-
-    const char* labels[] = { "0.5", "0.75", "1", "1.25", "1.5" };
-    for (int i = 0; i < 5; ++i)
-    {
-        const auto cx = track.getX() + track.getWidth() * (float) i / 4.0f;   // the first and last labels sit flush with the track's ends
-        const juce::Rectangle<float> r (i == 0 ? cx : i == 4 ? cx - 50.0f : cx - 25.0f, track.getBottom() + 4.0f, 50.0f, 12.0f);
-        text (g, Fonts::body (10.0f), Theme::cream.withAlpha (0.5f), juce::String (labels[i]) + times, r,
-              i == 0 ? juce::Justification::centredLeft : i == 4 ? juce::Justification::centredRight : juce::Justification::centred);
-    }
-
-    text (g, Fonts::body (14.0f, 700), Theme::cream, juce::String (speed, 2).trimCharactersAtEnd ("0").trimCharactersAtEnd (".") + times,
-          { valueX, 0.0f, 48.0f, h }, juce::Justification::centredRight);
-    const auto key = pitch == 0 ? juce::String ("same key") : (pitch > 0 ? "+" : "") + juce::String (pitch) + " st";
-    const auto keyW = (float) getWidth() - 10.0f - 12.0f - hintX;
-    text (g, Fonts::body (11.0f, pitch == 0 ? 400 : 700), Theme::cream.withAlpha (pitch == 0 ? 0.55f : 1.0f), key, { hintX, 0.0f, keyW, h },
-          juce::Justification::centredLeft);
-    // Up and down chevrons after it: the key drags up or down.
-    juce::Path chevrons;
-    const auto cx = hintX + keyW + 6.0f, cy = h / 2.0f;
-    chevrons.startNewSubPath (cx - 3.0f, cy - 3.0f); chevrons.lineTo (cx, cy - 6.0f); chevrons.lineTo (cx + 3.0f, cy - 3.0f);
-    chevrons.startNewSubPath (cx - 3.0f, cy + 3.0f); chevrons.lineTo (cx, cy + 6.0f); chevrons.lineTo (cx + 3.0f, cy + 3.0f);
-    g.setColour (Theme::cream.withAlpha (0.55f));
-    g.strokePath (chevrons, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    const auto speedText = juce::String (speed, 2) + times;
+    if (bpm > 0.0)
+        paintBox (g, tempoBox(), Icons::speed, juce::String (juce::roundToInt (bpm * speed)) + " BPM",
+                  speedText + " of " + juce::String (juce::roundToInt (bpm)));
+    else
+        paintBox (g, tempoBox(), Icons::speed, speedText, "Speed");
+    paintBox (g, keyBox(), Icons::note, (pitch >= 0 ? "+" : "") + juce::String (pitch) + " st", "Key");
 }
 
-bool SpeedStrip::onKey (juce::Point<int> p) const
+SpeedStrip::Target SpeedStrip::targetAt (juce::Point<int> p) const
 {
-    return p.x >= (int) hintX - 4;
-}
-
-bool SpeedStrip::onSlider (juce::Point<int> p) const
-{
-    return p.x >= (int) track.getX() - 7 && p.x <= (int) track.getRight() + 7 && p.y < 18;
+    return tempoBox().contains (p) ? Target::tempo : keyBox().contains (p) ? Target::key : Target::none;
 }
 
 void SpeedStrip::mouseMove (const juce::MouseEvent& e)
 {
-    setMouseCursor (onKey (e.getPosition()) ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
+    setMouseCursor (targetAt (e.getPosition()) != Target::none ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
 }
 
 void SpeedStrip::mouseDown (const juce::MouseEvent& e)
 {
-    draggingKey = onKey (e.getPosition());
-    keyDragFrom = pitch;
-    dragging = ! draggingKey && onSlider (e.getPosition());
-    if (dragging) set (speedAt ((float) e.x, track.getX(), track.getRight()), true);
+    dragging = targetAt (e.getPosition());
+    dragFromSpeed = speed;
+    dragFromPitch = pitch;
+    moved = false;
 }
 
 void SpeedStrip::mouseDrag (const juce::MouseEvent& e)
 {
-    if (draggingKey)   // 6 px a semitone, up is higher
-        setKey (juce::jlimit (-12, 12, keyDragFrom - e.getDistanceFromDragStartY() / 6), true);
-    if (dragging) set (speedAt ((float) e.x, track.getX(), track.getRight()), true);
+    const auto steps = -e.getDistanceFromDragStartY() / 4;   // 4 px a step, up is more
+    if (steps != 0) moved = true;
+    if (dragging == Target::tempo) set (stepSpeed (dragFromSpeed, steps, bpm), true);
+    if (dragging == Target::key)   setKey (juce::jlimit (-12, 12, dragFromPitch + steps), true);
+}
+
+void SpeedStrip::mouseUp (const juce::MouseEvent& e)
+{
+    // A click (no drag) on a box's chevron column steps it: the upper half up, the lower half down.
+    const auto box = dragging == Target::tempo ? tempoBox() : keyBox();
+    if (dragging != Target::none && ! moved && e.getNumberOfClicks() == 1 && e.x >= box.getRight() - 27)
+    {
+        const int step = e.y < box.getCentreY() ? 1 : -1;
+        if (dragging == Target::tempo) set (stepSpeed (speed, step, bpm), true);
+        else                           setKey (juce::jlimit (-12, 12, pitch + step), true);
+    }
+    dragging = Target::none;
 }
 
 void SpeedStrip::mouseDoubleClick (const juce::MouseEvent& e)
 {
-    if (onKey (e.getPosition())) setKey (0, true);
-    else if (onSlider (e.getPosition())) set (1.0, true);
+    const auto t = targetAt (e.getPosition());
+    if (t == Target::tempo && e.x < tempoBox().getRight() - 27) set (1.0, true);
+    if (t == Target::key && e.x < keyBox().getRight() - 27)     setKey (0, true);
 }
 
 void StemsScreen::setSpeed (double v)
 {
-    if (juce::exactlyEqual (v, speedStrip.getSpeed())) return;
     speedStrip.setSpeed (v);
-    repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle's BPM follows the speed
 }
 
 juce::String beatsText (double beats)
@@ -545,7 +539,7 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
     addAndMakeVisible (newSong);
     addAndMakeVisible (playButton);
     addAndMakeVisible (speedStrip);
-    speedStrip.onChange = [this] (double s) { repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16); if (onSpeed != nullptr) onSpeed (s); };
+    speedStrip.onChange = [this] (double s) { if (onSpeed != nullptr) onSpeed (s); };
     speedStrip.onPitch = [this] (int st) { if (onPitch != nullptr) onPitch (st); };
 }
 
@@ -581,6 +575,7 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     loopRange = dragBand = {};
     loopOn = false;
     tempo = {};
+    speedStrip.setBpm (0.0);
     playButton.setPlaying (false);
     rows.clear();
 
@@ -693,7 +688,8 @@ juce::Rectangle<int> StemsScreen::loopArea (juce::Range<double> r) const   // th
 void StemsScreen::setTempo (Tempo t)
 {
     tempo = t;
-    repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle shows the BPM
+    speedStrip.setBpm (t.bpm);                       // the Tempo box shows it
+    repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle's loop beats
 }
 
 double StemsScreen::gridStep() const
@@ -1024,9 +1020,9 @@ void StemsScreen::resized()
     newSong.setBounds (19 + 674 - w, 18, w, newSong.height);
     // While preparing, the chip keeps its widest width so the changing percent doesn't nudge the Loop button.
     const auto chipW = dragChipWidth (dragChip.isPreparing() ? juce::String ("Preparing 100%") : dragChip.getText());
-    dragChip.setBounds (newSong.getX() - 8 - chipW, 18, chipW, 34);
-    loopButton.setBounds (dragChip.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
-    speedStrip.setBounds (19, 343, 674, 30);
+    loopButton.setBounds (newSong.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
+    speedStrip.setBounds (19 + 10, 339, 674 - 20, 40);                               // board 5B: Tempo and Key boxes...
+    dragChip.setBounds (19 + 674 - 10 - chipW, 339 + 2, chipW, 36);                  // ...and the mix chip at the right end
     auto y = 74;
     for (auto* r : rows)
     {
@@ -1044,7 +1040,6 @@ void StemsScreen::paint (juce::Graphics& g)
         const auto x = 19.0f + 36.0f + 12.0f, w = (float) loopButton.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
         text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
         auto subtitle = timeText;
-        if (tempo.bpm > 0.0) subtitle << dot << juce::roundToInt (tempo.bpm * speedStrip.getSpeed()) << " BPM";   // the tempo you hear
         if (loopOn)
         {
             subtitle << dot << "loop " << mmss (loopRange.getStart() * length)
@@ -1204,7 +1199,7 @@ namespace
         { { Icons::play, "Play or pause", "Every stem plays together, in sync", { key ("Space") } },
           { Icons::jump, "Jump and scrub", "Click the waves to jump there, drag to scrub", { mouse ("Click"), mouse ("Drag") } },
           { Icons::home, "Back to the start", "Back to 0:00, or to the loop's start while looping", { key ("Home") } },
-          { Icons::speed, "Speed and key", "Drag Speed; drag the key up or down, 12 semitones each way", { mouse ("Speed"), orWord, mouse ("Key") } } },
+          { Icons::speed, "Tempo and key", "Drag either box up or down; double-click it to reset", { mouse ("Tempo"), orWord, mouse ("Key") } } },
         { { Icons::file, "Split a song", "Drop it on the panel or click Browse. 6 stems adds guitar and piano", { mouse ("Drop") } },
           { Icons::speakerOff, "Mute a stem", "Click its light; stems 1 to 6 go top to bottom", { mouse ("Light"), orWord, key (oneToSix) } },
           { Icons::speaker, "Solo a stem", "Only that stem plays; do it again to hear them all",

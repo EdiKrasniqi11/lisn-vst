@@ -25,6 +25,7 @@ namespace Icons
     inline constexpr const char* grid   = "M4 4v16M9 4v16M14 4v16M19 4v16";
     inline constexpr const char* layers = "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5";
     inline constexpr const char* speed  = "M4.5 18a8.5 8.5 0 1 1 15 0M12 13l3.5-3.5";   // stroked
+    inline constexpr const char* note   = "M9 18V5l12-2v13M6 15a3 3 0 1 0 0 6a3 3 0 1 0 0-6M18 13a3 3 0 1 0 0 6a3 3 0 1 0 0-6";   // stroked
     inline constexpr const char* mouse  = "M12 3a6 6 0 0 0-6 6v6a6 6 0 0 0 12 0V9a6 6 0 0 0-6-6zM12 7v3";
 }
 

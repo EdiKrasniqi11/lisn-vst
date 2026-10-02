@@ -26,27 +26,35 @@ struct ControlsTests : juce::UnitTest
         expectEquals (bar.getValue(), 1.0f);
         expect (! bar.getWantsKeyboardFocus());
 
-        beginTest ("SpeedStrip maps x to 0.5..1.5 in 0.05 steps and sticks at 1");
-        expectEquals (SpeedStrip::speedAt (100.0f, 100.0f, 500.0f), 0.5);
-        expectEquals (SpeedStrip::speedAt (500.0f, 100.0f, 500.0f), 1.5);
-        expectEquals (SpeedStrip::speedAt (303.0f, 100.0f, 500.0f), 1.0);   // within 4 px of the centre (300)
-        expectEquals (SpeedStrip::speedAt (400.0f, 100.0f, 500.0f), 1.25);
-        expectEquals (SpeedStrip::speedAt (362.0f, 100.0f, 500.0f), 1.15);  // 1.155 rounds to the 0.05 step 1.15
-        expectEquals (SpeedStrip::speedAt (0.0f, 100.0f, 500.0f), 0.5);     // clamped
+        beginTest ("SpeedStrip steps whole BPM (0.05x with no tempo) within 0.5..2");
+        expectWithinAbsoluteError (SpeedStrip::stepSpeed (1.0, 1, 92.0), 93.0 / 92.0, 1e-9);
+        expectWithinAbsoluteError (SpeedStrip::stepSpeed (1.15, -3, 92.0), 103.0 / 92.0, 1e-9);   // 1.15 x 92 = 105.8 shows 106
+        expectEquals (SpeedStrip::stepSpeed (1.0, 2, 0.0), 1.1);
+        expectEquals (SpeedStrip::stepSpeed (1.95, 5, 0.0), 2.0);                                  // clamped
+        expectEquals (SpeedStrip::stepSpeed (1.0, -200, 92.0), 0.5);
 
-        beginTest ("SpeedStrip: setSpeed is silent, Reset reports 1 and nothing takes focus");
+        beginTest ("SpeedStrip: setSpeed is silent, a double-click on a box resets it and nothing takes focus");
         SpeedStrip strip;
-        strip.setSize (674, 30);
+        strip.setSize (654, 40);
         double heard = -1.0;
+        int heardKey = 99;
         strip.onChange = [&] (double s) { heard = s; };
+        strip.onPitch = [&] (int st) { heardKey = st; };
         strip.setSpeed (0.85);
+        strip.setPitch (3);
         expectEquals (heard, -1.0);
+        expectEquals (heardKey, 99);
         expectEquals (strip.getSpeed(), 0.85);
         expect (! strip.getWantsKeyboardFocus());
-        strip.mouseDoubleClick (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { 300.0f, 10.0f }, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                                                  &strip, &strip, juce::Time::getCurrentTime(), { 300.0f, 10.0f }, juce::Time::getCurrentTime(), 2, false));
+        auto dbl = [&] (juce::Point<float> p)
+        {
+            strip.mouseDoubleClick (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                                      &strip, &strip, juce::Time::getCurrentTime(), p, juce::Time::getCurrentTime(), 2, false));
+        };
+        dbl ({ 40.0f, 20.0f });
         expectEquals (heard, 1.0);
-        expectEquals (strip.getSpeed(), 1.0);
+        dbl ({ 190.0f, 20.0f });
+        expectEquals (heardKey, 0);
 
         beginTest ("a DragChip asks for its file once per gesture, and never while busy");
         DragChip chip;

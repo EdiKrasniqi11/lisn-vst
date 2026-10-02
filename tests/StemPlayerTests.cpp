@@ -323,12 +323,12 @@ struct StemPlayerTests : juce::UnitTest
         p.prepare (48000, 512);
         expect (p.load ({ sine }));
         juce::Thread::sleep (100);                           // the read-ahead fills (40 stretched blocks read ~25600 samples)
-        p.setSpeed (2.0);                                    // clamped
-        expectEquals (p.getSpeed(), 1.5);
-        p.setSpeed (0.99999999);                             // rounded to hundredths, as renderName names it
+        p.setSpeed (3.0);                                    // clamped
+        expectEquals (p.getSpeed(), 2.0);
+        p.setSpeed (0.99999999);                             // rounded to 4 decimals, as renderName names it
         expectEquals (p.getSpeed(), 1.0);
-        p.setSpeed (1.234);
-        expectEquals (p.getSpeed(), 1.23);
+        p.setSpeed (1.23456);
+        expectEquals (p.getSpeed(), 1.2346);
         p.setSpeed (1.25);
         p.play();
         juce::AudioBuffer<float> heard (1, 512 * 40);

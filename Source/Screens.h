@@ -89,43 +89,43 @@ private:
 
 juce::String beatsText (double beats);   // "8 beats", "10.25 beats", "1 beat": rounded to a quarter beat
 
-// The speed row at the bottom of the stems panel (board 2C): icon + "Speed" in the 118 px name column, a slider whose 4 px
-// track fills in the accent colour from the 1x centre to the value (14 px cream thumb) with 0.5x / 0.75x / 1x / 1.25x / 1.5x
-// under it, the value ("1.15x") and the key ("same key", "+3 st"). Steps of 0.05, sticks at 1 for 4 px; a double-click
-// on the slider sets 1. The key drags up or down, -12..12 semitones; a double-click on it sets 0. Never takes focus.
+// The row at the bottom of the stems panel (board 5B): a Tempo box ("106 BPM" over "1.15x of 92", or "1.15x" over "Speed"
+// with no tempo) and a Key box ("+0 st" over "Key"), each with up / down chevrons. A vertical drag on a box changes it (up is
+// more), a click on a chevron steps it, a double-click resets it. Tempo steps 1 BPM (0.05x with no tempo), 0.5x..2x; Key steps
+// 1 semitone, -12..12. The mix chip sits at the row's right end (StemsScreen lays it out). Never takes focus.
 class SpeedStrip : public juce::Component
 {
 public:
     SpeedStrip();
-    void setTheme (const Theme&);
+    void setTheme (const Theme&) {}
     void setSpeed (double);                      // no callback; repaints only on change
     double getSpeed() const { return speed; }
     void setPitch (int);                         // no callback; repaints only on change
     int getPitch() const { return pitch; }
-    std::function<void (int)> onPitch;
-    // The slider's value for an x on its track [left, right]: 0.5..1.5 in steps of 0.05; within 4 px of the centre it is 1.
-    static double speedAt (float x, float left, float right);
+    void setBpm (double songBpm);                // the song's own tempo; 0 = unknown (the box shows the speed instead)
+    // The speed for a tempo box value `steps` steps away from `from`: whole BPM when bpm > 0, else 0.05x steps; 0.5..2.
+    static double stepSpeed (double from, int steps, double bpm);
     std::function<void (double)> onChange;
+    std::function<void (int)> onPitch;
+    juce::Rectangle<int> tempoBox() const { return { 0, 1, 140, 38 }; }
+    juce::Rectangle<int> keyBox() const   { return { 150, 1, 112, 38 }; }
     void paint (juce::Graphics&) override;
-    void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseMove (const juce::MouseEvent&) override;
 
 private:
     void set (double, bool report);
     void setKey (int, bool report);
-    bool onKey (juce::Point<int>) const;         // the key's text
-    bool onSlider (juce::Point<int>) const;      // inside the track's x range (plus the thumb's radius) and above the ticks
-    Theme theme = themeFor ("dusk");
-    double speed = 1.0;
-    juce::Rectangle<float> track;                // the slider's track, set in resized()
-    float valueX = 0.0f, hintX = 0.0f;           // the value's and the hint's left edges, set in resized()
-    bool dragging = false;                       // the press went down on the slider
-    int pitch = 0;
-    int keyDragFrom = 0;                         // the pitch when the press went down on the key
-    bool draggingKey = false;
+    void paintBox (juce::Graphics&, juce::Rectangle<int>, const char* icon, const juce::String& value, const juce::String& caption);
+    enum class Target { none, tempo, key };
+    Target targetAt (juce::Point<int>) const;
+    double speed = 1.0, bpm = 0.0, dragFromSpeed = 1.0;
+    int pitch = 0, dragFromPitch = 0;
+    Target dragging = Target::none;
+    bool moved = false;
 };
 
 // StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, the loop band with its handles
