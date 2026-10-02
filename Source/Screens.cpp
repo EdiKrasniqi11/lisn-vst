@@ -114,17 +114,77 @@ void Header::setEnabledSwitches (bool on)
     }
 }
 
+void Header::makeTitleBar (std::function<void()> minimise, std::function<void()> close)
+{
+    titleBar = true;
+    title.clear();
+    title.addLineOfText (tracked (Fonts::display (22.0f), 0.08f), "LISN", 0.0f, 30.25f);
+    minimiseButton.onClick = std::move (minimise);
+    closeButton.onClick = std::move (close);
+    addAndMakeVisible (minimiseButton);
+    addAndMakeVisible (closeButton);
+    resized();
+    repaint();
+}
+
 void Header::paint (juce::Graphics& g)
 {
     g.setColour (Theme::cream);
     title.draw (g);
+    if (titleBar)   // the 1 px separator between the pills and the window buttons
+    {
+        g.setColour (Theme::cream.withAlpha (0.24f));
+        g.fillRect (minimiseButton.getX() - 11, 11, 1, 22);
+    }
 }
 
 void Header::resized()
 {
+    auto right = getWidth();
+    if (titleBar)   // board 1A: pills, 8 + 2 px, separator, 2 + 8 px, Minimise, 8 px, Close
+    {
+        closeButton.setBounds (right - 32, 6, 32, 32);
+        minimiseButton.setBounds (closeButton.getX() - 8 - 32, 6, 32, 32);
+        right = minimiseButton.getX() - 21;
+    }
     const auto w = stemsPill.preferredWidth();
-    stemsPill.setBounds (getWidth() - w, 3, w, 38);
+    stemsPill.setBounds (right - w, 3, w, 38);
     themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);
+}
+
+void Header::mouseDown (const juce::MouseEvent& e)
+{
+    if (auto* top = getTopLevelComponent(); titleBar && top != nullptr)
+        dragger.startDraggingComponent (top, e.getEventRelativeTo (top));
+}
+
+void Header::mouseDrag (const juce::MouseEvent& e)
+{
+    if (auto* top = getTopLevelComponent(); titleBar && top != nullptr)
+        dragger.dragComponent (top, e.getEventRelativeTo (top), nullptr);
+}
+
+WindowButton::WindowButton (bool closeIcon) : juce::Button (closeIcon ? "Close" : "Minimise"), close (closeIcon)
+{
+    setWantsKeyboardFocus (false);
+    setMouseClickGrabsKeyboardFocus (false);
+}
+
+void WindowButton::paintButton (juce::Graphics& g, bool over, bool down)
+{
+    const auto r = getLocalBounds().toFloat().reduced (0.5f);
+    g.setColour (juce::Colour (32, 18, 27).withAlpha (down ? 0.85f : over ? 0.72f : 0.55f));
+    g.fillEllipse (r);
+    g.setColour (Theme::cream.withAlpha (over ? 0.36f : 0.18f));
+    g.drawEllipse (r, 1.0f);
+
+    juce::Path icon;   // the board's 14 px icons on a 24 grid: "M6 12h12" and "M7 7l10 10M17 7 7 17"
+    if (close) { icon.startNewSubPath (7, 7); icon.lineTo (17, 17); icon.startNewSubPath (17, 7); icon.lineTo (7, 17); }
+    else       { icon.startNewSubPath (6, 12); icon.lineTo (18, 12); }
+    const auto s = 14.0f / 24.0f;
+    icon.applyTransform (juce::AffineTransform::scale (s).translated (r.getCentreX() - 7.0f, r.getCentreY() - 7.0f));
+    g.setColour (Theme::cream);
+    g.strokePath (icon, juce::PathStrokeType (2.0f * s, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
 //==============================================================================

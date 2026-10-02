@@ -7,6 +7,16 @@
 // it paints only its own content over the WaveBackground panel. Nothing here takes keyboard focus.
 
 // Main.dc.html header, bounds (24, 16, 712, 44): "LISN StemSplitter", then [Dusk | Midnight] and [4 stems | 6 stems].
+// Board 1A's round Minimise / Close buttons: 32 px, cream@0.18 border, rgba(32,18,27,.55) fill.
+class WindowButton : public juce::Button
+{
+public:
+    explicit WindowButton (bool closeIcon);
+    void paintButton (juce::Graphics&, bool over, bool down) override;
+private:
+    bool close;
+};
+
 class Header : public juce::Component
 {
 public:
@@ -16,13 +26,21 @@ public:
     void setEnabledSwitches (bool);                // disabled pills are drawn at 0.55
     std::function<void (juce::String)> onTheme;    // "dusk" / "midnight"
     std::function<void (bool)> onSixStems;
+    // The desktop app (board 1A): the header is the title bar. It reads "LISN", gets Minimise / Close after the pills,
+    // and a drag on its empty space moves the window.
+    void makeTitleBar (std::function<void()> minimise, std::function<void()> close);
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
 
 private:
     juce::GlyphArrangement title;                  // "LISN StemSplitter", shaped once: the header repaints with every motion frame
     SegmentedPill themePill, stemsPill;
+    WindowButton minimiseButton { false }, closeButton { true };
+    bool titleBar = false;
+    juce::ComponentDragger dragger;
 };
 
 // Empty.dc.html: dashed drop zone, Browse, formats and the stems you'll get.
