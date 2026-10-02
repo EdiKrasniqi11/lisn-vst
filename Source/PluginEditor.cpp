@@ -122,7 +122,6 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     tick();   // first screen and theme before the window shows
     if (! proc.introShown && introEnabled())
     {
-        proc.introShown = true;
         setIntroTime (0.0f);
         introFrames = std::make_unique<juce::VBlankAttachment> (this, [this] { advanceIntro(); });
     }
@@ -160,7 +159,10 @@ void StemSplitterEditor::advanceIntro()
         return;
     const auto now = juce::Time::getMillisecondCounterHiRes();
     if (introStart == 0.0)
+    {
         introStart = now;
+        proc.introShown = true;                     // spent on the first frame shown, not on a view the host never shows
+    }
     setIntroTime ((float) ((now - introStart) / 1000.0));
 }
 

@@ -924,7 +924,8 @@ void StemsScreen::resized()
     playButton.setBounds (19, 17, 36, 36);
     const auto w = newSong.preferredWidth();
     newSong.setBounds (19 + 674 - w, 18, w, newSong.height);
-    const auto chipW = dragChipWidth (dragChip.getText());
+    // While preparing, the chip keeps its widest width so the changing percent doesn't nudge the Loop button.
+    const auto chipW = dragChipWidth (dragChip.isPreparing() ? juce::String ("Preparing 100%") : dragChip.getText());
     dragChip.setBounds (newSong.getX() - 8 - chipW, 18, chipW, 34);
     loopButton.setBounds (dragChip.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
     speedStrip.setBounds (19, 343, 674, 30);

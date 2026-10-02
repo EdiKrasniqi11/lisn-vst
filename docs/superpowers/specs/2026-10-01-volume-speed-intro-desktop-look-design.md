@@ -105,7 +105,7 @@ All of them are in this spec. Volume, speed and the opening animation are **shar
 - **When it plays:** the processor's `introShown` flag (not saved in the state) is set on the first editor. Later editors for that processor start at the end state.
   - A mouse click during the intro jumps to the end.
   - On Windows, `SystemParametersInfo (SPI_GETCLIENTAREAANIMATION)` false skips it.
-- **Instant window:** the editor's constructor no longer loads the restored song into the player. It is loaded on the first timer tick after the first paint, during the intro. This replaces today's about 3.7 s blank start.
+- **Instant window:** startup_ms (editor construction plus a full paint, Direct2D warmed) at or under 300 ms. Measured: the restored song's load is about 10 ms and stays in the constructor; the cost was the drag chips' `DraggingHandCursor` (about 150 ms warm), so they use the pointing hand. The cold Direct2D start (0.25 to 1.4 s) belongs to the platform.
 
 ### Help sheet
 The layout is unchanged: four tips per tab, with new text.

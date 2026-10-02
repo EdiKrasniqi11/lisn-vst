@@ -127,6 +127,7 @@ public:
     DragChip();
     void setText (const juce::String&);          // repaints; size it with dragChipWidth (text) x 34
     juce::String getText() const { return text; }
+    bool isPreparing() const { return progress.has_value(); }
     void setProgress (std::optional<float>);     // while set: the busy chip (a progress line, the wait cursor) and no drag
     std::function<juce::File()> fileToDrag;
     void paint (juce::Graphics& g) override { drawDragChip (g, getLocalBounds().toFloat(), text, progress); }
