@@ -312,14 +312,13 @@ void SplittingScreen::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (4 rows end at 352, 6 at 351),
+// Panel padding 16 18: content (19, 17, 674, 366). Song row 36, divider at 63, rows from 74 (4 rows end at 74+4*56+3*8=322, 6 at 74+6*36+5*6=320),
 // position strip at 375.
 
 namespace
 {
-    constexpr int waveLeft = 19 + 194, waveWidth = 376;   // the waveforms: rows at x 19, waveform at row x 194
+    constexpr int waveWidth = 376;                        // the waveforms; their left edge is StemsScreen::waveLeft()
     constexpr float stripY = 375.0f;                      // the position strip (4 tall) while zoomed, in the old footer's slot
-    const juce::Rectangle<int> stripArea { waveLeft - 2, 372, waveWidth + 4, 10 };   // with the loop ticks
 }
 
 juce::String beatsText (double beats)
@@ -390,6 +389,7 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
         row->setCompact (files.size() > 4);
         row->onToggleMute = [this, i] { if (onToggleMute != nullptr) onToggleMute (i); };
         row->onSolo = [this, i] { if (onSolo != nullptr) onSolo (i); };
+        row->onVolume = [this, i] (float v) { if (onVolume != nullptr) onVolume (i, v); };
         row->onWaveMouse = [this] (WaveMouse m, double f, bool alt, bool ctrl) { waveMouse (m, f, alt, ctrl); };
         row->dragFile = [this, i] { return stemFile != nullptr ? stemFile (i) : fileOf (i); };
         addAndMakeVisible (row);
@@ -453,20 +453,30 @@ juce::Range<int> StemsScreen::waveSpan() const
     return { rows.getFirst()->getY() + first.getY(), rows.getLast()->getY() + last.getBottom() };
 }
 
+int StemsScreen::waveLeft() const   // rows sit at x 19; the waveform is at row x 194 (186 in 6-stem rows)
+{
+    return 19 + (rows.isEmpty() ? 194 : rows.getFirst()->waveform().getX());
+}
+
+juce::Rectangle<int> StemsScreen::stripArea() const   // with the loop ticks
+{
+    return { waveLeft() - 2, 372, waveWidth + 4, 10 };
+}
+
 int StemsScreen::headX (double f) const
 {
-    return waveLeft + juce::roundToInt ((f - view.getStart()) / view.getLength() * waveWidth);
+    return waveLeft() + juce::roundToInt ((f - view.getStart()) / view.getLength() * waveWidth);
 }
 
 double StemsScreen::fractionAt (float x) const
 {
-    return view.getStart() + (x - (float) waveLeft) / (double) waveWidth * view.getLength();
+    return view.getStart() + (x - (float) waveLeft()) / (double) waveWidth * view.getLength();
 }
 
 juce::Rectangle<int> StemsScreen::waveSpanArea() const   // the waveforms plus the tabs above them
 {
     const auto span = waveSpan();
-    return { waveLeft - 9, span.getStart() - 13, waveWidth + 18, span.getLength() + 13 };
+    return { waveLeft() - 9, span.getStart() - 13, waveWidth + 18, span.getLength() + 13 };
 }
 
 juce::Rectangle<int> StemsScreen::loopArea (juce::Range<double> r) const   // the band, its edges and tabs (a hot tab's ring)
@@ -582,7 +592,7 @@ void StemsScreen::tabMouse (WaveMouse m, const juce::MouseEvent& e)
     const auto ours = m == WaveMouse::drag || m == WaveMouse::up ? tabDown : inside;
     if (m == WaveMouse::up) tabDown = false;
     if (ours)
-        waveMouse (m, fractionAt ((float) juce::jlimit (waveLeft, waveLeft + waveWidth, e.x)), e.mods.isAltDown(),
+        waveMouse (m, fractionAt ((float) juce::jlimit (waveLeft(), waveLeft() + waveWidth, e.x)), e.mods.isAltDown(),
                    e.mods.isCtrlDown());
     else
         waveMouse (WaveMouse::exit, 0.0, false);
@@ -603,7 +613,7 @@ void StemsScreen::setLoop (juce::Range<double> range, bool on)
     if (! on) setHot (-1);
     repaint (loopArea (loopOn ? loopRange : juce::Range<double>()));   // the new band
     repaint (19 + 36 + 12, 37, 674 - 36 - 12, 16);   // the subtitle shows the loop
-    repaint (stripArea);                             // the strip's loop ticks
+    repaint (stripArea());                             // the strip's loop ticks
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     loopButton.repaint();
     dragChip.setText (loopOn ? "Drag loop" : "Drag mix");
@@ -659,7 +669,7 @@ void StemsScreen::setPlayback (bool isPlaying, double f, double len)
         const auto span = waveSpan();
         const auto from = hasHead ? juce::jmin (lastHead, x) : x, to = hasHead ? juce::jmax (lastHead, x) : x;
         const auto area = juce::Rectangle<int>::leftTopRightBottom (from - 2, span.getStart(), to + 2, span.getEnd())
-                              .getIntersection ({ waveLeft - 2, span.getStart(), waveWidth + 4, span.getLength() });
+                              .getIntersection ({ waveLeft() - 2, span.getStart(), waveWidth + 4, span.getLength() });
         lastHead = x;
         hasHead = true;
         if (! area.isEmpty())
@@ -682,6 +692,11 @@ void StemsScreen::setPlayback (bool isPlaying, double f, double len)
         changed = true;
     }
     repaintCount += changed ? 1 : 0;
+}
+
+void StemsScreen::setVolume (int i, float v)
+{
+    if (juce::isPositiveAndBelow (i, rows.size())) rows[i]->setVolume (v);
 }
 
 void StemsScreen::setAudible (juce::uint32 mask)
@@ -717,7 +732,7 @@ void StemsScreen::mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWh
     // trackpad's many small events move fast. Upgrade path: scale the step by the delta.
     const auto p = e.getEventRelativeTo (this).position;
     const auto span = waveSpan();
-    if (rows.isEmpty() || p.x < (float) waveLeft || p.x > (float) (waveLeft + waveWidth)
+    if (rows.isEmpty() || p.x < (float) waveLeft() || p.x > (float) (waveLeft() + waveWidth)
         || p.y < (float) span.getStart() || p.y > (float) span.getEnd())
         return;
     if (e.mods.isCtrlDown())
@@ -736,7 +751,7 @@ void StemsScreen::paintOverChildren (juce::Graphics& g)
     if (rows.isEmpty()) return;
     const auto span = waveSpan();
     const auto top = (float) span.getStart(), h = (float) span.getLength();
-    const int right = waveLeft + waveWidth;
+    const int right = waveLeft() + waveWidth;
 
     // Grid (LoopHandles.mockup.html): a line per beat at cream 0.16, per bar at 0.34, while beats are 8 px or more apart.
     if (tempo.bpm > 0.0 && length > 0.0)
@@ -757,13 +772,13 @@ void StemsScreen::paintOverChildren (juce::Graphics& g)
     {
         // Clipped to the view: an edge outside it isn't drawn, nor is its tab.
         const auto x0 = headX (band.getStart()), x1 = headX (band.getEnd());
-        const auto a = juce::jlimit (waveLeft, right, x0), b = juce::jlimit (waveLeft, right, x1);
+        const auto a = juce::jlimit (waveLeft(), right, x0), b = juce::jlimit (waveLeft(), right, x1);
         g.setColour (Theme::cream.withAlpha (0.10f));
         g.fillRect ((float) a, top, (float) (b - a), h);
         for (int edge = 0; edge < 2; ++edge)
         {
             const auto x = (float) (edge == 0 ? x0 : x1);
-            if (x < (float) waveLeft || x > (float) right) continue;
+            if (x < (float) waveLeft() || x > (float) right) continue;
             g.setColour (Theme::cream);
             g.fillRect (x - 1.0f, top, 2.0f, h);
             // The grab tab: 10 x 18, radius 4, top 8 px above the band, two ink grip lines; hovered or dragged it grows to
@@ -786,7 +801,7 @@ void StemsScreen::paintOverChildren (juce::Graphics& g)
         }
     }
 
-    if (! hasHead || lastHead < waveLeft || lastHead > right) return;   // no playhead yet, or it's outside the view
+    if (! hasHead || lastHead < waveLeft() || lastHead > right) return;   // no playhead yet, or it's outside the view
     g.setColour (Theme::cream);
     g.fillRoundedRectangle ((float) lastHead - 1.0f, top, 2.0f, h, 1.0f);
 }
@@ -803,7 +818,7 @@ void StemsScreen::resized()
     for (auto* r : rows)
     {
         r->setBounds (19, y, 674, r->getHeight());
-        y += r->getHeight() + (rows.size() > 4 ? 5 : 10);
+        y += r->getHeight() + (rows.size() > 4 ? 6 : 8);
     }
 }
 
@@ -831,18 +846,18 @@ void StemsScreen::paint (juce::Graphics& g)
     g.fillRect (19.0f, 63.0f, 674.0f, 1.0f);
 
     // Position strip (only while zoomed): where the view sits in the song, the loop edges in the accent colour.
-    if (view.getLength() < 1.0 && g.clipRegionIntersects (stripArea))
+    if (view.getLength() < 1.0 && g.clipRegionIntersects (stripArea()))
     {
         g.setColour (Theme::cream.withAlpha (0.10f));
-        g.fillRoundedRectangle ((float) waveLeft, stripY, (float) waveWidth, 4.0f, 2.0f);
+        g.fillRoundedRectangle ((float) waveLeft(), stripY, (float) waveWidth, 4.0f, 2.0f);
         g.setColour (Theme::cream.withAlpha (0.55f));
-        g.fillRoundedRectangle ((float) waveLeft + (float) view.getStart() * waveWidth, stripY,
+        g.fillRoundedRectangle ((float) waveLeft() + (float) view.getStart() * waveWidth, stripY,
                                 juce::jmax (2.0f, (float) view.getLength() * waveWidth), 4.0f, 2.0f);
         if (loopOn)
         {
             g.setColour (theme.accent());
             for (const auto f : { loopRange.getStart(), loopRange.getEnd() })
-                g.fillRect ((float) waveLeft + (float) f * waveWidth - 1.0f, stripY - 2.0f, 2.0f, 8.0f);
+                g.fillRect ((float) waveLeft() + (float) f * waveWidth - 1.0f, stripY - 2.0f, 2.0f, 8.0f);
         }
     }
 }

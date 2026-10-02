@@ -230,7 +230,63 @@ void MuteLight::paintButton (juce::Graphics& g, bool, bool)
     g.setColour (Theme::cream.withAlpha (0.22f));
     g.drawEllipse (r.reduced (0.5f), 1.0f);
     g.setColour (muted ? Theme::cream.withAlpha (0.5f) : Theme::cream);
-    strokeIcon (g, muted ? Icons::speakerOff : Icons::speaker, r.withSizeKeepingCentre (18.0f, 18.0f), 2.0f);
+    const auto icon = r.getWidth() < 38.0f ? 15.0f : 18.0f;   // board 2C: 18 in the 38 light, 15 in the 30 one
+    strokeIcon (g, muted ? Icons::speakerOff : Icons::speaker, r.withSizeKeepingCentre (icon, icon), 2.0f);
+}
+
+VolumeBar::VolumeBar()
+{
+    setWantsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void VolumeBar::setColour (juce::Colour c)
+{
+    if (c != colour) { colour = c; repaint(); }
+}
+
+void VolumeBar::setValue (float v)
+{
+    v = juce::jlimit (0.0f, 1.0f, v);
+    if (juce::exactlyEqual (v, value)) return;
+    value = v;
+    repaint();
+}
+
+float VolumeBar::valueAt (float x, float width)
+{
+    return juce::jlimit (0.0f, 1.0f, (x - 5.0f) / juce::jmax (1.0f, width - 10.0f));
+}
+
+void VolumeBar::reset()
+{
+    value = 1.0f;
+    repaint();
+    if (onChange != nullptr) onChange (1.0f);
+}
+
+void VolumeBar::setFromMouse (const juce::MouseEvent& e)
+{
+    value = valueAt (e.position.x, (float) getWidth());
+    repaint();
+    if (onChange != nullptr) onChange (value);
+}
+
+void VolumeBar::mouseDown (const juce::MouseEvent& e)        { setFromMouse (e); }
+void VolumeBar::mouseDrag (const juce::MouseEvent& e)        { setFromMouse (e); }
+void VolumeBar::mouseDoubleClick (const juce::MouseEvent&)   { reset(); }
+
+void VolumeBar::paint (juce::Graphics& g)
+{
+    const auto w = (float) getWidth(), cy = (float) getHeight() / 2.0f, endX = 5.0f + value * (w - 10.0f);
+    g.setColour (Theme::cream.withAlpha (0.16f));
+    g.fillRoundedRectangle (5.0f, cy - 1.5f, w - 10.0f, 3.0f, 1.5f);
+    g.setColour (colour);
+    g.fillRoundedRectangle (5.0f, cy - 1.5f, endX - 5.0f, 3.0f, 1.5f);
+    g.setColour (juce::Colour (0x73000000));
+    g.fillEllipse (juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ endX, cy + 1.0f }));
+    g.setColour (Theme::cream);
+    g.fillEllipse (juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ endX, cy }));
 }
 
 void drawDashedRoundedRect (juce::Graphics& g, juce::Rectangle<float> r, float radius, float thickness, float dash, float gap, juce::Colour c)

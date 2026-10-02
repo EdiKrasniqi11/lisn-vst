@@ -73,6 +73,7 @@ target_sources(lisn_tests PRIVATE
     tests/WaveGeometryTests.cpp
     tests/FrostTests.cpp
     tests/WaveBackgroundTests.cpp
+    tests/ControlsTests.cpp
     tests/StemRowTests.cpp
     tests/UiStateTests.cpp
     tests/OpenWithTests.cpp

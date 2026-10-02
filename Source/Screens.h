@@ -85,6 +85,7 @@ public:
     juce::File getDir() const { return dir; }
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
     void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
+    void setVolume (int row, float v);               // the row's volume bar; no callback, repaints only on change
     void setAudible (juce::uint32 mask);            // bit i set = row i audible
     // The shared view: the song fractions every row shows (the whole song by default; new stems reset it).
     void setView (juce::Range<double>);             // kept inside 0..1
@@ -112,6 +113,8 @@ public:
     // handle); elsewhere a click seeks, a drag scrubs, and a Ctrl+drag of 4 px or more makes a new loop. Loops go to
     // onSetLoop on release.
     void waveMouse (WaveMouse, double fraction, bool alt, bool ctrl = false);
+    int waveLeft() const;                            // the waveforms' left edge in this screen's coordinates
+    juce::Rectangle<int> stripArea() const;
     int hotEdge() const { return hot; }              // 0 = loop start, 1 = loop end, -1 = none (test hook)
     juce::String chipText() const { return dragChip.getText(); }   // test hook
     std::function<void (double, double)> onSetLoop;  // a finished loop drag, a handle trim or defaultLoop (snapped unless Alt)
@@ -121,6 +124,7 @@ public:
 
     std::function<void()> onNewSong, onPlayPause;
     std::function<void (int)> onToggleMute, onSolo;
+    std::function<void (int, float)> onVolume;       // a row's volume bar moved
     std::function<void (double)> onSeek;             // fraction 0..0.999
 
     void paint (juce::Graphics&) override;

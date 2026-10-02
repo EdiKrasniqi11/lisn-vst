@@ -88,6 +88,29 @@ private:
     bool muted = false;
 };
 
+// The volume bar under a stem's name (board 2C): a 3 px track (cream@0.16) filled in the stem colour up to the volume, with a
+// 10 px cream thumb. Drag (or click) sets 0..1; double-click resets to 1. Never takes focus.
+class VolumeBar : public juce::Component
+{
+public:
+    VolumeBar();
+    void setColour (juce::Colour);
+    void setValue (float);                       // 0..1, no callback; repaints only when it changes
+    float getValue() const { return value; }
+    static float valueAt (float x, float width); // 0..1 for an x in the component: (x - 5) / (width - 10), clamped (the thumb's radius)
+    void reset();                                // to 1 and calls onChange: what a double-click does
+    std::function<void (float)> onChange;        // from the mouse only
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+
+private:
+    void setFromMouse (const juce::MouseEvent&);
+    juce::Colour colour = Theme::cream;
+    float value = 1.0f;
+};
+
 void drawDashedRoundedRect (juce::Graphics&, juce::Rectangle<float>, float radius, float thickness, float dash, float gap, juce::Colour);
 
 // The dashed "Drag" chip of the mockups: 1 px dashed border (dash 3, gap 3) at cream 0.3, radius 10, grip 16 px stroke 3,
