@@ -280,9 +280,9 @@ void VolumeBar::paint (juce::Graphics& g)
 {
     const auto w = (float) getWidth(), cy = (float) getHeight() / 2.0f, endX = 5.0f + value * (w - 10.0f);
     g.setColour (Theme::cream.withAlpha (0.16f));
-    g.fillRoundedRectangle (5.0f, cy - 1.5f, w - 10.0f, 3.0f, 1.5f);
+    g.fillRoundedRectangle (0.0f, cy - 1.5f, w, 3.0f, 1.5f);   // the full width; only the thumb travel is inset
     g.setColour (colour);
-    g.fillRoundedRectangle (5.0f, cy - 1.5f, endX - 5.0f, 3.0f, 1.5f);
+    g.fillRoundedRectangle (0.0f, cy - 1.5f, endX, 3.0f, 1.5f);
     g.setColour (juce::Colour (0x73000000));
     g.fillEllipse (juce::Rectangle<float> (10.0f, 10.0f).withCentre ({ endX, cy + 1.0f }));
     g.setColour (Theme::cream);
