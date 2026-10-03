@@ -1,9 +1,15 @@
 #include "Screens.h"
+#include "BinaryData.h"
 #include "Icons.h"
 #include "Peaks.h"
 
 namespace
 {
+    // HeaderLogoGlass.dc.html, option A: lisn-symbol-glass.svg at 32 px, then "LISN" 10 px after it. The disc is centred in
+    // the symbol's box and the box on the capitals: the baseline (30.25) minus half of Unbounded's 0.75 em cap height is y 22.
+    const juce::Rectangle<float> symbolArea { 0.0f, 6.0f, 32.0f, 32.0f };
+    const float titleX = symbolArea.getRight() + 10.0f;
+
     // Non-ASCII UI text is escaped UTF-8: String (const char*) would read the bytes as ASCII.
     const juce::String dot (juce::CharPointer_UTF8 (" \xc2\xb7 "));
     const juce::String ellipsis (juce::CharPointer_UTF8 ("\xe2\x80\xa6"));
@@ -81,11 +87,14 @@ namespace
 }
 
 //==============================================================================
-Header::Header() : themePill ({ "Dusk", "Midnight" }), stemsPill ({ "4 stems", "6 stems" })
+Header::Header()
+    : symbol (juce::Drawable::createFromImageData (BinaryData::lisnsymbolglass_svg, (size_t) BinaryData::lisnsymbolglass_svgSize)),
+      themePill ({ "Dusk", "Midnight" }), stemsPill ({ "4 stems", "6 stems" })
 {
+    jassert (symbol != nullptr);
     const auto lisn = tracked (Fonts::display (22.0f), 0.08f);
-    title.addLineOfText (lisn, "LISN", 0.0f, 30.25f);   // shared baseline
-    title.addLineOfText (Fonts::body (14.0f, 500), "StemSplitter", juce::GlyphArrangement::getStringWidth (lisn, "LISN") + 10.0f, 30.25f);
+    title.addLineOfText (lisn, "LISN", titleX, 30.25f);   // shared baseline
+    title.addLineOfText (Fonts::body (14.0f, 500), "StemSplitter", titleX + juce::GlyphArrangement::getStringWidth (lisn, "LISN") + 10.0f, 30.25f);
 
     themePill.onChange = [this] (int i) { if (onTheme != nullptr) onTheme (i == 1 ? "midnight" : "dusk"); };
     stemsPill.onChange = [this] (int i) { if (onSixStems != nullptr) onSixStems (i == 1); };
@@ -118,7 +127,7 @@ void Header::makeTitleBar (std::function<void()> minimise, std::function<void()>
 {
     titleBar = true;
     title.clear();
-    title.addLineOfText (tracked (Fonts::display (22.0f), 0.08f), "LISN", 0.0f, 30.25f);
+    title.addLineOfText (tracked (Fonts::display (22.0f), 0.08f), "LISN", titleX, 30.25f);
     minimiseButton.onClick = std::move (minimise);
     closeButton.onClick = std::move (close);
     addAndMakeVisible (minimiseButton);
@@ -129,6 +138,22 @@ void Header::makeTitleBar (std::function<void()> minimise, std::function<void()>
 
 void Header::paint (juce::Graphics& g)
 {
+    auto& context = g.getInternalContext();
+    const auto scale = context.getPhysicalPixelScaleFactor();
+    const auto type = context.getPreferredImageTypeForTemporaryImages();
+    if (symbolImage.isNull() || scale != symbolScale || symbolImage.getPixelData()->createType()->getTypeID() != type->getTypeID())
+    {
+        // The image starts at this component's origin, so at a whole-pixel position its pixels land on the screen's.
+        symbolScale = scale;
+        symbolImage = juce::Image (juce::Image::ARGB, (int) std::ceil (symbolArea.getRight() * scale),
+                                   (int) std::ceil (symbolArea.getBottom() * scale), true, *type);
+        juce::Graphics sg (symbolImage);
+        sg.addTransform (juce::AffineTransform::scale (scale));
+        if (symbol != nullptr)
+            symbol->drawWithin (sg, symbolArea, juce::RectanglePlacement::centred, 1.0f);
+    }
+    g.drawImageTransformed (symbolImage, juce::AffineTransform::scale (1.0f / scale));
+
     g.setColour (Theme::cream);
     title.draw (g);
     if (titleBar)   // the 1 px separator between the pills and the window buttons

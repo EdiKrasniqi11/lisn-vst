@@ -180,10 +180,17 @@ int runSnapshots (const juce::File& outDir)
                                     "    100%|##########| 5.85/5.85 [00:14<00:00]\n  File \"demucs/apply.py\", line 214, in apply_model\n"
                                     "    out = model(mix)\nRuntimeError: CUDA out of memory. Tried to allocate 1.20 GiB (GPU 0; 4.00 GiB total capacity)\n"
                                     "Could not separate the song.";
+    const auto titleBar = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.makeTitleBar ([] {}, [] {}); };   // the desktop app
 
     const std::vector<Shot> shots {
         { "drop-dusk", "dusk", state (Screen::Drop, false) },
         { "drop-midnight-6", "midnight", state (Screen::Drop, true) },
+        { "drop-midnight@2x", "midnight", state (Screen::Drop, false), 2.0f },
+        { "titlebar-dusk", "dusk", state (Screen::Drop, false), 1.0f, titleBar },
+        { "titlebar-midnight", "midnight", state (Screen::Drop, false), 1.0f, titleBar },
+        { "titlebar-dusk@1.25x", "dusk", state (Screen::Drop, false), 1.25f, titleBar },
+        { "titlebar-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f, titleBar },
+        { "titlebar-midnight@2x", "midnight", state (Screen::Drop, false), 2.0f, titleBar },
         { "splitting-dusk", "dusk", withProgress (state (Screen::Splitting, false), 0.58) },
         { "splitting-midnight", "midnight", withProgress (state (Screen::Splitting, true), 0.58) },
         { "stems4-dusk-mix", "dusk", state (Screen::Stems, false), 1.0f, looping },

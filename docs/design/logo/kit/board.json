@@ -1,0 +1,26 @@
+{
+  "brand": "LISN",
+  "tagline": "Audio tools that listen",
+  "brief": "LISN starts as a stem splitter (VST3 and desktop app) and grows into an audio company. The mark has to say audio, carry the app's warm dusk palette, and outlive any single feature.",
+  "adjectives": ["warm", "musical", "crafted", "curious"],
+  "criteria": "Reads as audio at a glance, survives 16 px, works in one colour, belongs to the app's palette.",
+  "mockups": ["app-icon", "website", "favicon-tab", "social", "sticker", "tshirt"],
+  "nav": ["Stem Splitter", "Download", "About"],
+  "brand_color": "#2B1822",
+  "greyscale": false,
+  "final": true,
+  "concepts": [
+    {
+      "name": "Split and Rejoin",
+      "symbol": "lisn-symbol.svg",
+      "lockup": "lisn-horizontal.svg",
+      "stacked": "lisn-stacked.svg",
+      "avatar": "lisn-app-icon-light.svg",
+      "symbol_on_tile": "lisn-symbol-reversed.svg",
+      "lockup_on_dark": "lisn-horizontal-reversed.svg",
+      "idea": "One sound enters the disc, opens into its parts, and leaves as one again.",
+      "rationale": ["The four strands are the app's stem colours: vocals, drums, bass, other", "Not tied to splitting: it says 'we work inside the sound', so it fits every future product", "A perfect disc and one wave keep it calm and recognisable at 16 px"]
+    }
+  ],
+  "recommendation": "Final mark: Split and Rejoin."
+}

@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/design/logo/kit/lisn-horizontal-reversed.svg">
+  <img src="docs/design/logo/kit/lisn-horizontal.svg" alt="LISN" width="240">
+</picture>
+
 # LISN StemSplitter
 
 A VST3 for Windows that splits a song into stems with Demucs, plays them in sync and lets you drag them into your DAW.
