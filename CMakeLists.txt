@@ -14,11 +14,13 @@ FetchContent_Declare(signalsmith-stretch GIT_REPOSITORY https://github.com/Signa
     GIT_TAG a670068d9aeb64913331d5cc29337b19a457a7df)   # 1.4.0
 FetchContent_MakeAvailable(signalsmith-linear signalsmith-stretch)
 
-juce_add_binary_data(LisnFonts SOURCES
+# The fonts, and the header's symbol straight from the logo kit (BinaryData::lisnsymbolglass_svg).
+juce_add_binary_data(LisnAssets SOURCES
     Resources/fonts/Unbounded-Bold.ttf
     Resources/fonts/DMSans-Regular.ttf
     Resources/fonts/DMSans-Medium.ttf
-    Resources/fonts/DMSans-Bold.ttf)
+    Resources/fonts/DMSans-Bold.ttf
+    docs/design/logo/kit/lisn-symbol-glass.svg)
 
 # Shared by the plugin and lisn_tests; later .cpp files go inside this call.
 set(LISN_SOURCES
@@ -44,7 +46,11 @@ juce_add_plugin(StemSplitter
     PLUGIN_CODE Stsp
     FORMATS VST3 Standalone
     PRODUCT_NAME "LISN StemSplitter"
-    ICON_BIG Resources/icon.png
+    # The logo kit's app icon. juceaide turns these into the exe's .ico (16/32/48/256) when CMake configures, so
+    # re-run cmake after changing them. The 32 px render keeps the 32 px frame exact: Windows draws the taskbar
+    # icon from it at 100% and 125% scaling.
+    ICON_SMALL docs/design/logo/kit/app/lisn-app-icon-32.png
+    ICON_BIG docs/design/logo/kit/app/lisn-app-icon-1024.png
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
@@ -58,7 +64,7 @@ target_compile_definitions(StemSplitter PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
 
 target_link_libraries(StemSplitter
-    PRIVATE LisnFonts juce::juce_audio_utils signalsmith-stretch
+    PRIVATE LisnAssets juce::juce_audio_utils signalsmith-stretch
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 juce_add_console_app(lisn_tests PRODUCT_NAME "lisn_tests")
@@ -86,7 +92,7 @@ target_compile_definitions(lisn_tests PRIVATE
     "JucePlugin_Name=\"LISN StemSplitter\"")
 
 target_link_libraries(lisn_tests PRIVATE
-    LisnFonts juce::juce_audio_utils signalsmith-stretch juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+    LisnAssets juce::juce_audio_utils signalsmith-stretch juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 enable_testing()
 add_executable(progress_test tests/progress_test.cpp)

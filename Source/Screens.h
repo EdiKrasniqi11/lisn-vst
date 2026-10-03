@@ -6,7 +6,8 @@
 // The screens of docs/design. Each screen takes the panel bounds (24, 76, 712, 400) and lays out in panel coordinates;
 // it paints only its own content over the WaveBackground panel. Nothing here takes keyboard focus.
 
-// Main.dc.html header, bounds (24, 16, 712, 44): "LISN StemSplitter", then [Dusk | Midnight] and [4 stems | 6 stems].
+// Main.dc.html header, bounds (24, 16, 712, 44): the logo kit's glass symbol, "LISN StemSplitter" (HeaderLogoGlass.dc.html,
+// option A), then [Dusk | Midnight] and [4 stems | 6 stems].
 // Board 1A's round Minimise / Close buttons: 32 px, cream@0.18 border, rgba(32,18,27,.55) fill.
 class WindowButton : public juce::Button
 {
@@ -26,8 +27,8 @@ public:
     void setEnabledSwitches (bool);                // disabled pills are drawn at 0.55
     std::function<void (juce::String)> onTheme;    // "dusk" / "midnight"
     std::function<void (bool)> onSixStems;
-    // The desktop app (board 1A): the header is the title bar. It reads "LISN", gets Minimise / Close after the pills,
-    // and a drag on its empty space moves the window.
+    // The desktop app (board 1A): the header is the title bar. It reads "LISN" after the symbol, gets Minimise / Close after
+    // the pills, and a drag anywhere else (the symbol and text too) moves the window.
     void makeTitleBar (std::function<void()> minimise, std::function<void()> close);
 
     void paint (juce::Graphics&) override;
@@ -36,7 +37,12 @@ public:
     void mouseDrag (const juce::MouseEvent&) override;
 
 private:
-    juce::GlyphArrangement title;                  // "LISN StemSplitter", shaped once: the header repaints with every motion frame
+    // The header repaints with every motion frame, so the symbol is parsed once and drawn from an image made at the screen's
+    // pixel scale (remade when the scale or the renderer changes), and the text is shaped once.
+    std::unique_ptr<juce::Drawable> symbol;        // lisn-symbol-glass.svg from BinaryData
+    juce::Image symbolImage;
+    float symbolScale = 0.0f;
+    juce::GlyphArrangement title;                  // "LISN StemSplitter"; "LISN" in the title bar
     SegmentedPill themePill, stemsPill;
     WindowButton minimiseButton { false }, closeButton { true };
     bool titleBar = false;

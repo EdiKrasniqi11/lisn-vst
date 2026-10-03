@@ -86,6 +86,30 @@ struct UiStateTests : juce::UnitTest
             }
         }
 
+        beginTest ("the desktop title bar drags the window from its symbol and text too");
+        {
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            StemSplitterEditor ed (proc);
+            ed.makeTitleBar ([] {}, [] {});
+            ed.setVisible (true);                                                              // getComponentAt skips hidden components
+            expect (dynamic_cast<Header*> (ed.getComponentAt (24 + 80, 16 + 22)) != nullptr);  // over "LISN": no child takes it
+            auto* header = dynamic_cast<Header*> (ed.getComponentAt (24 + 16, 16 + 22));      // the symbol's middle
+            expect (header != nullptr);
+            if (header != nullptr)
+            {
+                auto at = [&] (float x, float y)
+                {
+                    const auto now = juce::Time::getCurrentTime();
+                    return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { x, y }, juce::ModifierKeys::leftButtonModifier,
+                                             0.0f, 0.0f, 0.0f, 0.0f, 0.0f, header, header, now, { 16.0f, 22.0f }, now, 1, x != 16.0f);
+                };
+                header->mouseDown (at (16.0f, 22.0f));
+                header->mouseDrag (at (46.0f, 32.0f));
+                expect (ed.getPosition() == juce::Point<int> (30, 10), ed.getPosition().toString());   // the top-level component moved
+            }
+        }
+
         beginTest ("stem player: order, play/pause, mutes, solo, repaint only on change");
         {
             StemSplitterProcessor proc;

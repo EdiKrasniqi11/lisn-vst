@@ -26,7 +26,11 @@ OutputBaseFilename=LISN-StemSplitter-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\docs\design\logo\kit\app\lisn.ico
+WizardSmallImageFile=..\docs\design\logo\kit\app\lisn-app-icon-256.png
 UninstallDisplayName=LISN StemSplitter
+; No exe to point at: the uninstaller carries SetupIconFile's icon, so Add/Remove Programs shows the logo.
+UninstallDisplayIcon={uninstallexe}
 
 [Messages]
 FinishedLabelNoIcons=LISN StemSplitter is installed. Open FL Studio or Ableton Live and rescan your plugins to find it.

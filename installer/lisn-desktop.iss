@@ -29,8 +29,12 @@ OutputBaseFilename=LISN-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\docs\design\logo\kit\app\lisn.ico
+WizardSmallImageFile=..\docs\design\logo\kit\app\lisn-app-icon-256.png
 UninstallDisplayName=LISN
 UninstallDisplayIcon={app}\LISN.exe
+; The Open with entries carry LISN.exe's icon: have Explorer refresh its icons after install and uninstall.
+ChangesAssociations=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
