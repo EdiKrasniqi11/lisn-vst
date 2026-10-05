@@ -114,8 +114,4 @@ sv='0 28 256 %s'%f(sb+6-28)
 save('lisn-stacked.svg',sv,paint(sym)+stk(INK))
 save('lisn-stacked-reversed.svg',sv,paint(sym,**REV)+stk(CREAM))
 save('lisn-wordmark.svg','60 -10 %s 770'%f(764+347+843+972-140+3*80+20),'<path fill="%s" d="%s"/>'%(INK,type_lisn(0,750,1000)))
-# app icon: ink tile, reversed small cut
-tile='<rect width="256" height="256" rx="56" fill="%s"/>'%INK
-save('lisn-app-icon.svg','0 0 256 256',tile+'<g transform="translate(128 128) scale(.78) translate(-128 -128)">%s</g>'%paint(small,PLUM,CREAM,STEMS[:3]))
-tile2='<rect width="256" height="256" rx="56" fill="%s"/>'%CREAM
-save('lisn-app-icon-light.svg','0 0 256 256',tile2+'<g transform="translate(128 128) scale(.8) translate(-128 -128)">%s</g>'%paint(small,cols=STEMS[:3]))
+# app icon (app/): lisn-symbol.svg with nothing behind it, lisn-symbol-small.svg at 16 and 24 px. Owner's pick, 2026-10-05.

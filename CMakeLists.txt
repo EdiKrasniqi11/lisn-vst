@@ -49,7 +49,7 @@ juce_add_plugin(StemSplitter
     # The logo kit's app icon. juceaide turns these into the exe's .ico (16/32/48/256) when CMake configures, so
     # re-run cmake after changing them. The 32 px render keeps the 32 px frame exact: Windows draws the taskbar
     # icon from it at 100% and 125% scaling.
-    ICON_SMALL docs/design/logo/kit/app/lisn-app-icon-32.png
+    ICON_SMALL docs/design/logo/kit/app/lisn-app-icon-16.png
     ICON_BIG docs/design/logo/kit/app/lisn-app-icon-1024.png
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
