@@ -83,4 +83,3 @@ Companion fonts, both OFL and already in `Resources/fonts`: **Unbounded Bold** f
 
 - Trademark: get a professional search done (EUIPO / USPTO / WIPO, plus a reverse image search) before you register or print it.
 - The strand curves are built from sampled points: about 340 anchors, where hand-drawn logos have around 50. They render smoothly, but a designer could redraw them with fewer points in Illustrator or Figma if exact print masters (AI, PDF, EPS) are needed.
-- The old four-bar icon is still in the end card of the website's promo video (lisn-site `assets/lisn-promo.mp4`).
