@@ -56,6 +56,67 @@ struct ControlsTests : juce::UnitTest
         dbl ({ 190.0f, 20.0f });
         expectEquals (heardKey, 0);
 
+        beginTest ("SpeedStrip: the right-click menu resets a box like a double-click, greyed out when it is already reset");
+        auto item = [&] (SpeedStrip::Target t)
+        {
+            const auto menu = strip.resetMenu (t);
+            juce::PopupMenu::MenuItemIterator it (menu);
+            expect (it.next());
+            return it.getItem();
+        };
+        expectEquals (item (SpeedStrip::Target::tempo).text, juce::String (juce::CharPointer_UTF8 ("Reset to 1.00\xc3\x97")));   // no tempo
+        expectEquals (item (SpeedStrip::Target::key).text, juce::String ("Reset to +0 st"));
+        expect (! item (SpeedStrip::Target::tempo).isEnabled);
+        expect (! item (SpeedStrip::Target::key).isEnabled);
+        strip.setSpeed (0.85);
+        strip.setPitch (-2);
+        strip.setBpm (92.4);
+        const auto tempoReset = item (SpeedStrip::Target::tempo), keyReset = item (SpeedStrip::Target::key);
+        expectEquals (tempoReset.text, juce::String ("Reset to 92 BPM"));
+        expect (tempoReset.isEnabled);
+        expect (keyReset.isEnabled);
+        heard = -1.0;
+        heardKey = 99;
+        tempoReset.action();                         // what choosing it does
+        keyReset.action();
+        expectEquals (strip.getSpeed(), 1.0);
+        expectEquals (heard, 1.0);
+        expectEquals (strip.getPitch(), 0);
+        expectEquals (heardKey, 0);
+
+        beginTest ("SpeedStrip: a right-click on a box opens the menu and never drags or steps; a left click still steps");
+        strip.setSpeed (0.85);
+        strip.setPitch (3);
+        heard = -1.0;
+        heardKey = 99;
+        auto gesture = [&] (juce::ModifierKeys::Flags button, juce::Point<float> from, juce::Point<float> to)
+        {
+            auto at = [&] (juce::Point<float> p)
+            {
+                const auto now = juce::Time::getCurrentTime();
+                return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, juce::ModifierKeys (button), 0.0f, 0.0f, 0.0f,
+                                         0.0f, 0.0f, &strip, &strip, now, from, now, 1, p != from);
+            };
+            strip.mouseDown (at (from));
+            strip.mouseDrag (at (to));
+            strip.mouseUp (at (to));
+        };
+        const auto right = juce::ModifierKeys::rightButtonModifier;
+        gesture (right, { 40.0f, 20.0f }, { 40.0f, 0.0f });       // a drag up on Tempo
+        expect (juce::PopupMenu::dismissAllActiveMenus());          // it opened the menu
+        gesture (right, { 130.0f, 10.0f }, { 130.0f, 10.0f });     // Tempo's up chevron
+        gesture (right, { 250.0f, 30.0f }, { 250.0f, 26.0f });     // Key's down chevron, then a drag up
+        juce::PopupMenu::dismissAllActiveMenus();
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (20);   // deletes the dismissed menus
+        expectEquals (strip.getSpeed(), 0.85);
+        expectEquals (strip.getPitch(), 3);
+        expectEquals (heard, -1.0);
+        expectEquals (heardKey, 99);
+        gesture (right, { 400.0f, 20.0f }, { 400.0f, 20.0f });     // outside the boxes: nothing
+        expect (! juce::PopupMenu::dismissAllActiveMenus());
+        gesture (juce::ModifierKeys::leftButtonModifier, { 250.0f, 30.0f }, { 250.0f, 30.0f });
+        expectEquals (strip.getPitch(), 2);
+
         beginTest ("a DragChip asks for its file once per gesture, and never while busy");
         DragChip chip;
         chip.setSize (120, 34);
