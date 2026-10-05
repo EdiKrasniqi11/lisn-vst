@@ -167,6 +167,27 @@ int runSnapshots (const juce::File& outDir)
         volumes (p, ed);
         ed.stemsScreen().setMixChip ("Preparing 40%", 0.4f);   // the job's progress, frozen (StemsVst's busy chip)
     };
+    // The reset menu, opened by a right-click at p in the speed strip (the real PopupMenu, a child of the editor).
+    const auto rightClick = [] (StemSplitterEditor& ed, juce::Point<float> p)
+    {
+        auto& strip = ed.stemsScreen().speedStripControl();
+        const auto now = juce::Time::getCurrentTime();
+        strip.mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, juce::ModifierKeys (juce::ModifierKeys::rightButtonModifier),
+                                           0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &strip, &strip, now, p, now, 1, false));
+    };
+    const auto tempoMenu = [volumes, rightClick] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        volumes (p, ed);                                     // 1.15x
+        rightClick (ed, { 60.0f, 20.0f });
+        for (auto* c : ed.getChildren())
+            if (c->getName() == "menu")
+                c->keyPressed (juce::KeyPress (juce::KeyPress::downKey));   // the item hovered
+    };
+    const auto keyMenu = [volumes6, rightClick] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        volumes6 (p, ed);                                    // +0 st: the item is greyed out
+        rightClick (ed, { 200.0f, 24.0f });
+    };
     const auto moving = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.background().setMotion (140.0f, 0.9f); };
     const auto introAt = [] (float seconds)
     {
@@ -214,6 +235,8 @@ int runSnapshots (const juce::File& outDir)
         { "help-export-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f, helpTab (3) },
         { "intro-dusk-0.6", "dusk", state (Screen::Drop, false), 1.0f, introAt (0.6f) },
         { "intro-dusk-end", "dusk", state (Screen::Drop, false), 1.0f, introAt (1.9f) },
+        { "reset-menu-dusk", "dusk", state (Screen::Stems, false), 1.0f, tempoMenu },
+        { "reset-menu-midnight", "midnight", state (Screen::Stems, true), 1.0f, keyMenu },
     };
 
     int failures = 0;
@@ -244,6 +267,7 @@ int runSnapshots (const juce::File& outDir)
             ++failures;
         proc.player.unload();
     }
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (20);   // deletes the reset menus (closed with their editors)
 
     // The intro's last frame is the plain frame, pixel for pixel.
     const auto& end = images["intro-dusk-end"];

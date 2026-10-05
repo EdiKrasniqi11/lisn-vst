@@ -13,6 +13,7 @@ namespace
     // Non-ASCII UI text is escaped UTF-8: String (const char*) would read the bytes as ASCII.
     const juce::String dot (juce::CharPointer_UTF8 (" \xc2\xb7 "));
     const juce::String ellipsis (juce::CharPointer_UTF8 ("\xe2\x80\xa6"));
+    const juce::String times (juce::CharPointer_UTF8 ("\xc3\x97"));
     const char* const note = "The first split downloads the AI model (about 80 MB), so it can sit at 0% for a minute. "
                              "After that it starts right away.";
 
@@ -404,13 +405,84 @@ namespace
 {
     constexpr int waveWidth = 376;                        // the waveforms; their left edge is StemsScreen::waveLeft()
     constexpr float stripY = 326.0f;                      // the position strip (4 tall) while zoomed, between the last row and the divider
+
+    // The speed strip's reset menu (board 5B): the theme's panel tint at 0.94 (PopupMenu::backgroundColourId), radius 10, a
+    // 1 px cream@0.16 border and 4 px padding around one 32 px item: 10 px, the 14 px reset icon, 9 px, Medium 13, 28 px (the
+    // mockup's menu is 176 wide for "Reset to 120 BPM"). Hovered, the item is cream@0.10 (radius 7); disabled, its icon and
+    // text are at 0.38. No shadow: the menu is a child of the plugin window and could only draw one inside its own bounds.
+    constexpr int menuBorder = 5;
+
+    struct ResetMenuLook : juce::LookAndFeel_V4
+    {
+        int getPopupMenuBorderSizeWithOptions (const juce::PopupMenu::Options&) override { return menuBorder; }
+        void drawResizableFrame (juce::Graphics&, int, int, const juce::BorderSize<int>&) override {}   // PopupMenu's frame for a menu in a parent
+
+        void getIdealPopupMenuItemSizeWithOptions (const juce::String& s, bool, int, int& w, int& h, const juce::PopupMenu::Options&) override
+        {
+            w = (int) std::ceil (10.0f + 14.0f + 9.0f + juce::GlyphArrangement::getStringWidth (Fonts::body (13.0f, 500), s) + 28.0f);
+            h = 32;
+        }
+
+        void drawPopupMenuBackgroundWithOptions (juce::Graphics& g, int w, int h, const juce::PopupMenu::Options&) override
+        {
+            const auto r = juce::Rectangle<float> ((float) w, (float) h).reduced (0.5f);
+            g.setColour (findColour (juce::PopupMenu::backgroundColourId));
+            g.fillRoundedRectangle (r, 10.0f);
+            g.setColour (Theme::cream.withAlpha (0.16f));
+            g.drawRoundedRectangle (r, 10.0f, 1.0f);
+        }
+
+        // The item spans the menu's width (PopupMenu insets items by the border only vertically), so inset it here.
+        void drawPopupMenuItemWithOptions (juce::Graphics& g, const juce::Rectangle<int>& area, bool highlighted,
+                                           const juce::PopupMenu::Item& item, const juce::PopupMenu::Options&) override
+        {
+            const auto r = area.toFloat().reduced ((float) menuBorder, 0.0f);
+            if (highlighted)                         // never for a disabled item
+            {
+                g.setColour (Theme::cream.withAlpha (0.1f));
+                g.fillRoundedRectangle (r, 7.0f);
+            }
+            const auto c = Theme::cream.withAlpha (item.isEnabled ? 1.0f : 0.38f);
+            g.setColour (c);
+            strokeIcon (g, Icons::reset, { r.getX() + 10.0f, r.getCentreY() - 7.0f, 14.0f, 14.0f }, 2.2f);
+            text (g, Fonts::body (13.0f, 500), c, item.text, r.withLeft (r.getX() + 33.0f), juce::Justification::centredLeft);
+        }
+    };
 }
 
 //==============================================================================
-SpeedStrip::SpeedStrip()
+SpeedStrip::SpeedStrip() : menuLook (std::make_unique<ResetMenuLook>())
 {
     setWantsKeyboardFocus (false);
     setMouseClickGrabsKeyboardFocus (false);
+    setTheme (themeFor ("dusk"));
+}
+
+SpeedStrip::~SpeedStrip()
+{
+    juce::PopupMenu::dismissAllActiveMenus();        // an open reset menu draws with menuLook; its window goes later, asynchronously
+}
+
+void SpeedStrip::setTheme (const Theme& t)
+{
+    menuLook->setColour (juce::PopupMenu::backgroundColourId, t.panelTint.withAlpha (0.94f));
+}
+
+juce::PopupMenu SpeedStrip::resetMenu (Target t)
+{
+    const auto tempo = t == Target::tempo;
+    const auto label = ! tempo ? juce::String ("Reset to +0 st")
+                     : bpm > 0.0 ? "Reset to " + juce::String (juce::roundToInt (bpm)) + " BPM"
+                     : "Reset to 1.00" + times;
+    juce::PopupMenu menu;
+    menu.setLookAndFeel (menuLook.get());
+    menu.addItem (label, tempo ? ! juce::exactlyEqual (speed, 1.0) : pitch != 0, false, [safe = SafePointer<SpeedStrip> (this), tempo]
+    {
+        if (safe == nullptr) return;
+        if (tempo) safe->set (1.0, true);
+        else       safe->setKey (0, true);
+    });
+    return menu;
 }
 
 void SpeedStrip::setSpeed (double v)
@@ -479,7 +551,6 @@ void SpeedStrip::paintBox (juce::Graphics& g, juce::Rectangle<int> box, const ch
 
 void SpeedStrip::paint (juce::Graphics& g)
 {
-    const auto times = juce::String (juce::CharPointer_UTF8 ("\xc3\x97"));
     const auto speedText = juce::String (speed, 2) + times;
     if (bpm > 0.0)
         paintBox (g, tempoBox(), Icons::speed, juce::String (juce::roundToInt (bpm * speed)) + " BPM",
@@ -501,6 +572,19 @@ void SpeedStrip::mouseMove (const juce::MouseEvent& e)
 
 void SpeedStrip::mouseDown (const juce::MouseEvent& e)
 {
+    if (e.mods.isPopupMenu())                        // a right-click never drags or steps
+    {
+        dragging = Target::none;
+        const auto t = targetAt (e.getPosition());
+        if (t == Target::none) return;
+        // The menu's top-left at the pointer, inside the window. JUCE opens a menu above a point low in its parent, so the
+        // target runs from the window's top (inside the menu's border) down to the pointer: the menu goes under it.
+        auto* top = getTopLevelComponent();
+        const auto p = top->getLocalPoint (this, e.getPosition());
+        const auto target = juce::Rectangle<int>::leftTopRightBottom (p.x, menuBorder, p.x + 1, p.y);
+        resetMenu (t).showMenuAsync (juce::PopupMenu::Options().withParentComponent (top).withTargetScreenArea (top->localAreaToGlobal (target)));
+        return;
+    }
     dragging = targetAt (e.getPosition());
     dragFromSpeed = speed;
     dragFromPitch = pitch;

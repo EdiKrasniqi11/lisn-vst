@@ -27,6 +27,7 @@ namespace Icons
     inline constexpr const char* speed  = "M4.5 18a8.5 8.5 0 1 1 15 0M12 13l3.5-3.5";   // stroked
     inline constexpr const char* note   = "M9 18V5l12-2v13M6 15a3 3 0 1 0 0 6a3 3 0 1 0 0-6M18 13a3 3 0 1 0 0 6a3 3 0 1 0 0-6";   // stroked
     inline constexpr const char* mouse  = "M12 3a6 6 0 0 0-6 6v6a6 6 0 0 0 12 0V9a6 6 0 0 0-6-6zM12 7v3";
+    inline constexpr const char* reset  = "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5";   // the speed strip's reset menu, stroked
 }
 
 // The icon's 24x24 viewBox mapped onto `area`.

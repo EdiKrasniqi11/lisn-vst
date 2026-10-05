@@ -97,13 +97,15 @@ juce::String beatsText (double beats);   // "8 beats", "10.25 beats", "1 beat": 
 
 // The row at the bottom of the stems panel (board 5B): a Tempo box ("106 BPM" over "1.15x of 92", or "1.15x" over "Speed"
 // with no tempo) and a Key box ("+0 st" over "Key"), each with up / down chevrons. A vertical drag on a box changes it (up is
-// more), a click on a chevron steps it, a double-click resets it. Tempo steps 1 BPM (0.05x with no tempo), 0.5x..2x; Key steps
-// 1 semitone, -12..12. The mix chip sits at the row's right end (StemsScreen lays it out). Never takes focus.
+// more), a click on a chevron steps it, a double-click or the right-click menu resets it. Tempo steps 1 BPM (0.05x with no
+// tempo), 0.5x..2x; Key steps 1 semitone, -12..12. The mix chip sits at the row's right end (StemsScreen lays it out). Never
+// takes focus.
 class SpeedStrip : public juce::Component
 {
 public:
     SpeedStrip();
-    void setTheme (const Theme&) {}
+    ~SpeedStrip() override;
+    void setTheme (const Theme&);                // the reset menu's fill
     void setSpeed (double);                      // no callback; repaints only on change
     double getSpeed() const { return speed; }
     void setPitch (int);                         // no callback; repaints only on change
@@ -115,6 +117,10 @@ public:
     std::function<void (int)> onPitch;
     juce::Rectangle<int> tempoBox() const { return { 0, 1, 140, 38 }; }
     juce::Rectangle<int> keyBox() const   { return { 150, 1, 112, 38 }; }
+    enum class Target { none, tempo, key };
+    // A right-click on a box opens this at the pointer: one item, "Reset to 92 BPM" ("Reset to 1.00x" with no tempo) or
+    // "Reset to +0 st", that does what a double-click does; greyed out when the box is already there. Public for tests.
+    juce::PopupMenu resetMenu (Target);
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
@@ -126,12 +132,12 @@ private:
     void set (double, bool report);
     void setKey (int, bool report);
     void paintBox (juce::Graphics&, juce::Rectangle<int>, const char* icon, const juce::String& value, const juce::String& caption);
-    enum class Target { none, tempo, key };
     Target targetAt (juce::Point<int>) const;
     double speed = 1.0, bpm = 0.0, dragFromSpeed = 1.0;
     int pitch = 0, dragFromPitch = 0;
     Target dragging = Target::none;
     bool moved = false;
+    std::unique_ptr<juce::LookAndFeel> menuLook;     // the reset menu's look (Screens.cpp)
 };
 
 // StemPlayer.mockup.html panel: song row (Play/Pause, name, time), one StemRow per stem file, the loop band with its handles

@@ -14,7 +14,7 @@ LISN works inside the sound. The mark isn't tied to stem splitting, so it can co
 | The app's headers and the website | `lisn-symbol-glass.svg`, followed by "LISN" as live Unbounded Bold text (`lisn-horizontal-glass.svg` is the same lockup with outlined lettering, for images) |
 | One colour (print, engraving, fax, embroidery) | `lisn-symbol-mono.svg`, `lisn-horizontal-mono.svg`, `one-colour/` |
 | Small sizes (16–24 px) | `lisn-symbol-small.svg` (3 strands, heavier wave) |
-| App icon | `lisn-app-icon-light.svg` (primary), `lisn-app-icon.svg` (dark alternative), `app/` PNGs + `lisn.ico` |
+| App icon | `lisn-symbol.svg` with nothing behind it, and `lisn-symbol-small.svg` at 16 and 24 px: the PNGs and `lisn.ico` in `app/`. On dark backgrounds the ink disc and tails fade and the strands carry it; the owner chose that over a tile on 2026-10-05. |
 | Web | `web/` (favicon.ico, favicon.svg, PWA icons, `head-snippet.html`) |
 | Wordmark alone | `lisn-wordmark.svg` |
 
@@ -26,7 +26,7 @@ They point at the files in this kit, so the kit stays the single source. Change 
 
 | Where | File | Set in |
 |---|---|---|
-| LISN.exe and the VST3: taskbar, Alt-Tab, Start menu, Explorer, Open with, the plugin folder's icon | `app/lisn-app-icon-32.png` and `app/lisn-app-icon-1024.png` | `ICON_SMALL` and `ICON_BIG` in `CMakeLists.txt`. JUCE makes the exe's .ico (16, 32, 48 and 256 px) from them when CMake configures, so re-run `cmake -S . -B build -A x64` after changing them. |
+| LISN.exe and the VST3: taskbar, Alt-Tab, Start menu, Explorer, Open with, the plugin folder's icon | `app/lisn-app-icon-16.png` and `app/lisn-app-icon-1024.png` | `ICON_SMALL` and `ICON_BIG` in `CMakeLists.txt`. JUCE makes the exe's .ico when CMake configures, each size from the smallest image at least that big: 16 px from the small cut, 32, 48 and 256 px from the 1024. Re-run `cmake -S . -B build -A x64` after changing them. |
 | Setup and the uninstaller, both installers | `app/lisn.ico` | `SetupIconFile` in `installer/lisn-desktop.iss` and `installer/lisn-vst.iss` |
 | Installer wizard, top right corner | `app/lisn-app-icon-256.png` | `WizardSmallImageFile` in both .iss files (PNG needs Inno Setup 6.5.2 or later) |
 | Add/Remove Programs | Desktop app: LISN.exe's icon. VST3: the uninstaller's icon, which is `app/lisn.ico` | `UninstallDisplayIcon` in both .iss files |
