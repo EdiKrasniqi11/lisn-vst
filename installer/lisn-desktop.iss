@@ -11,6 +11,10 @@
 AppId={{93E72666-5647-4F9A-8152-9DA75AC91D0F}
 AppName=LISN
 AppVersion={#AppVersion}
+; SignPath checks the signed installers' product name and version.
+VersionInfoVersion={#AppVersion}
+VersionInfoProductTextVersion={#AppVersion}
+VersionInfoProductName=LISN StemSplitter
 AppPublisher=LISN
 AppPublisherURL=https://edikrasniqi11.github.io/lisn-site/
 AppSupportURL=https://github.com/EdiKrasniqi11/lisn-vst/issues
