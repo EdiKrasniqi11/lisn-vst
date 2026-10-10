@@ -27,7 +27,6 @@ RedirectionGuard=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
-LicenseFile=..\LICENSE
 OutputDir=Output
 OutputBaseFilename=LISN-Setup
 Compression=lzma2
