@@ -5,7 +5,8 @@ LISN StemSplitter includes or installs the components below. Each is used under 
 ================================================================================
 JUCE 8
 ================================================================================
-Built with JUCE (https://juce.com) under the JUCE 8 End User Licence Agreement (Starter).
+Built with JUCE (https://juce.com), used under the GNU Affero General Public License v3.
+LISN is licensed under the same licence; its full text is in LICENSE.txt next to this file.
 
 ================================================================================
 Steinberg VST 3 SDK 3.8 (part of the plugin)
