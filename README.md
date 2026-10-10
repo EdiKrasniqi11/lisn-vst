@@ -9,7 +9,7 @@ A VST3 for Windows that splits a song into stems with Demucs, plays them in sync
 
 The same code builds **LISN**, a desktop app that does the same without a DAW: `Source/StandaloneApp.cpp`, installed by `installer/lisn-desktop.iss`.
 
-**Download:** https://edikrasniqi11.github.io/lisn-site/
+**Download:** https://lisn.digital/
 
 LISN is free software under the GNU Affero General Public License v3 (see [LICENSE](LICENSE)). Built with JUCE 8, used under the same licence.
 
