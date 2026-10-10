@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(StemSplitter VERSION 0.2.1)
+project(StemSplitter VERSION 0.2.2)
 set(CMAKE_CXX_STANDARD 17)
 
 include(FetchContent)
