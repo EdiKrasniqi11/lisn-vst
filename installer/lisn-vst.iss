@@ -10,7 +10,6 @@
 AppId={{E866911A-0569-4928-8FF5-A1B24278423C}
 AppName=LISN StemSplitter
 AppVersion={#AppVersion}
-; SignPath checks the signed installers' product name and version.
 VersionInfoVersion={#AppVersion}
 VersionInfoProductTextVersion={#AppVersion}
 VersionInfoProductName=LISN StemSplitter
