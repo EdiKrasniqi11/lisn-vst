@@ -644,10 +644,10 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
     loopButton.onClick = [this] { toggleLoop(); };
     dragChip.fileToDrag = [this] { return mixFile != nullptr ? mixFile() : juce::File(); };
     addAndMakeVisible (loopButton);
-    addAndMakeVisible (dragChip);
     addAndMakeVisible (newSong);
     addAndMakeVisible (playButton);
     addAndMakeVisible (speedStrip);
+    addAndMakeVisible (dragChip);                    // after the strip: the chip sits inside its bounds
     speedStrip.onChange = [this] (double s) { if (onSpeed != nullptr) onSpeed (s); };
     speedStrip.onPitch = [this] (int st) { if (onPitch != nullptr) onPitch (st); };
 }

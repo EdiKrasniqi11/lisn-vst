@@ -168,6 +168,8 @@ struct UiStateTests : juce::UnitTest
             ed.tick();
             auto& screen = ed.stemsScreen();
             expectEquals (screen.chipText(), juce::String ("Drag mix"));
+            ed.setVisible (true);                            // getComponentAt skips hidden components
+            expect (dynamic_cast<DragChip*> (ed.getComponentAt (24 + 683 - 20, 76 + 359)) != nullptr);   // the speed strip isn't over it
 
             screen.setTempo ({ 120.0, 0.0 });                // a beat every 0.5 s (the stems are 0.5 s long)
             // 0.5 s stems at 120 BPM: a quarter beat (0.125 s) is 94 px wide, so edges snap to quarter beats.
