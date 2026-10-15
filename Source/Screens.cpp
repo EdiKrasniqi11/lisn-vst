@@ -101,12 +101,22 @@ Header::Header()
     stemsPill.onChange = [this] (int i) { if (onSixStems != nullptr) onSixStems (i == 1); };
     addAndMakeVisible (themePill);
     addAndMakeVisible (stemsPill);
+    update.onClick = [this] { if (onUpdate != nullptr) onUpdate(); };
+    addChildComponent (update);
+}
+
+void Header::showUpdate (const juce::String& version)
+{
+    update.setButtonText ("Update " + version);
+    update.setVisible (version.isNotEmpty());
+    resized();
 }
 
 void Header::setTheme (const Theme& t)
 {
     themePill.setTheme (t);
     stemsPill.setTheme (t);
+    update.setAccent (t.accent());
     themePill.setSelected (t.id == "midnight" ? 1 : 0);
 }
 
@@ -173,6 +183,8 @@ void Header::resized()
         minimiseButton.setBounds (closeButton.getX() - 8 - 32, 6, 32, 32);
         right = minimiseButton.getX() - 21;
     }
+    // The update pill: 16 px after the title, centred on the header like the capitals (y 22)
+    update.setBounds (juce::roundToInt (title.getBoundingBox (0, -1, true).getRight()) + 16, 9, update.preferredWidth(), 26);
     const auto w = stemsPill.preferredWidth();
     stemsPill.setBounds (right - w, 3, w, 38);
     themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);

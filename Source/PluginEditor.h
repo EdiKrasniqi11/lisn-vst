@@ -3,6 +3,7 @@
 #include "RenderJob.h"
 #include "Screens.h"
 #include "UiState.h"
+#include "UpdateCheck.h"
 #include "WaveBackground.h"
 #include <optional>
 
@@ -10,6 +11,7 @@
 // UiState, updates the stem rows from the player and moves the waves while it plays.
 class StemSplitterEditor : public juce::AudioProcessorEditor,
                            public juce::FileDragAndDropTarget,
+                           private juce::ChangeListener,
                            private juce::Timer
 {
 public:
@@ -39,9 +41,11 @@ public:
     WaveBackground& background() { return waves; }
     StemsScreen& stemsScreen() { return stems; }
     HelpSheet& helpSheet() { return help; }
+    Header& headerBar() { return header; }
 
 private:
     void timerCallback() override { tick(); }
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;   // UpdateCheck found a newer LISN
     void advanceIntro();                             // one display frame of the intro
     void show (const UiState&);
     void showScreen();                               // the shown screen, or the help sheet in its place

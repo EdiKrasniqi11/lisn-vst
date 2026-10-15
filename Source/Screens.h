@@ -30,6 +30,9 @@ public:
     // The desktop app (board 1A): the header is the title bar. It reads "LISN" after the symbol, gets Minimise / Close after
     // the pills, and a drag anywhere else (the symbol and text too) moves the window.
     void makeTitleBar (std::function<void()> minimise, std::function<void()> close);
+    // "Update 0.2.5" in a pill 16 px after the title (the update-notice mockup, option A); empty hides it.
+    void showUpdate (const juce::String& version);
+    std::function<void()> onUpdate;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -45,6 +48,7 @@ private:
     juce::GlyphArrangement title;                  // "LISN StemSplitter"; "LISN" in the title bar
     SegmentedPill themePill, stemsPill;
     WindowButton minimiseButton { false }, closeButton { true };
+    UpdatePill update;
     bool titleBar = false;
     juce::ComponentDragger dragger;
 };

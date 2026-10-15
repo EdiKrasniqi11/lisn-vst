@@ -120,6 +120,20 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
         });
     };
 
+    // A newer LISN: the header's update pill opens its installer. Not in the tests (no plugin wrapper), which stay offline.
+    using Wrapper = juce::AudioProcessor::WrapperType;
+    const auto wrapper = juce::PluginHostType::getPluginLoadedAs();
+    header.onUpdate = [standalone = wrapper == Wrapper::wrapperType_Standalone]
+    {
+        juce::URL (juce::String ("https://github.com/EdiKrasniqi11/lisn-vst/releases/latest/download/")
+                   + (standalone ? "LISN-Setup.exe" : "LISN-StemSplitter-Setup.exe")).launchInDefaultBrowser();
+    };
+    if (wrapper != Wrapper::wrapperType_Undefined)
+    {
+        UpdateCheck::getInstance()->addChangeListener (this);
+        changeListenerCallback (nullptr);
+    }
+
     setSize (760, 500);
     tick();   // first screen and theme before the window shows
     if (! proc.introShown && introEnabled())
@@ -170,7 +184,14 @@ void StemSplitterEditor::advanceIntro()
 
 StemSplitterEditor::~StemSplitterEditor()
 {
+    if (auto* check = UpdateCheck::getInstanceWithoutCreating())
+        check->removeChangeListener (this);
     proc.player.pause();
+}
+
+void StemSplitterEditor::changeListenerCallback (juce::ChangeBroadcaster*)
+{
+    header.showUpdate (UpdateCheck::getInstance()->getNewerVersion());
 }
 
 void StemSplitterEditor::resized()
