@@ -222,6 +222,37 @@ void InfoButton::paintButton (juce::Graphics& g, bool isMouseOver, bool)
     g.fillEllipse (juce::Rectangle<float> (1.4f, 1.4f).withCentre ({ icon.getX() + 6.0f, icon.getY() + 3.625f }));
 }
 
+UpdatePill::UpdatePill() : juce::Button ({})
+{
+    setWantsKeyboardFocus (false);
+    setMouseClickGrabsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void UpdatePill::setAccent (juce::Colour c)
+{
+    if (c != accent) { accent = c; repaint(); }
+}
+
+int UpdatePill::preferredWidth() const
+{
+    return (int) std::ceil (1 + 8 + 7 + 6 + juce::GlyphArrangement::getStringWidth (Fonts::body (12.0f, 700), getButtonText()) + 10 + 1);
+}
+
+void UpdatePill::paintButton (juce::Graphics& g, bool over, bool)
+{
+    const auto r = getLocalBounds().toFloat().reduced (0.5f);
+    g.setColour (juce::Colour (32, 18, 27).withAlpha (over ? 0.72f : 0.55f));
+    g.fillRoundedRectangle (r, r.getHeight() / 2.0f);
+    g.setColour (Theme::cream.withAlpha (over ? 0.36f : 0.22f));
+    g.drawRoundedRectangle (r, r.getHeight() / 2.0f, 1.0f);
+    g.setColour (accent);
+    g.fillEllipse (9.0f, r.getCentreY() - 3.5f, 7.0f, 7.0f);
+    g.setColour (Theme::cream);
+    g.setFont (Fonts::body (12.0f, 700));
+    g.drawText (getButtonText(), getLocalBounds().toFloat().withLeft (22.0f), juce::Justification::centredLeft, false);
+}
+
 MuteLight::MuteLight() : juce::Button ({})
 {
     setWantsKeyboardFocus (false);

@@ -202,6 +202,8 @@ int runSnapshots (const juce::File& outDir)
                                     "    out = model(mix)\nRuntimeError: CUDA out of memory. Tried to allocate 1.20 GiB (GPU 0; 4.00 GiB total capacity)\n"
                                     "Could not separate the song.";
     const auto titleBar = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.makeTitleBar ([] {}, [] {}); };   // the desktop app
+    const auto update = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().showUpdate ("0.2.5"); };
+    const auto appUpdate = [titleBar, update] (StemSplitterProcessor& p, StemSplitterEditor& ed) { titleBar (p, ed); update (p, ed); };
 
     const std::vector<Shot> shots {
         { "drop-dusk", "dusk", state (Screen::Drop, false) },
@@ -237,6 +239,9 @@ int runSnapshots (const juce::File& outDir)
         { "intro-dusk-end", "dusk", state (Screen::Drop, false), 1.0f, introAt (1.9f) },
         { "reset-menu-dusk", "dusk", state (Screen::Stems, false), 1.0f, tempoMenu },
         { "reset-menu-midnight", "midnight", state (Screen::Stems, true), 1.0f, keyMenu },
+        { "update-dusk", "dusk", state (Screen::Stems, false), 1.0f, update },
+        { "update-titlebar-dusk@2x", "dusk", state (Screen::Stems, false), 2.0f, appUpdate },
+        { "update-titlebar-midnight", "midnight", state (Screen::Drop, false), 1.0f, appUpdate },
     };
 
     int failures = 0;

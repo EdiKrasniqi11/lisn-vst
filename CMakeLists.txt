@@ -38,7 +38,8 @@ set(LISN_SOURCES
     Source/StemRow.cpp
     Source/UiState.cpp
     Source/Screens.cpp
-    Source/RenderJob.cpp)
+    Source/RenderJob.cpp
+    Source/UpdateCheck.cpp)
 
 juce_add_plugin(StemSplitter
     COMPANY_NAME "LISN"
@@ -85,11 +86,12 @@ target_sources(lisn_tests PRIVATE
     tests/UiStateTests.cpp
     tests/OpenWithTests.cpp
     tests/RenderJobTests.cpp
+    tests/UpdateCheckTests.cpp
     tests/Snapshots.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1
-    "JucePlugin_Name=\"LISN StemSplitter\"")
+    "JucePlugin_Name=\"LISN StemSplitter\"" "JucePlugin_VersionString=\"${PROJECT_VERSION}\"")
 
 target_link_libraries(lisn_tests PRIVATE
     LisnAssets juce::juce_audio_utils signalsmith-stretch juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)

@@ -73,6 +73,20 @@ public:
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 };
 
+// The header's "Update 0.2.5" pill (the update-notice mockup, option A): 26 tall, rgba(32,18,27,.55) with a 1 px cream@0.22
+// border (0.72 and 0.36 hovered), padding 0 10 0 8: a 7 px dot in the theme's accent, 6 px, Bold 12.
+class UpdatePill : public juce::Button
+{
+public:
+    UpdatePill();
+    void setAccent (juce::Colour);
+    int preferredWidth() const;                  // for getButtonText(), "Update 0.2.5"
+    void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
+
+private:
+    juce::Colour accent = themeFor ("dusk").accent();
+};
+
 // The 38 px mute light of a stem row: a neutral ring with a white speaker, or the speaker with an x when muted.
 // Left click toggles, right click solos (FL's channel rack).
 class MuteLight : public juce::Button
