@@ -380,7 +380,7 @@ void StemSplitterEditor::show (const UiState& s)
     if (s.screen != Screen::Stems)
     {
         proc.player.unload();
-        unloadableDir = {};
+        unloadableDir = juce::File();
     }
     else if (s.stemDir != stems.getDir())
     {

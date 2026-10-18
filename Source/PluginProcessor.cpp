@@ -40,7 +40,7 @@ void StemSplitterProcessor::startSplit (const juce::File& input)
     player.unload();
     const juce::ScopedLock sl (settingsLock);   // also covers job.start(), which resets the strings getStateInformation reads
     lastInput = input;
-    stemDir = {};
+    stemDir = juce::File();
     stemDirHasWav = false;
     job.start (input, model, pythonPath);
 }
