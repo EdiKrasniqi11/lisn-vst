@@ -6,6 +6,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      test_tag:
+        description: 'Publish LISN-Mac.pkg as a public pre-release with this tag (e.g. mac-test-1). Leave empty for a plain build.'
+        required: false
+        default: ''
 
 permissions:
   contents: write   # gh release create
@@ -60,21 +65,26 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$('${{ github.ref_name }}'.TrimStart('v'))" installer\lisn-desktop.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-      - name: Draft release
+      - uses: actions/upload-artifact@v4
         if: env.RELEASE == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $vst = 'installer\Output\LISN-StemSplitter-Setup.exe'
-          $app = 'installer\Output\LISN-Setup.exe'
-          $notes = "LISN-StemSplitter-Setup.exe is the VST3 for FL Studio and Ableton Live. SHA-256: $((Get-FileHash $vst).Hash.ToLower())`n`n" +
-                   "LISN-Setup.exe is LISN, the desktop app. SHA-256: $((Get-FileHash $app).Hash.ToLower())"
-          gh release create '${{ github.ref_name }}' $vst $app --draft --title 'LISN StemSplitter ${{ github.ref_name }}' --notes $notes
+        with:
+          name: windows-installers
+          path: |
+            installer/Output/LISN-StemSplitter-Setup.exe
+            installer/Output/LISN-Setup.exe
 
   macos:
     runs-on: macos-14
+    env:
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Tag matches the CMake version
+        if: env.RELEASE == 'true'
+        run: |
+          v=$(grep -oE 'project\(StemSplitter VERSION [0-9.]+' CMakeLists.txt | awk '{print $3}')
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but CMakeLists.txt says $v"; exit 1; }
 
       - name: Build
         run: |
@@ -258,3 +268,50 @@ jobs:
         with:
           name: LISN-Mac.pkg
           path: installer/Output/LISN-Mac.pkg
+
+  # One draft release for a v* tag: both Windows installers and the Mac pkg.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installers
+          path: dl
+      - uses: actions/download-artifact@v4
+        with:
+          name: LISN-Mac.pkg
+          path: dl
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dl
+          sha() { sha256sum "$1" | cut -d' ' -f1; }
+          notes="LISN-StemSplitter-Setup.exe is the VST3 for FL Studio and Ableton Live. SHA-256: $(sha LISN-StemSplitter-Setup.exe)
+
+          LISN-Setup.exe is LISN, the desktop app. SHA-256: $(sha LISN-Setup.exe)
+
+          LISN-Mac.pkg is LISN for Apple Silicon Macs: the VST3 and the desktop app. SHA-256: $(sha LISN-Mac.pkg)"
+          gh release create "$GITHUB_REF_NAME" LISN-StemSplitter-Setup.exe LISN-Setup.exe LISN-Mac.pkg --repo "$GITHUB_REPOSITORY" --draft --title "LISN StemSplitter $GITHUB_REF_NAME" --notes "$notes"
+
+  # Tester builds: run the workflow by hand with test_tag. A public pre-release, so /releases/latest is unchanged.
+  prerelease:
+    if: github.event_name == 'workflow_dispatch' && inputs.test_tag != ''
+    needs: [macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: LISN-Mac.pkg
+          path: dl
+      - name: Pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.test_tag }}
+        run: |
+          case "$TAG" in v*) echo "test_tag must not start with v (that is for real releases)"; exit 1;; esac
+          cd dl
+          notes="LISN-Mac.pkg is LISN for Apple Silicon Macs: the VST3 and the desktop app. A test build, not a release. SHA-256: $(sha256sum LISN-Mac.pkg | cut -d' ' -f1)"
+          gh release create "$TAG" LISN-Mac.pkg --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "LISN for Mac, test build" --notes "$notes"
