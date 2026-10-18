@@ -212,9 +212,15 @@ int runSnapshots (const juce::File& outDir)
     harmonyState.songName = "Michael Jackson - Liberian Girl (Acapella).mp3";
     const auto harmonyPlaying = [] (StemSplitterProcessor& p, StemSplitterEditor& ed)
     {
+        ed.showHarmonies (true);                     // the name says Harmonies, the panel is on the Harmonies screen
+        ed.tick();                                   // the player loads Lead + Harmonies
+        p.player.setVolume (1, 0.7f);
         p.player.setPositionFraction (0.38);
-        ed.tick();                                   // the player loads the 6 rows and mutes Vocals
+        ed.tick();
+        for (int i = 0; i < 60 && ! ed.harmonyScreen().hasPeaks(); ++i)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
     };
+    const auto reelMid = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().setReelPosition (9.4); };
     const auto splittingHarmony = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.stemsScreen().setHarmonyButton ("Splitting 42%"); };
     const auto appUpdate = [titleBar, update] (StemSplitterProcessor& p, StemSplitterEditor& ed) { titleBar (p, ed); update (p, ed); };
 
@@ -258,6 +264,7 @@ int runSnapshots (const juce::File& outDir)
         { "harmony-dusk", "dusk", harmonyState, 1.0f, harmonyPlaying },
         { "harmony-midnight", "midnight", harmonyState, 1.0f, harmonyPlaying },
         { "harmony-splitting-dusk", "dusk", state (Screen::Stems, false), 1.0f, splittingHarmony },
+        { "harmony-reel-dusk", "dusk", harmonyState, 1.0f, reelMid },
     };
 
     int failures = 0;

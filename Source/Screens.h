@@ -33,11 +33,24 @@ public:
     // "Update 0.2.5" in a pill 16 px after the title (the update-notice mockup, option A); empty hides it.
     void showUpdate (const juce::String& version);
     std::function<void()> onUpdate;
+    // The name after "LISN" is a slot reel (the Harmony Split canvas, Main and Reel boards): spinTo (true) spins up through
+    // the stem names in their colours and lands on "Harmonies" (a gold glow) in 1.9 s; spinTo (false) spins back to
+    // "StemSplitter" in 1.3 s. Without `animate` it just shows that name. onLanded follows an animated spin.
+    void spinTo (bool harmonies, bool animate);
+    bool showsHarmonies() const { return reelTarget > 0.0; }
+    bool isSpinning() const { return spinning; }
+    void setReelPosition (double index);           // test hook: a frame mid-spin (0 = StemSplitter, the last = Harmonies)
+    std::function<void()> onLanded;
+    // A click on the name (not a drag) calls onName while it is clickable; the cursor says so.
+    void setNameClickable (bool on) { nameClickable = on; }
+    std::function<void()> onName;
 
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
 
 private:
     // The header repaints with every motion frame, so the symbol is parsed once and drawn from an image made at the screen's
@@ -45,7 +58,18 @@ private:
     std::unique_ptr<juce::Drawable> symbol;        // lisn-symbol-glass.svg from BinaryData
     juce::Image symbolImage;
     float symbolScale = 0.0f;
-    juce::GlyphArrangement title;                  // "LISN StemSplitter"; "LISN" in the title bar
+    juce::GlyphArrangement title;                  // "LISN"; the name after it is the reel
+    struct Word { juce::GlyphArrangement glyphs; juce::Colour colour; };
+    std::vector<Word> reel;                        // StemSplitter, 3 x (Vocals Drums Bass Other Lead StemSplitter), Harmonies
+    double reelPos = 0.0, reelFrom = 0.0, reelTarget = 0.0;   // word indices
+    double reelStart = 0.0, reelMs = 0.0, landedAt = 0.0;     // ms
+    bool spinning = false, nameClickable = false;
+    std::unique_ptr<juce::VBlankAttachment> reelFrames;      // while spinning or glowing
+    juce::String updateVersion;
+    void placeUpdate();                            // the update pill's place and visibility (see showUpdate)
+    void makeReel (const Theme&);
+    void reelFrame();
+    juce::Rectangle<int> nameArea() const;
     SegmentedPill themePill, stemsPill;
     WindowButton minimiseButton { false }, closeButton { true };
     UpdatePill update;
@@ -152,20 +176,17 @@ public:
     StemsScreen();
     ~StemsScreen() override;
     void setTheme (const Theme&);
-    // Rebuilds the rows (vocals, lead, harmonies, drums, bass, guitar, piano, other, then unknown stems A-Z; compact with
-    // more than 4) and reads their peaks and the song length on a background thread. With `harmony`, a 4-stem split's
-    // harmony/*.wav (Harmony Split's Lead and Harmonies) join the rows under Vocals.
-    void setStems (const juce::File& dir, const juce::String& songName, bool harmony = false);
-    bool showsHarmony() const { return harmonyRows; }
-    // The Harmony Split button, left of Loop; only for 4-stem splits. Its text ("Harmony Split", "Splitting 42%" ...),
-    // accent-lit while the Lead and Harmonies rows show.
+    // Rebuilds the rows (vocals, drums, bass, guitar, piano, other, then unknown stems A-Z; compact with more than 4)
+    // and reads their peaks and the song length on a background thread.
+    void setStems (const juce::File& dir, const juce::String& songName);
+    // The Harmony Split button, left of Loop; only for 4-stem splits. Its text: "Harmony Split", "Splitting 42%" ...
     void setHarmonyButton (const juce::String& text);
     juce::String harmonyText() const { return harmonyButton.getButtonText(); }   // test hook
     bool hasHarmonyButton() const { return harmonyButton.isVisible(); }          // test hook
     std::function<void()> onHarmony;                 // a click on the button
     // Its menu, under the button: Quick and Best quality with their time for this song (the result's quality ticked;
-    // "" = no result yet) and, with a result, Hide / Show the rows.
-    enum class HarmonyChoice { quick = 1, best, toggleRows };
+    // "" = no result yet) and, with a result, Open Harmonies.
+    enum class HarmonyChoice { quick = 1, best, open };
     juce::PopupMenu harmonyMenu (const juce::String& resultQuality);
     void showHarmonyMenu (const juce::String& resultQuality);
     std::function<void (HarmonyChoice)> onHarmonyChoice;
@@ -263,12 +284,84 @@ private:
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };
     LisnButton harmonyButton { "Harmony Split", LisnButton::Style::Ghost };
-    bool harmonyRows = false;
     std::unique_ptr<juce::LookAndFeel> menuLook;     // the Harmony Split menu's look (the speed strip's, with the layers icon)
     DragChip dragChip;
     SpeedStrip speedStrip;
     LisnButton newSong;
     juce::ThreadPool pool { 1 };                     // last member: its jobs stop before the rows go
+};
+
+// A vertical fader: a 4 px track filled in its colour up to the level, a 16 px cream thumb. A click or drag sets 0..1,
+// a double-click 100 %.
+class Fader : public juce::Component
+{
+public:
+    void setColour (juce::Colour c) { colour = c; repaint(); }
+    void setValue (float);                           // no callback; repaints on change
+    float getValue() const { return value; }
+    std::function<void (float)> onChange;
+
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent& e) override { drag (e); }
+    void mouseDrag (const juce::MouseEvent& e) override { drag (e); }
+    void mouseDoubleClick (const juce::MouseEvent&) override;
+
+private:
+    void drag (const juce::MouseEvent&);
+    float value = 1.0f;
+    juce::Colour colour = Theme::cream;
+};
+
+// Harmony Split's own screen (the canvas's "A + B" board): Lead and Harmonies as two big wave lanes with Solo, Mute and
+// Drag, a fader each on the right, and "All stems" back. The player holds just these two files while it shows, so lane i
+// is stem i to the callbacks.
+class HarmonyScreen : public juce::Component
+{
+public:
+    HarmonyScreen();
+    ~HarmonyScreen() override;
+    void setTheme (const Theme&);
+    // A split's harmony/lead.wav and harmony/harmonies.wav; the lanes' peaks are read on a background thread.
+    void setSong (const juce::File& stemDir, const juce::String& songName, const juce::String& quality);
+    juce::Array<juce::File> getFiles() const { return files; }   // lead, harmonies: the player's order
+    bool hasPeaks() const { return peaksReady; }
+    void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
+    void setVolume (int lane, float);                // its fader; no callback
+    void setAudible (juce::uint32 mask);             // bit i = lane i heard: a silent lane dims, Solo / Mute light up
+    Fader& fader (int lane) { return lanes[lane].fader; }   // test hook
+    std::function<void()> onBack, onPlayPause;
+    std::function<void (int)> onSolo, onToggleMute;
+    std::function<void (int, float)> onVolume;
+    std::function<void (double)> onSeek;             // fraction 0..0.999
+    std::function<juce::File()> mixFile;             // what "Drag both" drags
+
+    void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;   // the playhead over both lanes
+    void resized() override;
+
+private:
+    struct Lane
+    {
+        WaveformView wave;
+        LisnButton solo { "Solo", LisnButton::Style::Ghost }, mute { "Mute", LisnButton::Style::Ghost };
+        DragChip drag;
+        Fader fader;
+        bool audible = true;
+    };
+    juce::Rectangle<int> laneArea (int i) const { return { 19, 70 + i * 128, 524, 116 }; }
+    juce::Colour laneColour (int i) const { return i == 0 ? theme.vocals : theme.guitar; }
+
+    Theme theme = themeFor ("dusk");
+    Lane lanes[2];
+    juce::Array<juce::File> files;
+    juce::String song, quality, timeText { "0:00 / 0:00" };
+    double fraction = 0.0, length = 0.0;
+    bool playing = false, peaksReady = false;
+    int generation = 0, lastHead = -1;
+    CircleButton playButton;
+    LisnButton back { "All stems", LisnButton::Style::Ghost };
+    DragChip both;
+    juce::ThreadPool pool { 1 };                     // last member: its jobs stop before the lanes go
 };
 
 // PythonMissing.dc.html in three variants: Python missing, Demucs missing, split failed.

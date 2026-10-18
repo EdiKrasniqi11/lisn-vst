@@ -20,13 +20,6 @@ struct HarmonyTests : juce::UnitTest
         w->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
     }
 
-    static juce::StringArray rowNames (StemsScreen& s)
-    {
-        juce::StringArray names;
-        for (const auto& f : s.getFiles()) names.add (f.getFileNameWithoutExtension());
-        return names;
-    }
-
     static juce::StringArray menuItems (const juce::PopupMenu& m)   // "text", or "text [ticked]"
     {
         juce::StringArray items;
@@ -56,50 +49,54 @@ struct HarmonyTests : juce::UnitTest
         for (auto stem : { "vocals", "drums", "bass", "guitar", "piano", "other" })
             writeWav (six.getChildFile (juce::String (stem) + ".wav"));
 
-        beginTest ("Lead keeps the vocal colour, Harmonies take guitar's");
-        for (auto id : { "dusk", "midnight" })
-        {
-            const auto& t = themeFor (id);
-            expect (t.stemColour ("lead") == t.stemColour ("vocals"));
-            expect (t.stemColour ("harmonies") == t.stemColour ("guitar"));
-        }
-
-        beginTest ("the button is on 4-stem splits only, and the rows go under Vocals");
+        beginTest ("the button is on 4-stem splits only; its menu ticks the result's quality and opens it");
         {
             StemsScreen s;
             s.setBounds (0, 0, 712, 398);
-            s.setStems (four, "Song", true);       // no harmony result yet: 4 rows
+            s.setStems (four, "Song");
             expect (s.hasHarmonyButton());
-            expect (! s.showsHarmony(), "no rows without a result");
-            expectEquals (s.numRows(), 4);
-
-            writeWav (four.getChildFile ("harmony/lead.wav"));
-            writeWav (four.getChildFile ("harmony/harmonies.wav"));
-            expect (HarmonyJob::hasResult (four));
-            s.setStems (four, "Song", true);
-            expect (s.showsHarmony());
-            expectEquals (rowNames (s).joinIntoString (" "), juce::String ("vocals lead harmonies drums bass other"));
-            expectEquals (s.row (1)->getHeight(), s.row (5)->getHeight());   // all compact
-            expect (s.row (5)->getBottom() <= 339, "the rows end above the speed strip");
-
-            s.setStems (four, "Song", false);       // hidden again
-            expect (! s.showsHarmony());
-            expectEquals (s.numRows(), 4);
-
-            s.setStems (six, "Song", true);
-            expect (! s.hasHarmonyButton() && ! s.showsHarmony());
-            expectEquals (s.numRows(), 6);
+            expectEquals (s.numRows(), 4);                   // Lead and Harmonies live on their own screen
+            s.setStems (six, "Song");
+            expect (! s.hasHarmonyButton());
 
             s.setHarmonyButton ("Splitting 42%");
             expectEquals (s.harmonyText(), juce::String ("Splitting 42%"));
-
-            beginTest ("the menu: Quick and Best quality, the result's ticked, then Hide / Show");
-            s.setStems (four, "Song", true);
             expectEquals (menuItems (s.harmonyMenu ({})).joinIntoString ("|"), juce::String ("Quick split|Best quality"));
             expectEquals (menuItems (s.harmonyMenu ("best")).joinIntoString ("|"),
-                          juce::String ("Quick split|Best quality [ticked]|Hide Lead and Harmonies"));
+                          juce::String ("Quick split|Best quality [ticked]|Open Harmonies"));
         }
-        four.getChildFile ("harmony").deleteRecursively();
+
+        beginTest ("the Harmonies screen: Lead and Harmonies files, faders both ways");
+        {
+            HarmonyScreen h;
+            h.setBounds (0, 0, 712, 398);
+            h.setSong (four, "Song", "best");
+            expectEquals (h.getFiles()[0].getFullPathName(), four.getChildFile ("harmony/lead.wav").getFullPathName());
+            expectEquals (h.getFiles()[1].getFileName(), juce::String ("harmonies.wav"));
+            float heard = -1.0f;
+            int lane = -1;
+            h.onVolume = [&] (int i, float v) { lane = i; heard = v; };
+            h.fader (1).onChange (0.4f);
+            expectEquals (lane, 1);
+            expectEquals (heard, 0.4f);
+            h.setVolume (0, 0.25f);
+            expectEquals (h.fader (0).getValue(), 0.25f);
+            h.setAudible (1u);                               // Lead soloed: Harmonies dims
+            h.setPlayback (true, 0.5, 60.0);
+        }
+
+        beginTest ("the header's name: StemSplitter or Harmonies");
+        {
+            Header hd;
+            hd.setBounds (24, 16, 712, 44);
+            expect (! hd.showsHarmonies() && ! hd.isSpinning());
+            hd.spinTo (true, false);
+            expect (hd.showsHarmonies() && ! hd.isSpinning());
+            hd.spinTo (false, true);
+            expect (! hd.showsHarmonies() && hd.isSpinning());
+            hd.spinTo (false, false);
+            expect (! hd.isSpinning());
+        }
 
         beginTest ("a pass moves a finished result into harmony/, with progress");
         {

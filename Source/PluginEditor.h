@@ -42,6 +42,9 @@ public:
     WaveBackground& background() { return waves; }
     StemsScreen& stemsScreen() { return stems; }
     HelpSheet& helpSheet() { return help; }
+    HarmonyScreen& harmonyScreen() { return harmony; }
+    void showHarmonies (bool on) { if (on) openHarmonies (false); else backToStems (false); }   // no reel, no slide
+    bool showsHarmonies() const { return harmonyView; }
     Header& headerBar() { return header; }
 
 private:
@@ -56,10 +59,17 @@ private:
     juce::File renderFile (const std::vector<float>& gains, double speed);   // renderRequest's dest, rendered here unless cached
     void prepareMix();                               // at a speed other than 1, renders the mix on mixJob; sets the chip
     // The Harmony Split button: cancels a running pass, else opens its menu. A menu choice starts a pass of that quality
-    // on harmonyJob, or shows / hides the rows of the result that's there.
+    // on harmonyJob, or opens the Harmonies screen for the result that's there.
     void harmonyClicked();
     void harmonyChosen (StemsScreen::HarmonyChoice);
-    void updateHarmony();                            // a finished pass shows its rows; the button's text follows the job
+    void updateHarmony();                            // a finished pass opens Harmonies; the button's text follows the job
+    // To the Harmonies screen and back (the Harmony Split canvas, Main board): the header's name spins to "Harmonies",
+    // then the panel slides left; back, it spins to "StemSplitter" while the panel slides right. Without `animate`: at once.
+    void openHarmonies (bool animate);
+    void backToStems (bool animate);
+    void setHarmonyView (bool);                      // which files the player holds; it keeps the position and play state
+    void slideTo (float target, bool animate);       // 0 = the stems, 1 = Harmonies; 0.7 s, ease in-out
+    void layoutSlide();
     void startSplit (const juce::File&);             // cancels mixJob first: it must not hold stems a re-split replaces
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
@@ -70,6 +80,7 @@ private:
     DropScreen drop;
     SplittingScreen splitting;
     StemsScreen stems;
+    HarmonyScreen harmony;                           // right of the stems; the panel slides between them
     ErrorScreen error;
     HelpSheet help;
     InfoButton info;                                 // bottom-right corner: opens and closes the help sheet
@@ -87,6 +98,11 @@ private:
     double mixKeySince = 0.0;                        // when they last changed (ms); a render starts once they settle for 0.5 s
     RenderJob mixJob;                                // last: it stops before anything it reads goes
     HarmonyJob harmonyJob;
+    bool harmonyView = false;                        // the player holds Lead + Harmonies (the Harmonies screen's files)
+    std::optional<std::pair<double, bool>> carry;    // the position and play state to restore once the player reloads
+    float slide = 0.0f, slideFrom = 0.0f, slideTarget = 0.0f;
+    double slideStart = 0.0;
+    std::unique_ptr<juce::VBlankAttachment> slideFrames;   // while sliding
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemSplitterEditor)
 };

@@ -22,11 +22,10 @@ namespace
     const juce::StringArray allStems { "vocals", "drums", "bass", "guitar", "piano", "other" };
     juce::StringArray stemKeys (bool six) { return six ? allStems : juce::StringArray { "vocals", "drums", "bass", "other" }; }
 
-    int stemRank (const juce::File& f)                 // unknown stems sort last; Harmony Split's rows go under Vocals
+    int stemRank (const juce::File& f)                 // unknown stems sort last
     {
-        static const juce::StringArray order { "vocals", "lead", "harmonies", "drums", "bass", "guitar", "piano", "other" };
-        const auto i = order.indexOf (f.getFileNameWithoutExtension().toLowerCase());
-        return i < 0 ? order.size() : i;
+        const auto i = allStems.indexOf (f.getFileNameWithoutExtension().toLowerCase());
+        return i < 0 ? allStems.size() : i;
     }
 
     juce::Font tracked (const juce::Font& f, float em)   // CSS letter-spacing in em; JUCE scales kerning by the height, not the em
@@ -94,9 +93,8 @@ Header::Header()
       themePill ({ "Dusk", "Midnight" }), stemsPill ({ "4 stems", "6 stems" })
 {
     jassert (symbol != nullptr);
-    const auto lisn = tracked (Fonts::display (22.0f), 0.08f);
-    title.addLineOfText (lisn, "LISN", titleX, 30.25f);   // shared baseline
-    title.addLineOfText (Fonts::body (14.0f, 500), "StemSplitter", titleX + juce::GlyphArrangement::getStringWidth (lisn, "LISN") + 10.0f, 30.25f);
+    title.addLineOfText (tracked (Fonts::display (22.0f), 0.08f), "LISN", titleX, 30.25f);   // the reel shares its baseline
+    makeReel (themeFor ("dusk"));
 
     themePill.onChange = [this] (int i) { if (onTheme != nullptr) onTheme (i == 1 ? "midnight" : "dusk"); };
     stemsPill.onChange = [this] (int i) { if (onSixStems != nullptr) onSixStems (i == 1); };
@@ -109,12 +107,149 @@ Header::Header()
 void Header::showUpdate (const juce::String& version)
 {
     update.setButtonText ("Update " + version);
-    update.setVisible (version.isNotEmpty());
-    resized();
+    updateVersion = version;
+    placeUpdate();
+}
+
+void Header::placeUpdate()
+{
+    // The title bar has no room for the name and the pill: the pill takes the name's place (after "LISN") while it rests
+    // on StemSplitter, and steps aside while the reel spins to or shows Harmonies.
+    const auto reelBusy = spinning || reelTarget > 0.0 || reelPos != 0.0;
+    update.setVisible (updateVersion.isNotEmpty() && ! (titleBar && reelBusy));
+    const auto x = titleBar ? juce::roundToInt (title.getBoundingBox (0, -1, true).getRight()) : nameArea().getRight() - 4;
+    update.setBounds (x + 16, 9, update.preferredWidth(), 26);   // 16 px after the title, centred on the capitals (y 22)
+    repaint (nameArea().expanded (14, 0));
+}
+
+namespace
+{
+    float nameX()                                  // the reel's left edge: 10 px after "LISN"
+    {
+        return titleX + juce::GlyphArrangement::getStringWidth (tracked (Fonts::display (22.0f), 0.08f), "LISN") + 10.0f;
+    }
+    constexpr float reelRow = 22.0f;               // px between the reel's words
+
+    double easeOutBack (double t)                  // off the mark fast, a hair past the end (about 0.6 %), back
+    {
+        constexpr double c1 = 0.45, c3 = c1 + 1.0;
+        const auto u = t - 1.0;
+        return 1.0 + c3 * u * u * u + c1 * u * u;
+    }
+}
+
+void Header::makeReel (const Theme& t)
+{
+    const auto font = Fonts::body (14.0f, 500);
+    const auto x = nameX();
+    const auto word = [&] (const juce::String& s, juce::Colour c)
+    {
+        Word w { {}, c };
+        w.glyphs.addLineOfText (font, s, x, 0.0f);
+        return w;
+    };
+    reel.clear();
+    reel.push_back (word ("StemSplitter", Theme::cream));
+    for (int k = 0; k < 3; ++k)
+    {
+        reel.push_back (word ("Vocals", t.vocals));
+        reel.push_back (word ("Drums", t.drums));
+        reel.push_back (word ("Bass", t.bass));
+        reel.push_back (word ("Other", t.other));
+        reel.push_back (word ("Lead", t.vocals));
+        reel.push_back (word ("StemSplitter", Theme::cream));
+    }
+    reel.push_back (word ("Harmonies", t.guitar));
+    if (reelTarget > 0.0) reelTarget = (double) reel.size() - 1.0;
+}
+
+juce::Rectangle<int> Header::nameArea() const
+{
+    const auto w = juce::GlyphArrangement::getStringWidth (Fonts::body (14.0f, 500), "StemSplitter");   // the widest word
+    return { (int) nameX() - 4, 6, juce::roundToInt (w) + 8, 32 };
+}
+
+void Header::spinTo (bool harmonies, bool animate)
+{
+    const auto target = harmonies ? (double) reel.size() - 1.0 : 0.0;
+    if (! animate)
+    {
+        spinning = false;
+        reelFrames.reset();
+        reelPos = reelTarget = target;
+        landedAt = 0.0;
+        placeUpdate();
+        return;
+    }
+    if (target == reelTarget && (spinning || reelPos == target))
+        return;                                      // there, or on its way
+    reelTarget = target;
+    reelFrom = reelPos;
+    landedAt = 0.0;
+    reelStart = juce::Time::getMillisecondCounterHiRes();
+    reelMs = harmonies ? 1900.0 : 1300.0;
+    spinning = true;
+    placeUpdate();
+    if (reelFrames == nullptr)
+        reelFrames = std::make_unique<juce::VBlankAttachment> (this, [this] { reelFrame(); });
+}
+
+void Header::reelFrame()
+{
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    if (spinning)
+    {
+        const auto t = juce::jlimit (0.0, 1.0, (now - reelStart) / reelMs);
+        reelPos = reelFrom + (reelTarget - reelFrom) * easeOutBack (t);
+        if (t >= 1.0)
+        {
+            reelPos = reelTarget;
+            spinning = false;
+            landedAt = reelTarget > 0.0 ? now : 0.0;
+            placeUpdate();
+            if (onLanded != nullptr)
+                onLanded();
+        }
+    }
+    if (! spinning && (landedAt == 0.0 || now - landedAt > 1200.0))
+    {
+        landedAt = 0.0;
+        // Not from inside its own callback: drop the attachment on the next message.
+        juce::MessageManager::callAsync ([safe = SafePointer<Header> (this)]
+        {
+            if (safe != nullptr && ! safe->spinning && safe->landedAt == 0.0)
+                safe->reelFrames.reset();
+        });
+    }
+    repaint (nameArea().expanded (14, 0));
+}
+
+void Header::setReelPosition (double index)
+{
+    spinning = false;
+    reelFrames.reset();
+    reelPos = juce::jlimit (0.0, (double) reel.size() - 1.0, index);
+    reelTarget = std::round (reelPos);
+    placeUpdate();
+    repaint();
+}
+
+void Header::mouseMove (const juce::MouseEvent& e)
+{
+    setMouseCursor (nameClickable && nameArea().contains (e.getPosition()) ? juce::MouseCursor::PointingHandCursor
+                                                                           : juce::MouseCursor::NormalCursor);
+}
+
+void Header::mouseUp (const juce::MouseEvent& e)
+{
+    if (nameClickable && ! e.mouseWasDraggedSinceMouseDown() && nameArea().contains (e.getPosition()) && onName != nullptr)
+        onName();
 }
 
 void Header::setTheme (const Theme& t)
 {
+    makeReel (t);
+    repaint();
     themePill.setTheme (t);
     stemsPill.setTheme (t);
     update.setAccent (t.accent());
@@ -138,8 +273,6 @@ void Header::setEnabledSwitches (bool on)
 void Header::makeTitleBar (std::function<void()> minimise, std::function<void()> close)
 {
     titleBar = true;
-    title.clear();
-    title.addLineOfText (tracked (Fonts::display (22.0f), 0.08f), "LISN", titleX, 30.25f);
     minimiseButton.onClick = std::move (minimise);
     closeButton.onClick = std::move (close);
     addAndMakeVisible (minimiseButton);
@@ -168,6 +301,41 @@ void Header::paint (juce::Graphics& g)
 
     g.setColour (Theme::cream);
     title.draw (g);
+    if (! (titleBar && update.isVisible()))          // in the title bar the update pill sits where the name goes
+    {
+        // The reel: the words around reelPos, faded by their distance from the line. Mid-spin each word leaves two faint
+        // copies along its path (motion blur); the landed "Harmonies" glows for 1.2 s.
+        juce::Graphics::ScopedSaveState clip (g);
+        g.reduceClipRegion (nameArea());
+        const auto now = juce::Time::getMillisecondCounterHiRes();
+        const auto blur = spinning ? (float) (6.0 * std::sin (juce::MathConstants<double>::pi
+                                                              * juce::jlimit (0.0, 1.0, (now - reelStart) / reelMs))) : 0.0f;
+        const auto last = (int) reel.size() - 1;
+        for (int i = juce::jmax (0, (int) std::floor (reelPos) - 1); i <= juce::jmin (last, (int) std::ceil (reelPos) + 1); ++i)
+        {
+            const auto d = (float) (i - reelPos);
+            const auto alpha = juce::jlimit (0.0f, 1.0f, 1.0f - std::abs (d));   // gone one row away: nothing peeks at rest
+            if (alpha <= 0.0f) continue;
+            const auto& w = reel[(size_t) i];
+            const auto at = juce::AffineTransform::translation (0.0f, 30.25f + d * reelRow);
+            for (const auto off : { -blur, blur })
+                if (blur > 0.5f)
+                {
+                    g.setColour (w.colour.withMultipliedAlpha (alpha * 0.22f));
+                    w.glyphs.draw (g, at.translated (0.0f, off));
+                }
+            if (i == last && landedAt > 0.0)
+            {
+                const auto glow = (float) std::sin (juce::MathConstants<double>::pi * juce::jlimit (0.0, 1.0, (now - landedAt) / 1200.0));
+                juce::Path p;
+                w.glyphs.createPath (p);
+                p.applyTransform (at);
+                juce::DropShadow (w.colour.withAlpha (0.9f * glow), 12, {}).drawForPath (g, p);
+            }
+            g.setColour (w.colour.withMultipliedAlpha (alpha));
+            w.glyphs.draw (g, at);
+        }
+    }
     if (titleBar)   // the 1 px separator between the pills and the window buttons
     {
         g.setColour (Theme::cream.withAlpha (0.24f));
@@ -185,7 +353,7 @@ void Header::resized()
         right = minimiseButton.getX() - 21;
     }
     // The update pill: 16 px after the title, centred on the header like the capitals (y 22)
-    update.setBounds (juce::roundToInt (title.getBoundingBox (0, -1, true).getRight()) + 16, 9, update.preferredWidth(), 26);
+    placeUpdate();
     const auto w = stemsPill.preferredWidth();
     stemsPill.setBounds (right - w, 3, w, 38);
     themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);
@@ -685,8 +853,6 @@ void StemsScreen::setTheme (const Theme& t)
     theme = t;
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     loopButton.repaint();
-    harmonyButton.tint = harmonyRows ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
-    harmonyButton.repaint();
     menuLook->setColour (juce::PopupMenu::backgroundColourId, t.panelTint.withAlpha (0.94f));
     menuLook->setColour (juce::PopupMenu::highlightedTextColourId, t.accent());
     speedStrip.setTheme (t);
@@ -695,7 +861,7 @@ void StemsScreen::setTheme (const Theme& t)
     repaint();
 }
 
-void StemsScreen::setStems (const juce::File& newDir, const juce::String& songName, bool harmony)
+void StemsScreen::setStems (const juce::File& newDir, const juce::String& songName)
 {
     ++generation;
     pool.removeAllJobs (true, 2000);
@@ -718,11 +884,6 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     auto files = SeparationJob::stemsIn (dir);   // A-Z
     // ponytail: 4-stem splits only; 6 stems + 2 don't fit the panel. A taller panel or a scroll if 6-stem mode wants it.
     harmonyButton.setVisible (files.size() == 4 && dir.getChildFile ("vocals.wav").existsAsFile());
-    const auto harmonyFiles = SeparationJob::stemsIn (dir.getChildFile ("harmony"));
-    harmonyRows = harmony && harmonyButton.isVisible() && ! harmonyFiles.isEmpty();
-    if (harmonyRows)
-        files.addArray (harmonyFiles);
-    harmonyButton.tint = harmonyRows ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     std::stable_sort (files.begin(), files.end(), [] (const juce::File& a, const juce::File& b) { return stemRank (a) < stemRank (b); });
     for (int i = 0; i < files.size(); ++i)
     {
@@ -996,7 +1157,7 @@ juce::PopupMenu StemsScreen::harmonyMenu (const juce::String& resultQuality)
     menu.addItem ("Quick split" + about (1.7), true, resultQuality == "quick", choose (HarmonyChoice::quick));
     menu.addItem ("Best quality" + about (5.3), true, resultQuality == "best", choose (HarmonyChoice::best));
     if (resultQuality.isNotEmpty())
-        menu.addItem (harmonyRows ? "Hide Lead and Harmonies" : "Show Lead and Harmonies", choose (HarmonyChoice::toggleRows));
+        menu.addItem ("Open Harmonies", choose (HarmonyChoice::open));
     return menu;
 }
 
@@ -1515,4 +1676,276 @@ void HelpSheet::paint (juce::Graphics& g)
     const auto& tips = helpTips[(size_t) getTab()];
     for (size_t i = 0; i < tips.size(); ++i)
         paintTip (g, tips[i], { 19.0f, 74.0f + (float) i * (tipH + 8.0f), 674.0f, tipH });
+}
+
+//==============================================================================
+void Fader::setValue (float v)
+{
+    v = juce::jlimit (0.0f, 1.0f, v);
+    if (juce::exactlyEqual (v, value)) return;
+    value = v;
+    repaint();
+}
+
+void Fader::drag (const juce::MouseEvent& e)
+{
+    const auto top = 8.0f, bottom = (float) getHeight() - 8.0f;
+    setValue ((bottom - e.position.y) / (bottom - top));
+    if (onChange != nullptr) onChange (value);
+}
+
+void Fader::mouseDoubleClick (const juce::MouseEvent&)
+{
+    setValue (1.0f);
+    if (onChange != nullptr) onChange (value);
+}
+
+void Fader::paint (juce::Graphics& g)
+{
+    const auto cx = (float) getWidth() / 2.0f, top = 8.0f, bottom = (float) getHeight() - 8.0f;
+    const auto y = bottom - value * (bottom - top);
+    g.setColour (Theme::cream.withAlpha (0.14f));
+    g.fillRoundedRectangle (cx - 2.0f, top, 4.0f, bottom - top, 2.0f);
+    g.setColour (colour);
+    g.fillRoundedRectangle (cx - 2.0f, y, 4.0f, bottom - y, 2.0f);
+    g.setColour (Theme::cream);
+    g.fillEllipse (cx - 8.0f, y - 8.0f, 16.0f, 16.0f);
+}
+
+//==============================================================================
+HarmonyScreen::HarmonyScreen()
+{
+    playButton.onClick = [this] { if (onPlayPause != nullptr) onPlayPause(); };
+    back.icon = Icons::back;
+    back.padLeft = 10.0f;
+    back.padRight = 14.0f;
+    back.onClick = [this] { if (onBack != nullptr) onBack(); };
+    both.setText ("Drag both");
+    both.fileToDrag = [this] { return mixFile != nullptr ? mixFile() : juce::File(); };
+    for (int i = 0; i < 2; ++i)
+    {
+        auto& l = lanes[i];
+        for (auto* b : { &l.solo, &l.mute })
+        {
+            b->height = 26;
+            b->corner = 13.0f;
+            b->fontSize = 12.0f;
+            b->padLeft = b->padRight = 10.0f;
+            addAndMakeVisible (b);
+        }
+        l.solo.onClick = [this, i] { if (onSolo != nullptr) onSolo (i); };
+        l.mute.onClick = [this, i] { if (onToggleMute != nullptr) onToggleMute (i); };
+        l.wave.setBars (60);
+        l.wave.onMouse = [this] (WaveMouse m, double f, bool, bool)
+        {
+            if ((m == WaveMouse::down || m == WaveMouse::drag) && onSeek != nullptr)
+                onSeek (juce::jlimit (0.0, 0.999, f));
+        };
+        l.drag.setText ("Drag");
+        l.drag.fileToDrag = [this, i] { return files[i]; };
+        l.fader.onChange = [this, i] (float v)
+        {
+            repaint (lanes[i].fader.getX() - 20, 78, 68, 22);   // its level above it
+            if (onVolume != nullptr) onVolume (i, v);
+        };
+        addAndMakeVisible (l.wave);
+        addAndMakeVisible (l.drag);
+        addAndMakeVisible (l.fader);
+    }
+    addAndMakeVisible (playButton);
+    addAndMakeVisible (back);
+    addAndMakeVisible (both);
+    setTheme (theme);
+}
+
+HarmonyScreen::~HarmonyScreen()
+{
+    pool.removeAllJobs (true, 2000);
+}
+
+void HarmonyScreen::setTheme (const Theme& t)
+{
+    theme = t;
+    playButton.setFill (Theme::cream);
+    for (int i = 0; i < 2; ++i)
+    {
+        lanes[i].wave.setStemColour (laneColour (i));
+        lanes[i].fader.setColour (laneColour (i));
+        if (lanes[i].solo.tint.has_value())
+            lanes[i].solo.tint = laneColour (i);
+    }
+    repaint();
+}
+
+void HarmonyScreen::setSong (const juce::File& stemDir, const juce::String& songName, const juce::String& q)
+{
+    ++generation;
+    pool.removeAllJobs (true, 2000);
+    const auto dir = stemDir.getChildFile ("harmony");
+    files = { dir.getChildFile ("lead.wav"), dir.getChildFile ("harmonies.wav") };
+    song = songName;
+    quality = q;
+    peaksReady = false;
+    length = 0.0;
+    for (auto& l : lanes)
+        l.wave.setEnvelope ({});
+    repaint();
+
+    const int gen = generation;
+    pool.addJob ([safe = juce::Component::SafePointer<HarmonyScreen> (this), f = files, gen]
+    {
+        const std::function<bool()> shouldExit = [] { return juce::ThreadPoolJob::getCurrentThreadPoolJob()->shouldExit(); };
+        juce::AudioFormatManager formats;
+        formats.registerBasicFormats();
+        std::vector<std::vector<float>> envelopes;
+        double seconds = 0.0;
+        for (const auto& file : f)
+        {
+            if (shouldExit()) return;
+            std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+            envelopes.push_back (reader != nullptr ? readEnvelope (*reader, 100.0, shouldExit) : std::vector<float>());
+            if (reader != nullptr && seconds == 0.0) seconds = lengthSeconds (*reader);
+        }
+        if (shouldExit()) return;
+        juce::MessageManager::callAsync ([safe, gen, envelopes = std::move (envelopes), seconds]() mutable
+        {
+            if (safe == nullptr || safe->generation != gen) return;
+            for (size_t i = 0; i < 2 && i < envelopes.size(); ++i)
+                safe->lanes[i].wave.setEnvelope (std::move (envelopes[i]));
+            if (safe->length == 0.0) safe->length = seconds;
+            safe->peaksReady = true;
+            safe->repaint();
+        });
+    });
+}
+
+void HarmonyScreen::setPlayback (bool isPlaying, double f, double lengthSeconds)
+{
+    if (isPlaying != playing)
+    {
+        playing = isPlaying;
+        playButton.setPlaying (playing);
+    }
+    if (lengthSeconds > 0.0) length = lengthSeconds;
+    fraction = f;
+    const auto t = mmss (f * length) + " / " + mmss (length);
+    if (t != timeText)
+    {
+        timeText = t;
+        repaint (67, 17, 400, 36);
+    }
+    const auto& w = lanes[0].wave;
+    const auto head = w.getX() + juce::roundToInt (fraction * w.getWidth());
+    if (head != lastHead)
+    {
+        const auto top = laneArea (0).getY(), h = laneArea (1).getBottom() - top;
+        if (lastHead >= 0) repaint (lastHead - 2, top, 4, h);
+        repaint (head - 2, top, 4, h);
+        lastHead = head;
+    }
+}
+
+void HarmonyScreen::setVolume (int lane, float v)
+{
+    if (! juce::isPositiveAndBelow (lane, 2) || juce::exactlyEqual (lanes[lane].fader.getValue(), juce::jlimit (0.0f, 1.0f, v)))
+        return;
+    lanes[lane].fader.setValue (v);
+    repaint (lanes[lane].fader.getX() - 20, 78, 68, 22);
+}
+
+void HarmonyScreen::setAudible (juce::uint32 mask)
+{
+    for (int i = 0; i < 2; ++i)
+    {
+        auto& l = lanes[i];
+        const auto heard = ((mask >> i) & 1u) != 0;
+        const auto soloed = mask == (1u << i);
+        if (heard == l.audible && l.solo.tint.has_value() == soloed)
+            continue;
+        l.audible = heard;
+        l.wave.setAlpha (heard ? 1.0f : 0.35f);
+        l.solo.tint = soloed ? std::optional<juce::Colour> (laneColour (i)) : std::nullopt;
+        l.mute.tint = heard ? std::nullopt : std::optional<juce::Colour> (Theme::cream);
+        l.solo.repaint();
+        l.mute.repaint();
+        repaint (laneArea (i));
+    }
+}
+
+void HarmonyScreen::resized()
+{
+    playButton.setBounds (19, 17, 36, 36);
+    const auto bw = back.preferredWidth();
+    back.setBounds (19 + 674 - bw, 18, bw, back.height);
+    for (int i = 0; i < 2; ++i)
+    {
+        auto& l = lanes[i];
+        const auto r = laneArea (i);
+        l.solo.setBounds (r.getX() + 16, r.getY() + 74, l.solo.preferredWidth(), l.solo.height);
+        l.mute.setBounds (l.solo.getRight() + 6, r.getY() + 74, l.mute.preferredWidth(), l.mute.height);
+        l.drag.setBounds (r.getRight() - 12 - 64, r.getCentreY() - 17, 64, 34);
+        l.wave.setBounds (r.getX() + 134, r.getY() + 12, l.drag.getX() - 14 - (r.getX() + 134), 92);
+        l.fader.setBounds (557 + 34 + i * 68 - 14, 102, 28, 180);
+    }
+    const auto dw = dragChipWidth ("Drag both");
+    both.setBounds (19 + 674 - dw, 338, dw, 34);
+    lastHead = -1;
+}
+
+void HarmonyScreen::paint (juce::Graphics& g)
+{
+    // Its own room: a plum (Midnight: navy) gradient over the whole panel.
+    const auto dusk = theme.id != "midnight";
+    const auto b = getLocalBounds().toFloat();
+    g.setGradientFill (juce::ColourGradient (juce::Colour (dusk ? 0xff45283A : 0xff20324F), 0.0f, 0.0f,
+                                             juce::Colour (dusk ? 0xff2E1C27 : 0xff121B2E), b.getWidth() * 0.7f, b.getHeight(), false));
+    g.fillRoundedRectangle (b, 22.0f);
+
+    // The song name (Bold 15) over the time and where it came from (12, cream 0.64), as on the stems screen.
+    const auto x = 67.0f, w = (float) back.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
+    text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
+    text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f),
+          timeText + dot + "split from Vocals, " + (quality == "best" ? "best quality" : "quick"),
+          { x, y + 20.0f, w, 14.4f }, juce::Justification::centredLeft);
+
+    const char* const names[] = { "Lead", "Harmonies" };
+    const char* const hints[] = { "the main voice", "every voice behind it" };
+    for (int i = 0; i < 2; ++i)
+    {
+        const auto r = laneArea (i).toFloat();
+        g.setColour (Theme::cream.withAlpha (0.05f));
+        g.fillRoundedRectangle (r, 16.0f);
+        g.setColour (Theme::cream.withAlpha (0.08f));
+        g.drawRoundedRectangle (r.reduced (0.5f), 16.0f, 1.0f);
+        const auto a = lanes[i].audible ? 1.0f : 0.45f;
+        text (g, Fonts::body (21.0f, 700), laneColour (i).withMultipliedAlpha (a), names[i],
+              { r.getX() + 16.0f, r.getY() + 16.0f, 118.0f, 26.0f }, juce::Justification::centredLeft);
+        text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f * a), hints[i],
+              { r.getX() + 16.0f, r.getY() + 44.0f, 118.0f, 16.0f }, juce::Justification::centredLeft);
+    }
+
+    // The fader column: a darker well, each level (17 bold, in its colour) above its fader and its name below.
+    g.setColour (juce::Colour (0x4d140a10));
+    g.fillRoundedRectangle (557.0f, 70.0f, 136.0f, 244.0f, 16.0f);
+    for (int i = 0; i < 2; ++i)
+    {
+        const auto cx = (float) lanes[i].fader.getBounds().getCentreX();
+        text (g, Fonts::body (17.0f, 700), laneColour (i), juce::String (juce::roundToInt (lanes[i].fader.getValue() * 100.0f)),
+              { cx - 34.0f, 78.0f, 68.0f, 22.0f }, juce::Justification::centred);
+        text (g, Fonts::body (12.0f, 700), Theme::cream, names[i], { cx - 34.0f, 286.0f, 68.0f, 18.0f }, juce::Justification::centred);
+    }
+
+    text (g, Fonts::body (13.0f), Theme::cream.withAlpha (0.72f),
+          "Pull a fader down to hear more of the other voice. Drag a lane onto a track in FL.",
+          { 19.0f, 336.0f, (float) both.getX() - 31.0f, 38.0f }, juce::Justification::centredLeft);
+}
+
+void HarmonyScreen::paintOverChildren (juce::Graphics& g)
+{
+    g.setColour (Theme::cream);
+    for (const auto& l : lanes)
+    {
+        const auto x = (float) l.wave.getX() + (float) (fraction * l.wave.getWidth());
+        g.fillRoundedRectangle (x - 1.0f, (float) l.wave.getY() + 2.0f, 2.0f, (float) l.wave.getHeight() - 4.0f, 1.0f);
+    }
 }
