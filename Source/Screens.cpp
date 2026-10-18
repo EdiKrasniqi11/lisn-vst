@@ -1534,12 +1534,17 @@ void ErrorScreen::paint (juce::Graphics& g)
     g.drawRoundedRectangle (box.reduced (0.5f), 11.5f, 1.0f);
 
     const auto x = box.getX() + 17.0f, w = (float) copy.getX() - 12.0f - x;
+   #if JUCE_MAC
+    const auto monoSize = 12.5f;   // the log path is long
+   #else
+    const auto monoSize = 14.0f;
+   #endif
     if (kind == ErrorKind::Failed)
         for (int i = 0; i < lines.size(); ++i)
             text (g, Fonts::mono (14.0f), Theme::cream, lines[i], { x, box.getY() + 10.0f + 18.0f * (float) i, w, 18.0f },
                   juce::Justification::centredLeft);
     else
-        text (g, Fonts::mono (JUCE_MAC ? 12.5f : 14.0f), Theme::cream, command, { x, box.getY(), w, box.getHeight() }, juce::Justification::centredLeft);   // Mac: the log path is long
+        text (g, Fonts::mono (monoSize), Theme::cream, command, { x, box.getY(), w, box.getHeight() }, juce::Justification::centredLeft);
 }
 
 //==============================================================================
