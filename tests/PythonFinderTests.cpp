@@ -46,6 +46,7 @@ struct PythonFinderTests : juce::UnitTest
         beginTest ("checkPython rejects non-Python programs");
         expect (checkPython ("C:\\definitely\\missing.exe", 2000) == PythonStatus::NotPython);
         expect (checkPython ("C:\\Windows\\System32\\where.exe", 5000) == PythonStatus::NotPython);
+       #endif
 
         if (juce::SystemStats::getEnvironmentVariable ("LISN_INTEGRATION", {}) == "1")
         {
