@@ -51,7 +51,7 @@ struct ProcessorStateTests : juce::UnitTest
             expectEquals (p.getPythonPath(), juce::String ("python"));
             expect (! p.isSixStems());
             expect (p.getLastInput() == juce::File() && ! p.hasStems());
-            expectEquals (p.getProduct(), juce::String ("stemsplitter"));
+            expectEquals (p.getProduct(), juce::String ("stems"));
             expectEquals (p.getHarmonyQuality(), juce::String ("quick"));
             expect (p.getHarmonyInput() == juce::File());
         }

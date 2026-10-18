@@ -45,7 +45,7 @@ public:
     juce::File getStemDir() const      { const juce::ScopedLock sl (settingsLock); return stemDir; }
     bool hasStems() const              { const juce::ScopedLock sl (settingsLock); return stemDirHasWav; }   // cached, no disk scan
     bool isSixStems() const            { const juce::ScopedLock sl (settingsLock); return model == "htdemucs_6s"; }
-    juce::String getProduct() const        { const juce::ScopedLock sl (settingsLock); return product; }          // "stemsplitter" or "harmonies"
+    juce::String getProduct() const        { const juce::ScopedLock sl (settingsLock); return product; }          // "stems" or "harmonies"
     juce::String getHarmonyQuality() const { const juce::ScopedLock sl (settingsLock); return harmonyQuality; }   // "quick" or "best"
     juce::File getHarmonyInput() const     { const juce::ScopedLock sl (settingsLock); return harmonyInput; }
 
@@ -53,7 +53,7 @@ public:
     void setPythonPath (const juce::String& exe) { const juce::ScopedLock sl (settingsLock); pythonPath = exe; }
     void setSixStems (bool six);             // re-splits the last song when its stems exist for the other model
     void startSplit (const juce::File& input);
-    void setProduct (const juce::String& id);          // anything but "harmonies" means "stemsplitter"
+    void setProduct (const juce::String& id);          // anything but "harmonies" means "stems"
     void setHarmonyQuality (const juce::String& q);    // anything but "best" means "quick"
     void startHarmonies (const juce::File& song, bool keepExistingResult = true);   // Harmonies' flow for this song
     void syncWithJob();                      // adopts a finished job's stem dir and working Python
@@ -66,7 +66,7 @@ private:
     juce::String model = "htdemucs";
     juce::String pythonPath;   // a hint (the user's pick or the last Python that worked); empty = search
     juce::File lastInput;      // last dropped file
-    juce::String product = "stemsplitter";
+    juce::String product = "stems";
     juce::String harmonyQuality = "quick";
     juce::File harmonyInput;   // Harmonies' own song (its stems are the 4-stem split's cache, whatever model says)
     juce::File stemDir;        // folder of finished stems, empty if none

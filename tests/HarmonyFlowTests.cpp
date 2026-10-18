@@ -66,6 +66,22 @@ struct HarmonyFlowTests : juce::UnitTest
             juce::Thread::sleep (3500);   // the orphaned ping/sleep lets go of the folder
         }
 
+        beginTest ("a flow destroyed while running tears down cleanly");
+        {
+            CachedSong s;
+            {
+                HarmonyFlow flow;
+                flow.harmonyJobForTests().testCommand = fakeCommand (s.root.getChildFile ("slow"),
+                    "@echo off\r\nping -n 4 127.0.0.1 >nul\r\n", "#!/bin/sh\nexec sleep 3\n");
+                flow.start (s.file, "quick", {});
+                juce::Thread::sleep (300);
+                expect (flow.getStep() == HarmonyFlow::Step::harmonies);
+            }
+            expect (! s.stems.getChildFile ("harmony").exists() && ! s.stems.getChildFile ("harmony.part").exists());
+            expectEquals (SeparationJob::stemsIn (s.stems).size(), 4);
+            juce::Thread::sleep (3500);
+        }
+
         beginTest ("a failing harmony pass reports failed with its words");
         {
             CachedSong s;

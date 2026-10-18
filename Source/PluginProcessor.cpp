@@ -47,7 +47,7 @@ void StemSplitterProcessor::startSplit (const juce::File& input)
 
 void StemSplitterProcessor::setProduct (const juce::String& id)
 {
-    const juce::String p = id == "harmonies" ? id : "stemsplitter";
+    const juce::String p = id == "harmonies" ? id : "stems";
     {
         const juce::ScopedLock sl (settingsLock);
         if (product == p) return;
@@ -69,6 +69,7 @@ void StemSplitterProcessor::setHarmonyQuality (const juce::String& q)
 
 void StemSplitterProcessor::startHarmonies (const juce::File& song, bool keepExistingResult)
 {
+    harmonyFlow.cancel();   // may join a running step for seconds: not under the lock a host state save waits on
     {
         const juce::ScopedLock sl (settingsLock);   // also covers the split's start(), which resets the strings getStateInformation reads
         harmonyInput = song;
@@ -85,8 +86,9 @@ void StemSplitterProcessor::applyJobResults (juce::File& dir, juce::String& pyth
     if ((s == JobState::Done || (s == JobState::Failed && job.getErrorKind() != ErrorKind::PythonMissing))
         && job.getPythonExe().isNotEmpty())
         python = job.getPythonExe();
-    if (const auto found = harmonyFlow.getPythonExe(); found.isNotEmpty())   // the Python Harmonies' split found
-        python = found;
+    if (product == "harmonies")
+        if (const auto found = harmonyFlow.getPythonExe(); found.isNotEmpty())   // the Python Harmonies' split found
+            python = found;
 }
 
 void StemSplitterProcessor::syncWithJob()
@@ -133,7 +135,7 @@ void StemSplitterProcessor::setStateInformation (const void* data, int size)
     lastInput  = juce::File::isAbsolutePath (in) ? juce::File (in) : juce::File();
     stemDir    = juce::File::isAbsolutePath (st) ? juce::File (st) : juce::File();
     stemDirHasWav = hasWav (stemDir);
-    product        = s.getProperty ("product").toString() == "harmonies" ? "harmonies" : "stemsplitter";
+    product        = s.getProperty ("product").toString() == "harmonies" ? "harmonies" : "stems";
     harmonyQuality = s.getProperty ("harmonyQuality").toString() == "best" ? "best" : "quick";
     harmonyInput   = juce::File::isAbsolutePath (hin) ? juce::File (hin) : juce::File();
 }
