@@ -22,10 +22,11 @@ namespace
     const juce::StringArray allStems { "vocals", "drums", "bass", "guitar", "piano", "other" };
     juce::StringArray stemKeys (bool six) { return six ? allStems : juce::StringArray { "vocals", "drums", "bass", "other" }; }
 
-    int stemRank (const juce::File& f)                 // unknown stems sort last
+    int stemRank (const juce::File& f)                 // unknown stems sort last; Harmony Split's rows go under Vocals
     {
-        const auto i = allStems.indexOf (f.getFileNameWithoutExtension().toLowerCase());
-        return i < 0 ? allStems.size() : i;
+        static const juce::StringArray order { "vocals", "lead", "harmonies", "drums", "bass", "guitar", "piano", "other" };
+        const auto i = order.indexOf (f.getFileNameWithoutExtension().toLowerCase());
+        return i < 0 ? order.size() : i;
     }
 
     juce::Font tracked (const juce::Font& f, float em)   // CSS letter-spacing in em; JUCE scales kerning by the height, not the em
@@ -654,6 +655,11 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
     loopButton.padLeft = 10.0f;
     loopButton.padRight = 14.0f;
     loopButton.onClick = [this] { toggleLoop(); };
+    harmonyButton.icon = Icons::layers;
+    harmonyButton.padLeft = 10.0f;
+    harmonyButton.padRight = 14.0f;
+    harmonyButton.onClick = [this] { if (onHarmony != nullptr) onHarmony(); };
+    addChildComponent (harmonyButton);
     dragChip.fileToDrag = [this] { return mixFile != nullptr ? mixFile() : juce::File(); };
     addAndMakeVisible (loopButton);
     addAndMakeVisible (newSong);
@@ -674,13 +680,15 @@ void StemsScreen::setTheme (const Theme& t)
     theme = t;
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     loopButton.repaint();
+    harmonyButton.tint = harmonyRows ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
+    harmonyButton.repaint();
     speedStrip.setTheme (t);
     for (auto* r : rows)
         r->setTheme (t);
     repaint();
 }
 
-void StemsScreen::setStems (const juce::File& newDir, const juce::String& songName)
+void StemsScreen::setStems (const juce::File& newDir, const juce::String& songName, bool harmony)
 {
     ++generation;
     pool.removeAllJobs (true, 2000);
@@ -701,6 +709,13 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
     rows.clear();
 
     auto files = SeparationJob::stemsIn (dir);   // A-Z
+    // ponytail: 4-stem splits only; 6 stems + 2 don't fit the panel. A taller panel or a scroll if 6-stem mode wants it.
+    harmonyButton.setVisible (files.size() == 4 && dir.getChildFile ("vocals.wav").existsAsFile());
+    const auto harmonyFiles = SeparationJob::stemsIn (dir.getChildFile ("harmony"));
+    harmonyRows = harmony && harmonyButton.isVisible() && ! harmonyFiles.isEmpty();
+    if (harmonyRows)
+        files.addArray (harmonyFiles);
+    harmonyButton.tint = harmonyRows ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     std::stable_sort (files.begin(), files.end(), [] (const juce::File& a, const juce::File& b) { return stemRank (a) < stemRank (b); });
     for (int i = 0; i < files.size(); ++i)
     {
@@ -948,6 +963,14 @@ void StemsScreen::setMixChip (const juce::String& text, std::optional<float> pro
     resized();                                       // the chip width follows its text
 }
 
+void StemsScreen::setHarmonyButton (const juce::String& text)
+{
+    if (text == harmonyButton.getButtonText()) return;
+    harmonyButton.setButtonText (text);
+    resized();                                       // its width follows its text
+    repaint (19, 17, 674, 36);                       // the song name's room changes with it
+}
+
 void StemsScreen::toggleLoop()
 {
     if (! loopRange.isEmpty())
@@ -1142,6 +1165,7 @@ void StemsScreen::resized()
     // While preparing, the chip keeps its widest width so the changing percent doesn't nudge the Loop button.
     const auto chipW = dragChipWidth (dragChip.isPreparing() ? juce::String ("Preparing 100%") : dragChip.getText());
     loopButton.setBounds (newSong.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
+    harmonyButton.setBounds (loopButton.getX() - 8 - harmonyButton.preferredWidth(), 18, harmonyButton.preferredWidth(), harmonyButton.height);
     speedStrip.setBounds (19 + 10, 339, 674 - 20, 40);                               // board 5B: Tempo and Key boxes...
     dragChip.setBounds (19 + 674 - 10 - chipW, 339 + 2, chipW, 36);                  // ...and the mix chip at the right end
     auto y = 74;
@@ -1158,7 +1182,7 @@ void StemsScreen::paint (juce::Graphics& g)
     if (g.clipRegionIntersects ({ 19, 17, 674, 36 }))
     {
         // Song name (Bold 15) over the time (12, cream 0.64): line-height 1.2, 2 px apart, centred in the 36 px row.
-        const auto x = 19.0f + 36.0f + 12.0f, w = (float) loopButton.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
+        const auto x = 19.0f + 36.0f + 12.0f, w = (float) (harmonyButton.isVisible() ? harmonyButton : loopButton).getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
         text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
         auto subtitle = timeText;
         if (loopOn)

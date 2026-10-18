@@ -1,4 +1,5 @@
 #pragma once
+#include "HarmonyJob.h"
 #include "PluginProcessor.h"
 #include "RenderJob.h"
 #include "Screens.h"
@@ -54,6 +55,9 @@ private:
     RenderJob::Request renderRequest (const std::vector<float>& gains, double speed, int semitones = 0);
     juce::File renderFile (const std::vector<float>& gains, double speed);   // renderRequest's dest, rendered here unless cached
     void prepareMix();                               // at a speed other than 1, renders the mix on mixJob; sets the chip
+    // The Harmony Split button: starts a pass on harmonyJob, cancels a running one, or shows / hides its rows.
+    void harmonyClicked();
+    void updateHarmony();                            // a finished pass shows its rows; the button's text follows the job
     void startSplit (const juce::File&);             // cancels mixJob first: it must not hold stems a re-split replaces
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
@@ -80,6 +84,7 @@ private:
     RenderJob::Request mixKey;                       // the mix settings of the last tick (dest, from, to)
     double mixKeySince = 0.0;                        // when they last changed (ms); a render starts once they settle for 0.5 s
     RenderJob mixJob;                                // last: it stops before anything it reads goes
+    HarmonyJob harmonyJob;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemSplitterEditor)
 };

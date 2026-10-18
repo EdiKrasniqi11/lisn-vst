@@ -81,6 +81,10 @@ int runSnapshots (const juce::File& outDir)
     outDir.createDirectory();
     const auto four = makeStems (tempDir().getChildFile ("four"), false);
     const auto six = makeStems (tempDir().getChildFile ("six"), true);
+    const auto harmony = makeStems (tempDir().getChildFile ("harmony"), false);   // with a Harmony Split result
+    harmony.getChildFile ("harmony").createDirectory();
+    harmony.getChildFile ("vocals.wav").copyFileTo (harmony.getChildFile ("harmony/lead.wav"));
+    harmony.getChildFile ("other.wav").copyFileTo (harmony.getChildFile ("harmony/harmonies.wav"));
 
     auto state = [&] (Screen screen, bool sixStems)
     {
@@ -203,6 +207,15 @@ int runSnapshots (const juce::File& outDir)
                                     "Could not separate the song.";
     const auto titleBar = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.makeTitleBar ([] {}, [] {}); };   // the desktop app
     const auto update = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().showUpdate ("0.2.5"); };
+    auto harmonyState = state (Screen::Stems, false);
+    harmonyState.stemDir = harmony;
+    harmonyState.songName = "Michael Jackson - Liberian Girl (Acapella).mp3";
+    const auto harmonyPlaying = [] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        p.player.setPositionFraction (0.38);
+        ed.tick();                                   // the player loads the 6 rows and mutes Vocals
+    };
+    const auto splittingHarmony = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.stemsScreen().setHarmonyButton ("Splitting 42%"); };
     const auto appUpdate = [titleBar, update] (StemSplitterProcessor& p, StemSplitterEditor& ed) { titleBar (p, ed); update (p, ed); };
 
     const std::vector<Shot> shots {
@@ -242,6 +255,9 @@ int runSnapshots (const juce::File& outDir)
         { "update-dusk", "dusk", state (Screen::Stems, false), 1.0f, update },
         { "update-titlebar-dusk@2x", "dusk", state (Screen::Stems, false), 2.0f, appUpdate },
         { "update-titlebar-midnight", "midnight", state (Screen::Drop, false), 1.0f, appUpdate },
+        { "harmony-dusk", "dusk", harmonyState, 1.0f, harmonyPlaying },
+        { "harmony-midnight", "midnight", harmonyState, 1.0f, harmonyPlaying },
+        { "harmony-splitting-dusk", "dusk", state (Screen::Stems, false), 1.0f, splittingHarmony },
     };
 
     int failures = 0;

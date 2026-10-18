@@ -95,6 +95,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
     stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
     stems.onToggleLoop = [this] { proc.player.setLooping (! proc.player.isLooping()); };
+    stems.onHarmony = [this] { harmonyClicked(); };
     stems.mixFile = [this]   // the mix: what you hear. A stretched mix only comes from mixJob's cache, never rendered here
     {
         const auto speed = proc.player.getSpeed();
@@ -266,8 +267,13 @@ void StemSplitterEditor::tick()
     // The player always holds the stems on screen: a reopened window keeps its mix, position and loop (same files), and a
     // re-split of the same song (same stem dir, so the screen didn't change) reloads what startSplit() unloaded.
     if (s.screen == Screen::Stems && stems.getDir() != unloadableDir && proc.player.getFiles() != stems.getFiles()
-        && ! stems.getFiles().isEmpty() && ! proc.player.load (stems.getFiles()))
-        unloadableDir = stems.getDir();
+        && ! stems.getFiles().isEmpty())
+    {
+        if (! proc.player.load (stems.getFiles()))
+            unloadableDir = stems.getDir();
+        else if (stems.showsHarmony())               // Lead + Harmonies are the vocals: mute Vocals so nothing doubles
+            proc.player.setMuted (0, true);
+    }
     if (s.screen == Screen::Splitting)
         splitting.setProgress (s.progress);
     if (proc.getTheme() != appliedThemeId)           // e.g. the host restored another project
@@ -284,7 +290,10 @@ void StemSplitterEditor::tick()
     stems.setPitch (player.getPitch());
     stems.setLoop (player.getLoop(), player.isLooping());
     if (s.screen == Screen::Stems)
+    {
         prepareMix();
+        updateHarmony();
+    }
 
     // Beat motion: fast attack, slow release; after the player stops the waves settle and stop.
     const auto now = juce::Time::getMillisecondCounterHiRes();
@@ -327,13 +336,15 @@ void StemSplitterEditor::show (const UiState& s)
     if (s.screen != Screen::Stems)
     {
         mixJob.cancel();
+        harmonyJob.cancel();
         proc.player.unload();
         unloadableDir = {};
     }
     else if (s.stemDir != stems.getDir())
     {
         mixJob.cancel();
-        stems.setStems (s.stemDir, s.songName);
+        harmonyJob.cancel();
+        stems.setStems (s.stemDir, s.songName, HarmonyJob::hasResult (s.stemDir));   // a song split before shows its rows
     }
 }
 
@@ -401,9 +412,41 @@ void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
     startSplit (juce::File (files[0]));
 }
 
+void StemSplitterEditor::harmonyClicked()
+{
+    const auto dir = stems.getDir();
+    if (harmonyJob.getState() == HarmonyJob::State::running)
+        harmonyJob.cancel();
+    else if (HarmonyJob::hasResult (dir))
+    {
+        mixJob.cancel();                             // it may be rendering the rows that go
+        stems.setStems (dir, shown.has_value() ? shown->songName : juce::String(), ! stems.showsHarmony());
+    }
+    else
+        harmonyJob.start (dir, proc.getPythonPath());
+}
+
+void StemSplitterEditor::updateHarmony()
+{
+    const auto state = harmonyJob.getState();
+    if (state == HarmonyJob::State::done)
+    {
+        harmonyJob.cancel();                         // back to idle: the rows show from the cache from now on
+        mixJob.cancel();
+        stems.setStems (stems.getDir(), shown.has_value() ? shown->songName : juce::String(), true);
+    }
+    if (state == HarmonyJob::State::running)
+        stems.setHarmonyButton ("Splitting " + juce::String (juce::roundToInt (harmonyJob.getProgress() * 100.0f)) + "%");
+    else if (state == HarmonyJob::State::failed)
+        stems.setHarmonyButton ("Can't split");
+    else
+        stems.setHarmonyButton ("Harmony Split");
+}
+
 void StemSplitterEditor::startSplit (const juce::File& input)
 {
     mixJob.cancel();
+    harmonyJob.cancel();
     proc.startSplit (input);
 }
 

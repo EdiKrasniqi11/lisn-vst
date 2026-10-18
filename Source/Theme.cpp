@@ -8,7 +8,8 @@ namespace
 
 juce::Colour Theme::stemColour (const juce::String& stem) const
 {
-    if (stem == "vocals") return vocals;
+    if (stem == "vocals" || stem == "lead") return vocals;   // Harmony Split: the lead stays the vocal colour,
+    if (stem == "harmonies") return guitar;                  // the harmonies take guitar's (no guitar in 4 stems)
     if (stem == "drums")  return drums;
     if (stem == "bass")   return bass;
     if (stem == "guitar") return guitar;

@@ -20,7 +20,8 @@ juce_add_binary_data(LisnAssets SOURCES
     Resources/fonts/DMSans-Regular.ttf
     Resources/fonts/DMSans-Medium.ttf
     Resources/fonts/DMSans-Bold.ttf
-    docs/design/logo/kit/lisn-symbol-glass.svg)
+    docs/design/logo/kit/lisn-symbol-glass.svg
+    Resources/harmony_split.py)
 
 # Shared by the plugin and lisn_tests; later .cpp files go inside this call.
 set(LISN_SOURCES
@@ -39,7 +40,8 @@ set(LISN_SOURCES
     Source/UiState.cpp
     Source/Screens.cpp
     Source/RenderJob.cpp
-    Source/UpdateCheck.cpp)
+    Source/UpdateCheck.cpp
+    Source/HarmonyJob.cpp)
 
 juce_add_plugin(StemSplitter
     COMPANY_NAME "LISN"
@@ -87,6 +89,7 @@ target_sources(lisn_tests PRIVATE
     tests/OpenWithTests.cpp
     tests/RenderJobTests.cpp
     tests/UpdateCheckTests.cpp
+    tests/HarmonyTests.cpp
     tests/Snapshots.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE

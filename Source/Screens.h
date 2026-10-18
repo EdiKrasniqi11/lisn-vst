@@ -152,9 +152,17 @@ public:
     StemsScreen();
     ~StemsScreen() override;
     void setTheme (const Theme&);
-    // Rebuilds the rows (vocals, drums, bass, guitar, piano, other, then unknown stems A-Z; compact with more than 4)
-    // and reads their peaks and the song length on a background thread.
-    void setStems (const juce::File& dir, const juce::String& songName);
+    // Rebuilds the rows (vocals, lead, harmonies, drums, bass, guitar, piano, other, then unknown stems A-Z; compact with
+    // more than 4) and reads their peaks and the song length on a background thread. With `harmony`, a 4-stem split's
+    // harmony/*.wav (Harmony Split's Lead and Harmonies) join the rows under Vocals.
+    void setStems (const juce::File& dir, const juce::String& songName, bool harmony = false);
+    bool showsHarmony() const { return harmonyRows; }
+    // The Harmony Split button, left of Loop; only for 4-stem splits. Its text ("Harmony Split", "Splitting 42%" ...),
+    // accent-lit while the Lead and Harmonies rows show.
+    void setHarmonyButton (const juce::String& text);
+    juce::String harmonyText() const { return harmonyButton.getButtonText(); }   // test hook
+    bool hasHarmonyButton() const { return harmonyButton.isVisible(); }          // test hook
+    std::function<void()> onHarmony;
     juce::File getDir() const { return dir; }
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
     void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
@@ -248,6 +256,8 @@ private:
     juce::OwnedArray<StemRow> rows;
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };
+    LisnButton harmonyButton { "Harmony Split", LisnButton::Style::Ghost };
+    bool harmonyRows = false;
     DragChip dragChip;
     SpeedStrip speedStrip;
     LisnButton newSong;
