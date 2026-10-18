@@ -108,6 +108,8 @@ jobs:
           "build/StemSplitter_artefacts/Release/Standalone/LISN StemSplitter.app/Contents/MacOS/LISN StemSplitter" &
           app=$!
           sleep 8
+          osascript -e 'tell application "System Events" to set frontmost of (first process whose name is "LISN StemSplitter") to true' || true
+          sleep 2
           screencapture -x snapshots/mac-app.png
           # the window's own size and position, as macOS reports them
           osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose name is "LISN StemSplitter")' > snapshots/mac-app-window.txt || true

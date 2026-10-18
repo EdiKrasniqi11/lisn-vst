@@ -290,6 +290,13 @@ int runSnapshots (const juce::File& outDir)
             std::printf ("FAIL: %s: the header starts at x=%d, under the window buttons\n", shot.name.toRawUTF8(), ed.headerBar().getX());
             ++failures;
         }
+        if (shot.name == "titlebar-mac-dusk")   // macOS draws the buttons: LISN adds none
+            for (auto* child : ed.headerBar().getChildren())
+                if (dynamic_cast<WindowButton*> (child) != nullptr && child->isVisible())
+                {
+                    std::printf ("FAIL: %s: the header has a LISN window button\n", shot.name.toRawUTF8());
+                    ++failures;
+                }
 
         const auto image = ed.createComponentSnapshot (ed.getLocalBounds(), true, shot.scale);
         images[shot.name] = image;

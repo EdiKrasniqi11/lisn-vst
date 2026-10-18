@@ -61,10 +61,7 @@ public:
         DocumentWindow::visibilityChanged();
        #if JUCE_MAC
         if (isVisible() && ! titleBarDone)
-        {
-            makeTitleBarTransparent (*this);
-            titleBarDone = true;
-        }
+            titleBarDone = makeTitleBarTransparent (*this);
        #endif
        #if JUCE_WINDOWS
         if (auto* peer = getPeer())
