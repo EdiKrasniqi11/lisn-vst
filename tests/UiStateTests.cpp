@@ -6,7 +6,11 @@ struct UiStateTests : juce::UnitTest
 
     void runTest() override
     {
+       #if JUCE_WINDOWS
         const juce::File jobDir ("C:\\cache\\job"), savedDir ("C:\\cache\\saved"), input ("C:\\music\\song.mp3");
+       #else
+        const juce::File jobDir ("/cache/job"), savedDir ("/cache/saved"), input ("/music/song.mp3");
+       #endif
         auto map = [&] (JobState s, ErrorKind k = ErrorKind::None, const juce::File& saved = {})
         {
             return uiStateFor (s, k, 0.4, "boom", "C:\\Py\\python.exe", jobDir, saved, input, true);

@@ -453,6 +453,7 @@ struct StemPlayerTests : juce::UnitTest
         expect (! StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.0, 1.0, 1.0, cancelled, [] (float) { return false; }));
         expect (! cancelled.exists() && ! cancelled.getSiblingFile ("cancelled.wav.part").exists());
 
+       #if JUCE_WINDOWS   // a file held open blocks the rename only on Windows
         beginTest ("a render that cannot replace dest leaves no .part");
         const auto held = dir.getChildFile ("renders").getChildFile ("held.wav");
         {
@@ -461,6 +462,7 @@ struct StemPlayerTests : juce::UnitTest
             expect (! StemPlayer::render ({ a, b }, { 1.0f, 1.0f }, 0.0, 1.0, 1.0, held));
         }
         expect (! held.getSiblingFile ("held.wav.part").exists());
+       #endif
 
         beginTest ("renderName");
         const juce::StringArray stemNames { "vocals", "drums" };
