@@ -4,7 +4,9 @@
 bool UiState::sameScreenAs (const UiState& o) const
 {
     return screen == o.screen && error == o.error && errorText == o.errorText && pythonExe == o.pythonExe
-        && stemDir == o.stemDir && songName == o.songName && sixStems == o.sixStems;
+        && stemDir == o.stemDir && songName == o.songName && sixStems == o.sixStems
+        && harmoniesProduct == o.harmoniesProduct && harmonyStep == o.harmonyStep && downloading == o.downloading
+        && offerSong == o.offerSong && harmonyStemDir == o.harmonyStemDir && harmonyQuality == o.harmonyQuality;
 }
 
 UiState uiStateFor (JobState state, ErrorKind kind, double progress, const juce::String& errorText, const juce::String& pythonExe,
@@ -38,8 +40,65 @@ UiState uiStateFor (JobState state, ErrorKind kind, double progress, const juce:
     return s;
 }
 
+UiState harmoniesStateFor (HarmonyFlow::Step step, float progress, bool downloading, ErrorKind kind, const juce::String& errorText,
+                           const juce::String& pythonExe, const juce::File& harmonyInput, const juce::File& harmonyStemDir,
+                           bool hasResult, const juce::File& stemSplitterSong, bool stemSplitterSongHasStems, const juce::String& quality)
+{
+    using Step = HarmonyFlow::Step;
+    UiState s;
+    s.harmoniesProduct = true;
+    s.songName = harmonyInput.getFileName();
+    switch (step)
+    {
+        case Step::vocals:
+        case Step::harmonies:
+            s.screen = Screen::HarmonySplitting;
+            s.harmonyStep = step == Step::vocals ? 1 : 2;
+            s.progress = progress;
+            s.downloading = step == Step::harmonies && downloading;
+            return s;
+        case Step::failed:
+            s.screen = Screen::Error;
+            s.error = kind == ErrorKind::None ? ErrorKind::Failed : kind;
+            s.errorText = errorText;
+            s.pythonExe = pythonExe;
+            return s;
+        case Step::done:
+        case Step::idle:
+            break;
+    }
+    if (hasResult)
+    {
+        s.screen = Screen::Harmonies;
+        s.harmonyStemDir = harmonyStemDir;
+        s.harmonyQuality = quality;
+        return s;
+    }
+    s.screen = Screen::HarmonyDrop;
+    s.songName = {};
+    if (stemSplitterSongHasStems)
+        s.offerSong = stemSplitterSong.getFileNameWithoutExtension();
+    return s;
+}
+
 UiState uiStateFor (const StemSplitterProcessor& p)
 {
+    if (p.getProduct() == "harmonies")
+    {
+        const auto step = p.harmonyFlow.getStep();
+        const bool finished = step == HarmonyFlow::Step::done || step == HarmonyFlow::Step::failed;   // the worker writes the strings before the step
+        // Done: the flow's own stem dir. Idle (a reopened window): the song the user last gave Harmonies.
+        const auto input = step == HarmonyFlow::Step::idle ? p.getHarmonyInput() : p.harmonyFlow.getSong();
+        const auto dir = input == juce::File() ? juce::File()
+                                               : step == HarmonyFlow::Step::idle ? SeparationJob::stemDirFor (input, "htdemucs")
+                                                                                : p.harmonyFlow.getStemDir();
+        const bool hasResult = dir != juce::File() && (step == HarmonyFlow::Step::done || step == HarmonyFlow::Step::idle)
+                               && HarmonyJob::hasResult (dir);
+        return harmoniesStateFor (step, p.harmonyFlow.getProgress(), p.harmonyFlow.isDownloading(), p.harmonyFlow.getErrorKind(),
+                                  finished ? p.harmonyFlow.getError() : juce::String(), finished ? p.harmonyFlow.getPythonExe() : juce::String(),
+                                  input, dir, hasResult, p.getLastInput(), p.hasStems(),
+                                  hasResult ? HarmonyJob::qualityOf (dir) : p.getHarmonyQuality());
+    }
     const auto state = p.job.getState();
     const bool finished = state == JobState::Done || state == JobState::Failed;   // the worker writes the strings before the state
     return uiStateFor (state, p.job.getErrorKind(), p.job.getProgress(),

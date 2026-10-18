@@ -37,6 +37,58 @@ struct UiStateTests : juce::UnitTest
             }
         }
 
+        beginTest ("Harmonies mapping");
+        {
+            using Step = HarmonyFlow::Step;
+            const juce::File hInput = input, hDir = savedDir, other = input.getSiblingFile ("Liberian Girl.mp3");
+            auto h = [&] (Step st, bool downloading = false, ErrorKind k = ErrorKind::None, const juce::File& in = {},
+                          bool hasResult = false, const juce::File& song = {}, bool songStems = false)
+            {
+                return harmoniesStateFor (st, 0.3f, downloading, k, "boom", "C:\\Py\\python.exe", in, in == juce::File() ? juce::File() : hDir,
+                                          hasResult, song, songStems, "best");
+            };
+
+            const auto vocals = h (Step::vocals, false, ErrorKind::None, hInput);
+            expect (vocals.screen == Screen::HarmonySplitting && vocals.harmonyStep == 1 && vocals.harmoniesProduct);
+            expect (! vocals.downloading && std::abs (vocals.progress - 0.3) < 1e-6 && vocals.songName == "song.mp3");
+            const auto splitting = h (Step::harmonies, true, ErrorKind::None, hInput);
+            expect (splitting.screen == Screen::HarmonySplitting && splitting.harmonyStep == 2 && splitting.downloading);
+
+            const auto failed = h (Step::failed, false, ErrorKind::DemucsMissing, hInput);
+            expect (failed.screen == Screen::Error && failed.error == ErrorKind::DemucsMissing && failed.errorText == "boom" && failed.harmoniesProduct);
+            expect (failed.pythonExe == "C:\\Py\\python.exe");
+            expect (h (Step::failed).error == ErrorKind::Failed);
+
+            for (auto st : { Step::done, Step::idle })
+            {
+                const auto r = h (st, false, ErrorKind::None, hInput, true);
+                expect (r.screen == Screen::Harmonies && r.harmonyStemDir == hDir && r.harmonyQuality == "best" && r.songName == "song.mp3");
+            }
+
+            const auto offer = h (Step::idle, false, ErrorKind::None, {}, false, other, true);
+            expect (offer.screen == Screen::HarmonyDrop && offer.offerSong == "Liberian Girl" && offer.harmoniesProduct);
+            expect (h (Step::idle, false, ErrorKind::None, {}, false, other, false).offerSong.isEmpty());
+            const auto nothing = h (Step::idle);
+            expect (nothing.screen == Screen::HarmonyDrop && nothing.offerSong.isEmpty());
+            expect (h (Step::idle, false, ErrorKind::None, hInput, false).screen == Screen::HarmonyDrop);   // its result was deleted
+
+            auto a = vocals, b = a;
+            b.progress = 0.9;
+            expect (a.sameScreenAs (b));
+            b.harmonyStep = 2;
+            expect (! a.sameScreenAs (b));
+            b = a; b.downloading = true;
+            expect (! a.sameScreenAs (b));
+            b = a; b.offerSong = "x";
+            expect (! a.sameScreenAs (b));
+            b = a; b.harmonyStemDir = hDir;
+            expect (! a.sameScreenAs (b));
+            b = a; b.harmonyQuality = "quick";
+            expect (! a.sameScreenAs (b));
+            b = a; b.harmoniesProduct = false;
+            expect (! a.sameScreenAs (b));
+        }
+
         beginTest ("sameScreenAs ignores progress");
         {
             auto a = map (JobState::Running), b = a;
