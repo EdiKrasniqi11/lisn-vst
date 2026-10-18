@@ -3,6 +3,11 @@
 
 PythonSearchDirs PythonSearchDirs::fromEnvironment()
 {
+    PythonSearchDirs d;
+    d.pathEnv = juce::SystemStats::getEnvironmentVariable ("PATH", {});
+   #if JUCE_MAC
+    d.programData = juce::File ("/Library/Application Support");   // where the LISN installer puts the engine
+   #else
     // juce::File asserts on relative or empty paths, so unset or odd variables become File().
     auto dir = [] (const char* name, const char* suffix = "")
     {
@@ -10,14 +15,12 @@ PythonSearchDirs PythonSearchDirs::fromEnvironment()
         if (v.isNotEmpty()) v << suffix;
         return juce::File::isAbsolutePath (v) ? juce::File (v) : juce::File();
     };
-
-    PythonSearchDirs d;
-    d.pathEnv      = juce::SystemStats::getEnvironmentVariable ("PATH", {});
     d.localAppData = dir ("LOCALAPPDATA");
     d.programFiles = dir ("ProgramFiles");
     d.systemDrive  = dir ("SystemDrive", "\\");
     d.userProfile  = dir ("USERPROFILE");
     d.programData  = dir ("ProgramData");
+   #endif
     return d;
 }
 
@@ -32,6 +35,18 @@ juce::StringArray pythonCandidates (const juce::String& hint, const PythonSearch
     if (auto h = hint.trim().unquoted(); juce::File::isAbsolutePath (h))
         addIfFile (juce::File (h));
 
+   #if JUCE_MAC
+    if (dirs.programData != juce::File())   // the private engine the LISN installer sets up
+        addIfFile (dirs.programData.getChildFile ("LISN/engine/venv/bin/python3"));
+
+    for (auto entry : juce::StringArray::fromTokens (dirs.pathEnv, ":", "\""))
+    {
+        entry = entry.trim().unquoted();
+        if (juce::File::isAbsolutePath (entry))
+            addIfFile (juce::File (entry).getChildFile ("python3"));
+    }
+    addIfFile (juce::File ("/opt/homebrew/bin/python3"));   // a GUI app's PATH usually lacks Homebrew
+   #else
     if (dirs.programData != juce::File())   // the private engine the LISN installer sets up
         addIfFile (dirs.programData.getChildFile ("LISN\\engine\\venv\\Scripts\\python.exe"));
 
@@ -62,6 +77,8 @@ juce::StringArray pythonCandidates (const juce::String& hint, const PythonSearch
         addIfFile (dirs.userProfile.getChildFile ("anaconda3\\python.exe"));
         addIfFile (dirs.userProfile.getChildFile ("miniconda3\\python.exe"));
     }
+   #endif
+
     return out;
 }
 

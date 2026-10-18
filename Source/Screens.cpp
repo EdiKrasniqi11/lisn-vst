@@ -1418,7 +1418,11 @@ void StemsScreen::paint (juce::Graphics& g)
 // A 520 px column centred in the panel (x 96), 16 px gaps: icon + title (44), body, code box, 4 px, buttons (38).
 ErrorScreen::ErrorScreen()
     : copy ("Copy", LisnButton::Style::Soft), retry ("Try again", LisnButton::Style::Primary),
+     #if JUCE_MAC
+      findPython (juce::String (juce::CharPointer_UTF8 ("Already installed? Find python3\xe2\x80\xa6")), LisnButton::Style::Ghost)
+     #else
       findPython (juce::String (juce::CharPointer_UTF8 ("Already installed? Find python.exe\xe2\x80\xa6")), LisnButton::Style::Ghost)
+     #endif
 {
     copy.icon = Icons::copy;
     copy.iconSize = 14.0f;

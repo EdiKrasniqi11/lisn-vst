@@ -11,6 +11,9 @@ struct PythonSearchDirs
     static PythonSearchDirs fromEnvironment();           // skips unset/relative variables
 };
 
+// (On Mac: programData is /Library/Application Support, PATH is split at ':' and each entry's python3 is tried,
+// the engine is programData/LISN/engine/venv/bin/python3 and /opt/homebrew/bin/python3 comes last. The Windows-only
+// candidates below, the Store filter, Python3* folders and conda, do not apply.)
 // python.exe paths to try, first to last, without duplicates (case-insensitive):
 // 1. hint, if it is an absolute path to an existing file (a bare name such as "python" is dropped:
 //    CreateProcess could resolve it to the Microsoft Store stub)

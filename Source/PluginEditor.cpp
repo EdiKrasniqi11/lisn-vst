@@ -132,7 +132,11 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     error.onRetry = [this] { startSplit (proc.getLastInput()); };
     error.onFindPython = [this]
     {
+       #if JUCE_MAC
+        choose ("Find python3", "*", [this] (const juce::File& f)   // python3 has no extension
+       #else
         choose ("Find python.exe", "*.exe", [this] (const juce::File& f)
+       #endif
         {
             proc.setPythonPath (f.getFullPathName());
             startSplit (proc.getLastInput());
@@ -144,8 +148,13 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     const auto wrapper = juce::PluginHostType::getPluginLoadedAs();
     header.onUpdate = [standalone = wrapper == Wrapper::wrapperType_Standalone]
     {
-        juce::URL (juce::String ("https://github.com/EdiKrasniqi11/lisn-vst/releases/latest/download/")
-                   + (standalone ? "LISN-Setup.exe" : "LISN-StemSplitter-Setup.exe")).launchInDefaultBrowser();
+       #if JUCE_MAC
+        const char* const installer = "LISN-Mac.pkg";   // one installer for the app and the plugins
+        juce::ignoreUnused (standalone);
+       #else
+        const char* const installer = standalone ? "LISN-Setup.exe" : "LISN-StemSplitter-Setup.exe";
+       #endif
+        juce::URL (juce::String ("https://github.com/EdiKrasniqi11/lisn-vst/releases/latest/download/") + installer).launchInDefaultBrowser();
     };
     if (wrapper != Wrapper::wrapperType_Undefined)
     {

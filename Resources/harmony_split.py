@@ -10,7 +10,7 @@ Needs only what the engine has (torch, numpy, sphn, einops) plus onnxruntime (qu
 The two models, karaoke models from Ultimate Vocal Remover's public set:
   quick: UVR_MDXNET_KARA_2.onnx, MDX-Net (53 MB), installed with the engine in <engine>/venv/models/harmony
   best:  the aufr33 & viperx Mel-Band RoFormer karaoke model (913 MB), downloaded by the app on first use into
-         %LOCALAPPDATA%/LISN/models/harmony
+         %LOCALAPPDATA%/LISN/models/harmony (~/Library/Application Support/LISN/models/harmony on Mac)
 The inference follows python-audio-separator (MIT, Andrew Beveridge) and its RoFormer code from lucidrains'
 BS-RoFormer (MIT, Phil Wang), cut down to what these two models need.
 """
@@ -274,10 +274,15 @@ def main():
     quality = (sys.argv[3:] or ["quick"])[0]
 
     # Below normal priority (the pseudo-handle goes in as a pointer: a plain int -1 is truncated and the call fails).
-    ctypes.windll.kernel32.SetPriorityClass(ctypes.c_void_p(-1), 0x4000)
+    if sys.platform == "win32":
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.c_void_p(-1), 0x4000)
+    else:
+        os.nice(10)
     threads = max(1, (os.cpu_count() or 2) // 2)  # half the threads: on 8 cores x 2, 16 was slower than 8 anyway
 
-    dirs = [os.path.join(sys.prefix, "models", "harmony"), os.path.join(os.environ.get("LOCALAPPDATA", ""), "LISN", "models", "harmony")]
+    user_dir = (os.path.expanduser("~/Library/Application Support/LISN/models/harmony") if sys.platform == "darwin"
+                else os.path.join(os.environ.get("LOCALAPPDATA", ""), "LISN", "models", "harmony"))
+    dirs = [os.path.join(sys.prefix, "models", "harmony"), user_dir]
     model_path = next((p for p in (os.path.join(d, MODELS[quality]) for d in dirs) if os.path.isfile(p)), None)
     if model_path is None:
         needs_setup(f"no {MODELS[quality]} in {' or '.join(dirs)}")

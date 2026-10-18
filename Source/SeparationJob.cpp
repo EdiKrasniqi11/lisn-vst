@@ -8,7 +8,11 @@ juce::File SeparationJob::stemDirFor (juce::File input, juce::String model)
                     + juce::String (input.getSize())
                     + juce::String (input.getLastModificationTime().toMilliseconds())).hashCode64());
     return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("StemSplitter/cache").getChildFile (key).getChildFile (model);
+              #if JUCE_MAC   // that special location is ~/Library there
+               .getChildFile ("Application Support/StemSplitter/cache")
+              #else
+               .getChildFile ("StemSplitter/cache")
+              #endif.getChildFile (key).getChildFile (model);
 }
 
 juce::Array<juce::File> SeparationJob::stemsIn (juce::File dir)
