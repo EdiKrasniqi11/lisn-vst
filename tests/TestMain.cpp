@@ -1,6 +1,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <cstdio>
 #include "../Source/UpdateCheck.h"
+#include "../Source/HarmonyJob.h"
 
 int runSnapshots (const juce::File& outDir);   // tests/Snapshots.cpp
 int runBench();
@@ -12,6 +13,17 @@ int main (int argc, char* argv[])
     for (int i = 1; i < argc; ++i) args.add (argv[i]);
     if (args[0] == "--snapshots") return runSnapshots (juce::File::getCurrentWorkingDirectory().getChildFile (args[1]));
     if (args[0] == "--bench") return runBench();
+    if (args[0] == "--download")       // HarmonyJob::download for real: --download <url> <sha256> <dest>
+    {
+        const auto ok = HarmonyJob::download (juce::URL (args[1]), args[2], juce::File (args[3]), [] (float f)
+        {
+            static int shown = -1;
+            if (const auto p = (int) (f * 10.0f); p != shown) std::printf ("%d%%\n", (shown = p) * 10);
+            return true;
+        });
+        std::printf ("%s\n", ok ? "ok" : "failed");
+        return ok ? 0 : 1;
+    }
     if (args[0] == "--update-check")   // the real request to GitHub, and what it saved (see UpdateCheck.h)
     {
         std::printf ("GitHub's latest: '%s'\n", fetchLatestRelease().toRawUTF8());

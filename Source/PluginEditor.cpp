@@ -460,7 +460,8 @@ void StemSplitterEditor::harmonyClicked()
     if (harmonyJob.getState() == HarmonyJob::State::running)
         harmonyJob.cancel();
     else
-        stems.showHarmonyMenu (HarmonyJob::qualityOf (stems.getDir()));
+        stems.showHarmonyMenu (HarmonyJob::qualityOf (stems.getDir()),
+                               HarmonyJob::findModel ("best", proc.getPythonPath()) != juce::File());
 }
 
 void StemSplitterEditor::harmonyChosen (StemsScreen::HarmonyChoice choice)
@@ -547,7 +548,8 @@ void StemSplitterEditor::updateHarmony()
         openHarmonies (true);
     }
     if (state == HarmonyJob::State::running)
-        stems.setHarmonyButton ("Splitting " + juce::String (juce::roundToInt (harmonyJob.getProgress() * 100.0f)) + "%");
+        stems.setHarmonyButton (juce::String (harmonyJob.isDownloading() ? "Downloading " : "Splitting ")
+                                + juce::String (juce::roundToInt (harmonyJob.getProgress() * 100.0f)) + "%");
     else if (state == HarmonyJob::State::failed)
         stems.setHarmonyButton ("Can't split");
     else

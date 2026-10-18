@@ -40,7 +40,22 @@ try {
     $env:HF_HUB_OFFLINE = '0'                      # the one step that goes online: download both models into the engine
     Invoke-Native $py @('-c', $models)
     Remove-Item Env:HF_HUB_OFFLINE                 # from here on, sitecustomize.py's offline default applies, as in a split
-    Invoke-Native $py @('-c', "$models; import demucs.separate")   # loads torch's DLLs too, so a missing VC++ runtime fails here
+
+    # Harmony Split's quick model (Resources/harmony_split.py looks in venv\models\harmony), checked against its hash.
+    # Best quality (913 MB) is a download in the app, the first time someone picks it.
+    $harmony = Join-Path $venv 'models\harmony'
+    New-Item -ItemType Directory -Force $harmony | Out-Null
+    $kara = Join-Path $harmony 'UVR_MDXNET_KARA_2.onnx'
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $ProgressPreference = 'SilentlyContinue'       # PowerShell 5.1's progress bar slows the download to a crawl
+    Invoke-WebRequest -UseBasicParsing -OutFile $kara `
+        -Uri 'https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/UVR_MDXNET_KARA_2.onnx'
+    if ((Get-FileHash $kara -Algorithm SHA256).Hash -ne 'BF32E15105A09C0F7DDDD2B67346146334D6F3ECB399ED7638EBA2AB07CBF5F4') {
+        throw 'The Harmony Split model download is damaged.'
+    }
+
+    # Loads torch's DLLs too, so a missing VC++ runtime fails here; and Harmony Split's packages.
+    Invoke-Native $py @('-c', "$models; import demucs.separate, onnxruntime, rotary_embedding_torch")
 
     Set-Content -Path $stamp -Value $want -Encoding Ascii
     $code = 0

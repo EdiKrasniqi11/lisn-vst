@@ -67,7 +67,7 @@ target_compile_definitions(StemSplitter PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
 
 target_link_libraries(StemSplitter
-    PRIVATE LisnAssets juce::juce_audio_utils signalsmith-stretch
+    PRIVATE LisnAssets juce::juce_audio_utils juce::juce_cryptography signalsmith-stretch
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 juce_add_console_app(lisn_tests PRODUCT_NAME "lisn_tests")
@@ -97,7 +97,7 @@ target_compile_definitions(lisn_tests PRIVATE
     "JucePlugin_Name=\"LISN StemSplitter\"" "JucePlugin_VersionString=\"${PROJECT_VERSION}\"")
 
 target_link_libraries(lisn_tests PRIVATE
-    LisnAssets juce::juce_audio_utils signalsmith-stretch juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+    LisnAssets juce::juce_audio_utils juce::juce_cryptography signalsmith-stretch juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 enable_testing()
 add_executable(progress_test tests/progress_test.cpp)

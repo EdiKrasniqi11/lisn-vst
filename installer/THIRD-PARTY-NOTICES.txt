@@ -272,7 +272,20 @@ Their full licence texts are inside the engine (the Python install and its site-
 - NumPy 1.24.4: BSD-3-Clause.
 - CPython 3.11 (python-build-standalone, installed by uv): Python Software Foundation License.
 - The Demucs models htdemucs and htdemucs_6s, from Hugging Face (adefossez).
+- ONNX Runtime 1.31.0 by Microsoft: MIT License.
+- rotary-embedding-torch 0.6.5 by Phil Wang: MIT License.
+- Harmony Split's karaoke models from Ultimate Vocal Remover's public model set (github.com/TRvlvr/model_repo):
+  UVR-MDX-NET Karaoke 2 (installed with the engine) and the Mel-Band RoFormer karaoke model by aufr33 and viperx
+  (downloaded by the app when Best quality is first picked, into %LOCALAPPDATA%\LISN\models\harmony).
+  [Licence and permission to redistribute: to be confirmed with the authors before release.]
 - The other dependencies listed in requirements.txt, each under its own licence.
+
+================================================================================
+Harmony Split's inference code (harmony_split.py, part of the plugin and the desktop app)
+================================================================================
+Adapted from python-audio-separator (Copyright (c) 2023 Andrew Beveridge) and BS-RoFormer / Mel-Band RoFormer
+(Copyright (c) 2023 Phil Wang), both under the MIT License: the same text as Signalsmith Stretch's below, with
+those copyright lines.
 
 ================================================================================
 Signalsmith Stretch 1.4.0 (part of the plugin and the desktop app)

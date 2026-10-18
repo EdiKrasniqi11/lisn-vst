@@ -133,7 +133,7 @@ begin
     end;
   end;
 
-  WizardForm.StatusLabel.Caption := 'Setting up the AI engine (about 320 MB download, a few minutes)...';
+  WizardForm.StatusLabel.Caption := 'Setting up the AI engine (about 390 MB download, a few minutes)...';
   WizardForm.ProgressGauge.Style := npbstMarquee;
   Started := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
                   ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\engine-setup\setup-engine.ps1" -EngineDir "{#Engine}"'),

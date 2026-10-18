@@ -65,7 +65,7 @@ begin
   // 0 installed, 1638 newer one present, 3010 reboot pending: all fine. A real failure shows up in the engine check.
   Exec(ExpandConstant('{tmp}\vc_redist.x64.exe'), '/install /quiet /norestart', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
-  WizardForm.StatusLabel.Caption := 'Setting up the AI engine (about 320 MB download, a few minutes)...';
+  WizardForm.StatusLabel.Caption := 'Setting up the AI engine (about 390 MB download, a few minutes)...';
   WizardForm.ProgressGauge.Style := npbstMarquee;
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
               ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\engine-setup\setup-engine.ps1" -EngineDir "{#Engine}"'),

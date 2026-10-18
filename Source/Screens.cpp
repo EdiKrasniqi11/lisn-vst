@@ -1139,7 +1139,7 @@ void StemsScreen::setHarmonyButton (const juce::String& text)
     repaint (19, 17, 674, 36);                       // the song name's room changes with it
 }
 
-juce::PopupMenu StemsScreen::harmonyMenu (const juce::String& resultQuality)
+juce::PopupMenu StemsScreen::harmonyMenu (const juce::String& resultQuality, bool bestDownloaded)
 {
     // ponytail: minutes of work per minute of song, measured on the dev PC (16 threads) at Harmony Split's half the cores.
     // Ask harmony_split.py to time a few seconds first if other PCs turn out far off.
@@ -1155,16 +1155,17 @@ juce::PopupMenu StemsScreen::harmonyMenu (const juce::String& resultQuality)
         return [safe, c] { if (safe != nullptr && safe->onHarmonyChoice != nullptr) safe->onHarmonyChoice (c); };
     };
     menu.addItem ("Quick split" + about (1.7), true, resultQuality == "quick", choose (HarmonyChoice::quick));
-    menu.addItem ("Best quality" + about (5.3), true, resultQuality == "best", choose (HarmonyChoice::best));
+    menu.addItem ("Best quality" + about (5.3) + (bestDownloaded ? "" : ", 900 MB download first"), true, resultQuality == "best",
+                  choose (HarmonyChoice::best));
     if (resultQuality.isNotEmpty())
         menu.addItem ("Open Harmonies", choose (HarmonyChoice::open));
     return menu;
 }
 
-void StemsScreen::showHarmonyMenu (const juce::String& resultQuality)
+void StemsScreen::showHarmonyMenu (const juce::String& resultQuality, bool bestDownloaded)
 {
     auto* top = getTopLevelComponent();
-    harmonyMenu (resultQuality).showMenuAsync (juce::PopupMenu::Options().withParentComponent (top)
+    harmonyMenu (resultQuality, bestDownloaded).showMenuAsync (juce::PopupMenu::Options().withParentComponent (top)
                                                    .withTargetScreenArea (harmonyButton.getScreenBounds()));
 }
 

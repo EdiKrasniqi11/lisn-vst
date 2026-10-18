@@ -185,10 +185,10 @@ public:
     bool hasHarmonyButton() const { return harmonyButton.isVisible(); }          // test hook
     std::function<void()> onHarmony;                 // a click on the button
     // Its menu, under the button: Quick and Best quality with their time for this song (the result's quality ticked;
-    // "" = no result yet) and, with a result, Open Harmonies.
+    // "" = no result yet; Best says when its model is still a download) and, with a result, Open Harmonies.
     enum class HarmonyChoice { quick = 1, best, open };
-    juce::PopupMenu harmonyMenu (const juce::String& resultQuality);
-    void showHarmonyMenu (const juce::String& resultQuality);
+    juce::PopupMenu harmonyMenu (const juce::String& resultQuality, bool bestDownloaded);
+    void showHarmonyMenu (const juce::String& resultQuality, bool bestDownloaded);
     std::function<void (HarmonyChoice)> onHarmonyChoice;
     juce::File getDir() const { return dir; }
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order

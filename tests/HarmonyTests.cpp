@@ -1,6 +1,7 @@
 #include "../Source/HarmonyJob.h"
 #include "../Source/Screens.h"
 #include "../Source/Theme.h"
+#include <juce_cryptography/juce_cryptography.h>
 
 struct HarmonyTests : juce::UnitTest
 {
@@ -61,8 +62,9 @@ struct HarmonyTests : juce::UnitTest
 
             s.setHarmonyButton ("Splitting 42%");
             expectEquals (s.harmonyText(), juce::String ("Splitting 42%"));
-            expectEquals (menuItems (s.harmonyMenu ({})).joinIntoString ("|"), juce::String ("Quick split|Best quality"));
-            expectEquals (menuItems (s.harmonyMenu ("best")).joinIntoString ("|"),
+            expectEquals (menuItems (s.harmonyMenu ({}, false)).joinIntoString ("|"),
+                          juce::String ("Quick split|Best quality, 900 MB download first"));
+            expectEquals (menuItems (s.harmonyMenu ("best", true)).joinIntoString ("|"),
                           juce::String ("Quick split|Best quality [ticked]|Open Harmonies"));
         }
 
@@ -83,6 +85,29 @@ struct HarmonyTests : juce::UnitTest
             expectEquals (h.fader (0).getValue(), 0.25f);
             h.setAudible (1u);                               // Lead soloed: Harmonies dims
             h.setPlayback (true, 0.5, 60.0);
+        }
+
+        beginTest ("a model download keeps the file only when its hash matches, and leaves nothing when stopped");
+        {
+            const auto src = root.getChildFile ("model.bin"), dest = root.getChildFile ("models/model.bin");
+            juce::MemoryBlock data;
+            for (int i = 0; i < 300000; ++i) data.append (&i, 1);   // a few chunks' worth
+            src.replaceWithData (data.getData(), data.getSize());
+            const auto sha = juce::SHA256 (src).toHexString();
+            const auto none = [&] { return ! dest.exists() && ! dest.getSiblingFile ("model.bin.part").exists(); };
+
+            float last = 0.0f;
+            expect (HarmonyJob::download (juce::URL (src), sha, dest, [&] (float f) { last = f; return true; }));
+            expect (dest.existsAsFile() && dest.getSize() == src.getSize());
+            expectEquals (last, 1.0f);
+            dest.deleteFile();
+
+            expect (! HarmonyJob::download (juce::URL (src), juce::String::repeatedString ("0", 64), dest, [] (float) { return true; }));
+            expect (none(), "a wrong hash keeps nothing");
+            expect (! HarmonyJob::download (juce::URL (src), sha, dest, [] (float) { return false; }));
+            expect (none(), "a stop keeps nothing");
+            expect (! HarmonyJob::download (juce::URL (root.getChildFile ("missing.bin")), sha, dest, [] (float) { return true; }));
+            expect (none());
         }
 
         beginTest ("the header's name: StemSplitter or Harmonies");
