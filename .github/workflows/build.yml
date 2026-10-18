@@ -161,3 +161,95 @@ jobs:
         with:
           name: mac-build
           path: mac-build
+
+      - name: uv for the Mac engine
+        run: |
+          curl -fsSL https://github.com/astral-sh/uv/releases/download/0.12.21/uv-aarch64-apple-darwin.tar.gz -o uv.tar.gz
+          echo "b88bda573e566ef9bced66b155fe0408626fbbc053aee1c30ba686f0728c9447  uv.tar.gz" | shasum -a 256 -c -
+          tar xzf uv.tar.gz
+          cp uv-aarch64-apple-darwin/uv installer/mac/uv
+
+      - name: Engine script
+        timeout-minutes: 45
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/engine-src"
+          mkdir "$stage"
+          cp installer/mac/setup-engine.sh installer/mac/uv installer/requirements-macos.txt installer/sitecustomize.py "$stage"
+          eng="$RUNNER_TEMP/LISN engine"   # with a space, like /Library/Application Support
+
+          "$stage/setup-engine.sh" "$eng"
+          test -f "$eng/ready.txt"
+          du -sh "$eng"
+
+          # A Quick Harmony Split on 15 s of stereo 44.1 kHz audio.
+          cat > "$RUNNER_TEMP/mkwav.py" <<'PY'
+          import sys, wave
+          import numpy as np
+          t = np.arange(15 * 44100) / 44100
+          rng = np.random.default_rng(1)
+          l = 0.3 * np.sin(2 * np.pi * 220 * t) + 0.1 * np.sin(2 * np.pi * 330 * t) + 0.02 * rng.standard_normal(t.size)
+          r = 0.3 * np.sin(2 * np.pi * 220 * t) + 0.1 * np.sin(2 * np.pi * 277 * t) + 0.02 * rng.standard_normal(t.size)
+          pcm = (np.stack([l, r], 1) * 32767).astype("<i2")
+          with wave.open(sys.argv[1], "wb") as w:
+              w.setnchannels(2); w.setsampwidth(2); w.setframerate(44100); w.writeframes(pcm.tobytes())
+          PY
+          "$eng/venv/bin/python3" -I "$RUNNER_TEMP/mkwav.py" "$RUNNER_TEMP/test.wav"
+          "$eng/venv/bin/python3" -I Resources/harmony_split.py "$RUNNER_TEMP/test.wav" "$RUNNER_TEMP/hs-out" quick
+          test -s "$RUNNER_TEMP/hs-out/lead.wav"
+          test -s "$RUNNER_TEMP/hs-out/harmonies.wav"
+
+          # A second run finds the stamp and returns at once.
+          start=$SECONDS
+          "$stage/setup-engine.sh" "$eng"
+          took=$((SECONDS - start))
+          echo "second run: ${took}s"
+          [ "$took" -le 10 ]
+
+          # A broken requirements file fails and leaves no ready.txt.
+          bad="$RUNNER_TEMP/engine-bad-src"
+          cp -R "$stage" "$bad"
+          echo "no-such-package-lisn==1.0 --hash=sha256:0000000000000000000000000000000000000000000000000000000000000000" > "$bad/requirements-macos.txt"
+          if "$bad/setup-engine.sh" "$RUNNER_TEMP/bad engine"; then echo "the broken engine setup exited 0"; exit 1; fi
+          test ! -e "$RUNNER_TEMP/bad engine/ready.txt"
+          echo "engine script checks passed"
+
+      - name: LISN-Mac.pkg
+        run: |
+          version=$(grep -oE 'project\(StemSplitter VERSION [0-9.]+' CMakeLists.txt | awk '{print $3}')
+          installer/mac/build-pkg.sh "$version" "build/StemSplitter_artefacts/Release/Standalone/LISN StemSplitter.app" "build/StemSplitter_artefacts/Release/VST3/LISN StemSplitter.vst3"
+          ls -l installer/Output/LISN-Mac.pkg
+
+      - name: Install LISN-Mac.pkg
+        timeout-minutes: 45
+        run: |
+          set -euo pipefail
+          pkg="$PWD/installer/Output/LISN-Mac.pkg"
+          xattr -w com.apple.quarantine "0081;$(date +%s);Safari;" "$pkg"   # as if downloaded in a browser
+          sudo installer -pkg "$pkg" -target / -verbose
+
+          plugin="/Library/Audio/Plug-Ins/VST3/LISN StemSplitter.vst3"
+          eng="/Library/Application Support/LISN/engine"
+          test -d /Applications/LISN.app
+          test -d "$plugin"
+          test -f "$eng/ready.txt"
+          du -sh "$eng"
+          if xattr -p com.apple.quarantine /Applications/LISN.app 2>/dev/null; then echo "the app is quarantined"; exit 1; fi
+          if xattr -p com.apple.quarantine "$plugin" 2>/dev/null; then echo "the plugin is quarantined"; exit 1; fi
+
+          # The engine was installed by root; this user runs a split on it.
+          "$eng/venv/bin/python3" -I "$RUNNER_TEMP/mkwav.py" "$RUNNER_TEMP/test2.wav"
+          "$eng/venv/bin/python3" -I Resources/harmony_split.py "$RUNNER_TEMP/test2.wav" "$RUNNER_TEMP/hs-out2" quick
+          test -s "$RUNNER_TEMP/hs-out2/lead.wav"
+          test -s "$RUNNER_TEMP/hs-out2/harmonies.wav"
+
+          pluginval/pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --skip-gui-tests --validate "$plugin"
+
+          sudo installer -pkg "$pkg" -target / -verbose   # the same pkg again
+          test -f "$eng/ready.txt"
+          echo "pkg checks passed"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LISN-Mac.pkg
+          path: installer/Output/LISN-Mac.pkg
