@@ -98,6 +98,7 @@ struct StemPlayerTests : juce::UnitTest
         pull (0.25f);
         expect (allEqual (buf, 0.25f));
         p.setMuted (0, false);
+        juce::Thread::sleep (50);                            // the read-ahead thread keeps up with this tight loop on a slow runner
         pull (0.0f);
         pull (0.0f);
         expectGreaterThan (rms (buf, 0, 512), 0.2f);
