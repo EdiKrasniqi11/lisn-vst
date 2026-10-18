@@ -68,9 +68,14 @@ struct PythonFinderTests : juce::UnitTest
             dirs.programData = root.getChildFile ("pd");
 
             const auto hint = fakePython ("hint");
-            const juce::StringArray expected { hint, engine, path1, path2 };
-            expectEquals (pythonCandidates (hint, dirs).joinIntoString ("\n"), expected.joinIntoString ("\n"));
-            expectEquals (pythonCandidates ("python3", dirs).joinIntoString ("\n"), juce::StringArray { engine, path1, path2 }.joinIntoString ("\n"));   // a bare name is dropped
+            auto candidates = [&] (const juce::String& h)   // Homebrew's python3 comes last when this machine has one
+            {
+                auto c = pythonCandidates (h, dirs);
+                if (c.size() > 0 && c[c.size() - 1] == "/opt/homebrew/bin/python3") c.remove (c.size() - 1);
+                return c.joinIntoString ("\n");
+            };
+            expectEquals (candidates (hint), juce::StringArray { hint, engine, path1, path2 }.joinIntoString ("\n"));
+            expectEquals (candidates ("python3"), juce::StringArray { engine, path1, path2 }.joinIntoString ("\n"));   // a bare name is dropped
             root.deleteRecursively();
         }
        #endif
