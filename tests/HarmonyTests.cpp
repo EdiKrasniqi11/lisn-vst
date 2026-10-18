@@ -41,7 +41,7 @@ struct HarmonyTests : juce::UnitTest
        #else
         juce::ignoreUnused (windowsScript);
         const auto script = fileNoExtension.withFileExtension ("sh");
-        script.replaceWithText (shScript);
+        script.replaceWithText (shScript, false, false, "\n");   // JUCE's default line ending is \r\n, which sh reads as part of every word
         script.setExecutePermission (true);
         return { "/bin/sh", script.getFullPathName() };
        #endif
@@ -148,7 +148,7 @@ struct HarmonyTests : juce::UnitTest
                 "@echo off\r\necho 37%%^|\r\ncopy /y \"" + vocals + "\" \"%~1\\lead.wav\" >nul\r\n"
                 "copy /y \"" + vocals + "\" \"%~1\\harmonies.wav\" >nul\r\n"
                 "echo %~2> \"%~1\\quality.txt\"\r\n",
-                "#!/bin/sh\nexec 2>&1\nset -x\necho '37%|'\ncp \"" + vocals + "\" \"$1/lead.wav\"\n"
+                "#!/bin/sh\necho '37%|'\ncp \"" + vocals + "\" \"$1/lead.wav\"\n"
                 "cp \"" + vocals + "\" \"$1/harmonies.wav\"\n"
                 "echo \"$2\" > \"$1/quality.txt\"\n", "best");
             expect (state == HarmonyJob::State::done, job.getError());
