@@ -126,10 +126,19 @@ struct HarmonyTests : juce::UnitTest
             expect (none());
         }
 
-       #if ! JUCE_WINDOWS
+       #if JUCE_MAC
         beginTest ("the Best quality model folder is in Application Support");
         expect (HarmonyJob::userModelDir().getFullPathName().endsWith ("Library/Application Support/LISN/models/harmony"),
                 HarmonyJob::userModelDir().getFullPathName());
+
+        beginTest ("Mac: the Quick model is found beside the venv's python3");
+        {
+            const auto venv = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("lisn-harmony-venv", {});
+            const auto model = venv.getChildFile ("models/harmony/UVR_MDXNET_KARA_2.onnx");
+            expect (model.create().wasOk());
+            expectEquals (HarmonyJob::findModel ("quick", venv.getChildFile ("bin/python3").getFullPathName()).getFullPathName(), model.getFullPathName());
+            venv.deleteRecursively();
+        }
        #endif
 
         beginTest ("the header's name: StemSplitter or Harmonies");

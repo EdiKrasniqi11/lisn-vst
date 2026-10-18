@@ -6,7 +6,7 @@ struct PythonFinderTests : juce::UnitTest
 
     void runTest() override
     {
-       #if JUCE_WINDOWS   // the candidate paths and python.exe are Windows'; Task 2 adds the Mac cases
+       #if JUCE_WINDOWS   // the candidate paths and python.exe are Windows'
         beginTest ("candidate order");
         const auto root = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("lisn-pyfinder", {});
         auto fakePython = [&] (const char* dir)   // empty file standing in for python.exe
@@ -46,6 +46,37 @@ struct PythonFinderTests : juce::UnitTest
         beginTest ("checkPython rejects non-Python programs");
         expect (checkPython ("C:\\definitely\\missing.exe", 2000) == PythonStatus::NotPython);
         expect (checkPython ("C:\\Windows\\System32\\where.exe", 5000) == PythonStatus::NotPython);
+       #endif
+
+       #if JUCE_MAC
+        beginTest ("candidate order (Mac)");
+        {
+            const auto root = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("lisn-pyfinder", {});
+            auto fakePython = [&] (const char* dir)   // empty file standing in for python3
+            {
+                auto f = root.getChildFile (dir).getChildFile ("python3");
+                expect (f.create().wasOk());
+                return f.getFullPathName();
+            };
+            const auto path1  = fakePython ("path1");
+            const auto path2  = fakePython ("path2");
+            const auto engine = fakePython ("pd/LISN/engine/venv/bin");
+            auto dirOf = [] (const juce::String& exe) { return juce::File (exe).getParentDirectory().getFullPathName(); };
+
+            PythonSearchDirs dirs;
+            dirs.pathEnv = dirOf (path1) + ":relative/dir::" + dirOf (path1) + ":" + dirOf (path2);
+            dirs.programData = root.getChildFile ("pd");
+
+            const auto hint = fakePython ("hint");
+            const juce::StringArray expected { hint, engine, path1, path2 };
+            expectEquals (pythonCandidates (hint, dirs).joinIntoString ("
+"), expected.joinIntoString ("
+"));
+            expectEquals (pythonCandidates ("python3", dirs).joinIntoString ("
+"), juce::StringArray { engine, path1, path2 }.joinIntoString ("
+"));   // a bare name is dropped
+            root.deleteRecursively();
+        }
        #endif
 
         if (juce::SystemStats::getEnvironmentVariable ("LISN_INTEGRATION", {}) == "1")
