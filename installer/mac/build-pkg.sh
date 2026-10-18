@@ -16,6 +16,11 @@ root=$work/root scripts=$work/scripts
 mkdir -p "$root/Applications" "$root/Library/Audio/Plug-Ins/VST3" "$scripts" "$out"
 ditto "$app" "$root/Applications/LISN.app"
 ditto "$vst3" "$root/Library/Audio/Plug-Ins/VST3/LISN StemSplitter.vst3"
+# The pkg promises macOS 14.0 (torch's minimum), so the binaries must not need more.
+for exe in "$root/Applications/LISN.app/Contents/MacOS/"* "$root/Library/Audio/Plug-Ins/VST3/LISN StemSplitter.vst3/Contents/MacOS/"*; do
+    minos=$(vtool -show-build "$exe" | awk '$1 == "minos" {print $2}' | sort -u | paste -sd, -)
+    [ "$minos" = 14.0 ] || { echo "$exe needs macOS $minos, not 14.0" >&2; exit 1; }
+done
 codesign --force --deep --sign - "$root/Applications/LISN.app"
 codesign --force --deep --sign - "$root/Library/Audio/Plug-Ins/VST3/LISN StemSplitter.vst3"
 
@@ -31,7 +36,7 @@ chmod +x "$scripts/postinstall" "$scripts/setup-engine.sh" "$scripts/uv"
 
 # Installer.app otherwise "upgrades" any other copy of these bundles it finds (a build folder), not /Applications.
 pkgbuild --analyze --root "$root" "$work/components.plist" >/dev/null
-n=$(/usr/libexec/PlistBuddy -c "Print" "$work/components.plist" | grep -c "^    Dict")
+n=$(/usr/libexec/PlistBuddy -c "Print" "$work/components.plist" | grep -c "^    Dict" || true)
 [ "$n" -eq 2 ] || { echo "expected 2 bundles in the component plist, found $n" >&2; exit 1; }
 for i in 0 1; do
     /usr/libexec/PlistBuddy -c "Delete :$i:BundleIsRelocatable" "$work/components.plist" 2>/dev/null || true

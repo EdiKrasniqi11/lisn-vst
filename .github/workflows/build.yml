@@ -78,7 +78,7 @@ jobs:
 
       - name: Build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
           cmake --build build --parallel --target lisn_tests progress_test StemSplitter_VST3 StemSplitter_Standalone -- -k 0
 
       - name: Unit tests
@@ -242,6 +242,11 @@ jobs:
           "$eng/venv/bin/python3" -I Resources/harmony_split.py "$RUNNER_TEMP/test2.wav" "$RUNNER_TEMP/hs-out2" quick
           test -s "$RUNNER_TEMP/hs-out2/lead.wav"
           test -s "$RUNNER_TEMP/hs-out2/harmonies.wav"
+
+          # And the Demucs caches the same way: both models load offline, then a real split of the 15 s WAV.
+          "$eng/venv/bin/python3" -I -c "from demucs.pretrained import get_model; get_model('htdemucs'); get_model('htdemucs_6s')"
+          "$eng/venv/bin/python3" -I -m demucs -n htdemucs --device cpu -o "$RUNNER_TEMP/demucs-out" "$RUNNER_TEMP/test2.wav"
+          for stem in drums bass other vocals; do test -s "$RUNNER_TEMP/demucs-out/htdemucs/test2/$stem.wav"; done
 
           pluginval/pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --skip-gui-tests --validate "$plugin"
 

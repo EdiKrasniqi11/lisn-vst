@@ -53,5 +53,5 @@ setup() {
 set -o pipefail
 setup 2>&1 | tee "$engine/setup.log"
 code=${PIPESTATUS[0]}
-[ "$code" -eq 0 ] || echo "FAILED (exit $code)" | tee -a "$engine/setup.log"
+[ "$code" -eq 0 ] || echo "FAILED (exit $code), see $engine/setup.log" | tee -a "$engine/setup.log"
 exit "$code"
