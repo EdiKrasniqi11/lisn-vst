@@ -1,3 +1,4 @@
+#include "FakeHarmony.h"
 #include "../Source/PluginProcessor.h"
 
 struct ProcessorStateTests : juce::UnitTest
@@ -50,6 +51,36 @@ struct ProcessorStateTests : juce::UnitTest
             expectEquals (p.getPythonPath(), juce::String ("python"));
             expect (! p.isSixStems());
             expect (p.getLastInput() == juce::File() && ! p.hasStems());
+            expectEquals (p.getProduct(), juce::String ("stemsplitter"));
+            expectEquals (p.getHarmonyQuality(), juce::String ("quick"));
+            expect (p.getHarmonyInput() == juce::File());
+        }
+
+        beginTest ("product, quality and Harmonies' song are saved");
+        {
+            FakeHarmony::CachedSong song;
+            StemSplitterProcessor a;
+            a.harmonyFlow.harmonyJobForTests().testCommand = FakeHarmony::okPass (song);
+            a.setProduct ("harmonies");
+            a.setHarmonyQuality ("best");
+            a.startHarmonies (song.file);
+            for (int i = 0; i < 100 && a.harmonyFlow.getStep() != HarmonyFlow::Step::done; ++i)
+                juce::MessageManager::getInstance()->runDispatchLoopUntil (100);
+            expect (a.harmonyFlow.getStep() == HarmonyFlow::Step::done, a.harmonyFlow.getError());
+
+            juce::MemoryBlock blob;
+            a.getStateInformation (blob);
+            StemSplitterProcessor b;
+            b.setStateInformation (blob.getData(), (int) blob.getSize());
+            expectEquals (b.getProduct(), juce::String ("harmonies"));
+            expectEquals (b.getHarmonyQuality(), juce::String ("best"));
+            expect (b.getHarmonyInput() == song.file);
+
+            song.stems.getParentDirectory().deleteRecursively();   // its cache is gone: restoring still works
+            StemSplitterProcessor c;
+            c.setStateInformation (blob.getData(), (int) blob.getSize());
+            expect (c.getHarmonyInput() == song.file);
+            expect (c.harmonyFlow.getStep() == HarmonyFlow::Step::idle);
         }
 
         beginTest ("setSixStems without a song");

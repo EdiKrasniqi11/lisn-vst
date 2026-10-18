@@ -45,6 +45,38 @@ void StemSplitterProcessor::startSplit (const juce::File& input)
     job.start (input, model, pythonPath);
 }
 
+void StemSplitterProcessor::setProduct (const juce::String& id)
+{
+    const juce::String p = id == "harmonies" ? id : "stemsplitter";
+    {
+        const juce::ScopedLock sl (settingsLock);
+        if (product == p) return;
+        product = p;
+    }
+    notifyHost (*this);
+}
+
+void StemSplitterProcessor::setHarmonyQuality (const juce::String& q)
+{
+    const juce::String v = q == "best" ? q : "quick";
+    {
+        const juce::ScopedLock sl (settingsLock);
+        if (harmonyQuality == v) return;
+        harmonyQuality = v;
+    }
+    notifyHost (*this);
+}
+
+void StemSplitterProcessor::startHarmonies (const juce::File& song, bool keepExistingResult)
+{
+    {
+        const juce::ScopedLock sl (settingsLock);   // also covers the split's start(), which resets the strings getStateInformation reads
+        harmonyInput = song;
+        harmonyFlow.start (song, harmonyQuality, pythonPath, keepExistingResult);
+    }
+    notifyHost (*this);
+}
+
 void StemSplitterProcessor::applyJobResults (juce::File& dir, juce::String& python) const
 {
     const auto s = job.getState();
@@ -53,6 +85,8 @@ void StemSplitterProcessor::applyJobResults (juce::File& dir, juce::String& pyth
     if ((s == JobState::Done || (s == JobState::Failed && job.getErrorKind() != ErrorKind::PythonMissing))
         && job.getPythonExe().isNotEmpty())
         python = job.getPythonExe();
+    if (const auto found = harmonyFlow.getPythonExe(); found.isNotEmpty())   // the Python Harmonies' split found
+        python = found;
 }
 
 void StemSplitterProcessor::syncWithJob()
@@ -76,6 +110,9 @@ void StemSplitterProcessor::getStateInformation (juce::MemoryBlock& dest)
         s.setProperty ("python", python, nullptr);
         s.setProperty ("input", lastInput.getFullPathName(), nullptr);
         s.setProperty ("stems", dir.getFullPathName(), nullptr);
+        s.setProperty ("product", product, nullptr);
+        s.setProperty ("harmonyQuality", harmonyQuality, nullptr);
+        s.setProperty ("harmonyInput", harmonyInput.getFullPathName(), nullptr);
     }
     if (auto xml = s.createXml()) copyXmlToBinary (*xml, dest);
 }
@@ -87,6 +124,7 @@ void StemSplitterProcessor::setStateInformation (const void* data, int size)
     auto s = juce::ValueTree::fromXml (*xml);
     auto in = s.getProperty ("input").toString();
     auto st = s.getProperty ("stems").toString();
+    auto hin = s.getProperty ("harmonyInput").toString();
 
     const juce::ScopedLock sl (settingsLock);
     theme      = s.getProperty ("theme", "dusk").toString();
@@ -95,4 +133,7 @@ void StemSplitterProcessor::setStateInformation (const void* data, int size)
     lastInput  = juce::File::isAbsolutePath (in) ? juce::File (in) : juce::File();
     stemDir    = juce::File::isAbsolutePath (st) ? juce::File (st) : juce::File();
     stemDirHasWav = hasWav (stemDir);
+    product        = s.getProperty ("product").toString() == "harmonies" ? "harmonies" : "stemsplitter";
+    harmonyQuality = s.getProperty ("harmonyQuality").toString() == "best" ? "best" : "quick";
+    harmonyInput   = juce::File::isAbsolutePath (hin) ? juce::File (hin) : juce::File();
 }

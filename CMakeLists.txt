@@ -41,7 +41,8 @@ set(LISN_SOURCES
     Source/Screens.cpp
     Source/RenderJob.cpp
     Source/UpdateCheck.cpp
-    Source/HarmonyJob.cpp)
+    Source/HarmonyJob.cpp
+    Source/HarmonyFlow.cpp)
 
 if(APPLE)
     set(LISN_VST3_COPY_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/VST3")
@@ -99,6 +100,7 @@ target_sources(lisn_tests PRIVATE
     tests/RenderJobTests.cpp
     tests/UpdateCheckTests.cpp
     tests/HarmonyTests.cpp
+    tests/HarmonyFlowTests.cpp
     tests/Snapshots.cpp)
 
 target_compile_definitions(lisn_tests PRIVATE

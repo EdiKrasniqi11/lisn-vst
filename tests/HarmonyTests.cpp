@@ -1,25 +1,14 @@
+#include "FakeHarmony.h"
 #include "../Source/HarmonyJob.h"
 #include "../Source/Screens.h"
 #include "../Source/Theme.h"
 #include <juce_cryptography/juce_cryptography.h>
 
+using namespace FakeHarmony;
+
 struct HarmonyTests : juce::UnitTest
 {
     HarmonyTests() : juce::UnitTest ("Harmony Split") {}
-
-    static void writeWav (const juce::File& f)   // 0.2 s of a quiet 440 Hz tone, 44.1 kHz stereo
-    {
-        juce::AudioBuffer<float> b (2, 8820);
-        for (int ch = 0; ch < 2; ++ch)
-            for (int i = 0; i < b.getNumSamples(); ++i)
-                b.setSample (ch, i, 0.2f * std::sin (juce::MathConstants<float>::twoPi * 440.0f * (float) i / 44100.0f));
-        f.getParentDirectory().createDirectory();
-        auto out = f.createOutputStream();
-        std::unique_ptr<juce::AudioFormatWriter> w (juce::WavAudioFormat().createWriterFor (out.get(), 44100.0, 2, 16, {}, 0));
-        if (w == nullptr) return;
-        out.release();
-        w->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
-    }
 
     static juce::StringArray menuItems (const juce::PopupMenu& m)   // "text", or "text [ticked]"
     {
@@ -27,24 +16,6 @@ struct HarmonyTests : juce::UnitTest
         for (juce::PopupMenu::MenuItemIterator it (m); it.next();)
             items.add (it.getItem().text + (it.getItem().isTicked ? " [ticked]" : ""));
         return items;
-    }
-
-    // Writes the fake pass (a .cmd batch file on Windows, a /bin/sh script on Mac: %1 / $1 the .part dir, %2 / $2 the
-    // quality) and returns the command that runs it in place of Python.
-    static juce::StringArray fakeCommand (const juce::File& fileNoExtension, const juce::String& windowsScript, const juce::String& shScript)
-    {
-       #if JUCE_WINDOWS
-        juce::ignoreUnused (shScript);
-        const auto script = fileNoExtension.withFileExtension ("cmd");
-        script.replaceWithText (windowsScript);
-        return { "cmd.exe", "/c", script.getFullPathName() };
-       #else
-        juce::ignoreUnused (windowsScript);
-        const auto script = fileNoExtension.withFileExtension ("sh");
-        script.replaceWithText (shScript, false, false, "\n");   // JUCE's default line ending is \r\n, which sh reads as part of every word
-        script.setExecutePermission (true);
-        return { "/bin/sh", script.getFullPathName() };
-       #endif
     }
 
     // A HarmonyJob running a fake pass until it leaves running or 10 s pass.
