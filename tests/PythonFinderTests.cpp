@@ -64,7 +64,7 @@ struct PythonFinderTests : juce::UnitTest
             auto dirOf = [] (const juce::String& exe) { return juce::File (exe).getParentDirectory().getFullPathName(); };
 
             PythonSearchDirs dirs;
-            dirs.pathEnv = dirOf (path1) + ":relative/dir::" + dirOf (path1) + ":" + dirOf (path2);
+            dirs.pathEnv = dirOf (path1) + ":relative/dir::" + dirOf (path1) + ":/usr/bin:/usr/bin/:" + dirOf (path2);   // /usr/bin is never a candidate
             dirs.programData = root.getChildFile ("pd");
 
             const auto hint = fakePython ("hint");
@@ -76,6 +76,7 @@ struct PythonFinderTests : juce::UnitTest
             };
             expectEquals (candidates (hint), juce::StringArray { hint, engine, path1, path2 }.joinIntoString ("\n"));
             expectEquals (candidates ("python3"), juce::StringArray { engine, path1, path2 }.joinIntoString ("\n"));   // a bare name is dropped
+            expect (! pythonCandidates (hint, dirs).contains ("/usr/bin/python3"));   // present on every Mac
             root.deleteRecursively();
         }
        #endif

@@ -88,6 +88,7 @@ public:
         juce::PropertiesFile::Options options;
         options.applicationName = "LISN";        // %APPDATA%\LISN\LISN.settings
         options.filenameSuffix  = ".settings";
+        options.osxLibrarySubFolder = "Application Support";   // Mac: ~/Library/Application Support/LISN; Windows ignores it
         settings.setStorageParameters (options);
 
         // Output only: no mic, no "input muted" banner. The processor's input bus just gets silence.

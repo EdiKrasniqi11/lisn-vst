@@ -42,7 +42,8 @@ juce::StringArray pythonCandidates (const juce::String& hint, const PythonSearch
     for (auto entry : juce::StringArray::fromTokens (dirs.pathEnv, ":", "\""))
     {
         entry = entry.trim().unquoted();
-        if (juce::File::isAbsolutePath (entry))
+        // Never /usr/bin: that python3 has no Demucs, and without the Command Line Tools it is a stub that pops macOS's "install developer tools" dialog.
+        if (juce::File::isAbsolutePath (entry) && juce::File (entry) != juce::File ("/usr/bin"))
             addIfFile (juce::File (entry).getChildFile ("python3"));
     }
     addIfFile (juce::File ("/opt/homebrew/bin/python3"));   // a GUI app's PATH usually lacks Homebrew

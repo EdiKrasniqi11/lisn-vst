@@ -57,12 +57,13 @@ bool makeTitleBarTransparent (juce::Component& window)
                               NSWindowDidChangeScreenNotification, NSWindowDidChangeBackingPropertiesNotification ])
         [centre addObserverForName: name object: ns queue: nil usingBlock: again];
     NSView* bar = [ns standardWindowButton: NSWindowCloseButton].superview;
-    for (NSView* v in @[ bar, bar.superview ])   // AppKit moving the strip or the lights back
-        if (v != nil)
-        {
-            v.postsFrameChangedNotifications = YES;
-            [centre addObserverForName: NSViewFrameDidChangeNotification object: v queue: nil usingBlock: again];
-        }
+    if (bar != nil)
+        for (NSView* v in @[ bar, bar.superview ])   // AppKit moving the strip or the lights back
+            if (v != nil)
+            {
+                v.postsFrameChangedNotifications = YES;
+                [centre addObserverForName: NSViewFrameDidChangeNotification object: v queue: nil usingBlock: again];
+            }
     dispatch_async (dispatch_get_main_queue(), ^{ alignLights (ns); });   // after the window's first layout
     return true;
 }

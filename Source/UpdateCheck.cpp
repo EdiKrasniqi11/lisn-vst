@@ -45,6 +45,7 @@ void UpdateCheck::run()
     options.applicationName = "update";
     options.folderName = "StemSplitter";   // %APPDATA%\StemSplitter\update.settings, beside the stems cache
     options.filenameSuffix = ".settings";
+    options.osxLibrarySubFolder = "Application Support";   // Mac: ~/Library/Application Support/StemSplitter; Windows ignores it
     juce::PropertiesFile seen (options);
 
     // ponytail: two LISNs opening in the same second may both ask; a process lock if that ever matters

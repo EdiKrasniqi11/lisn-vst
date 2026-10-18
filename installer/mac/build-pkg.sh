@@ -46,10 +46,35 @@ done
 pkgbuild --root "$root" --component-plist "$work/components.plist" --scripts "$scripts" \
     --identifier digital.lisn.pkg --version "$version" --install-location / "$work/lisn.pkg"
 
+# The last step downloads the AI engine and Installer.app shows only a spinner: say so up front.
+mkdir "$work/resources"
+cat > "$work/resources/welcome.html" <<'HTML'
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>body { font-family: -apple-system, sans-serif; font-size: 13px; }</style></head>
+<body>
+<h2>Welcome to LISN</h2>
+<p>This installs the LISN app, the LISN StemSplitter plugin for your DAW, and LISN's AI engine.</p>
+<p><b>The last step downloads the AI engine</b> (about 390 MB). It takes a few minutes, and the installer may look stuck while it works. Please keep this Mac online until it says the installation is complete.</p>
+<p>If it fails: check your internet connection and run the installer again. The log is at<br>
+<code>/Library/Application Support/LISN/engine/setup.log</code></p>
+</body></html>
+HTML
+cat > "$work/resources/conclusion.html" <<'HTML'
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>body { font-family: -apple-system, sans-serif; font-size: 13px; }</style></head>
+<body>
+<h2>LISN is installed</h2>
+<p>Open LISN from Applications, or restart your DAW and rescan plugins to find LISN StemSplitter.</p>
+</body></html>
+HTML
+
 cat > "$work/distribution.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
     <title>LISN</title>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+    <domains enable_localSystem="true" enable_anywhere="false" enable_currentUserHome="false"/>
     <options customize="never" require-scripts="false" hostArchitectures="arm64"/>
     <volume-check><allowed-os-versions><os-version min="14.0"/></allowed-os-versions></volume-check>
     <choices-outline><line choice="lisn"/></choices-outline>
@@ -59,5 +84,5 @@ cat > "$work/distribution.xml" <<XML
     <pkg-ref id="digital.lisn.pkg" version="$version" onConclusion="none">lisn.pkg</pkg-ref>
 </installer-gui-script>
 XML
-productbuild --distribution "$work/distribution.xml" --package-path "$work" "$out/LISN-Mac.pkg"
+productbuild --distribution "$work/distribution.xml" --resources "$work/resources" --package-path "$work" "$out/LISN-Mac.pkg"
 echo "built $out/LISN-Mac.pkg"

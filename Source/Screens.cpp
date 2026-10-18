@@ -1457,6 +1457,16 @@ void ErrorScreen::setError (ErrorKind k, const juce::String& text, const juce::S
     kind = k == ErrorKind::PythonMissing || k == ErrorKind::DemucsMissing ? k : ErrorKind::Failed;
     const juce::String pip ("python -m pip install demucs");
     lines.clear();
+   #if JUCE_MAC
+    if (kind != ErrorKind::Failed)   // the pkg sets the engine up: nothing to type in a Terminal, just run it again
+    {
+        title = "The AI engine isn't set up yet";
+        body = "LISN's AI engine isn't installed. Run LISN-Mac.pkg again (it needs the internet for a few minutes). "
+               "If it keeps failing, the installer's log is here:";
+        command = copyText = "/Library/Application Support/LISN/engine/setup.log";
+    }
+    else
+   #endif
     if (kind == ErrorKind::PythonMissing)
     {
         title = "Python isn't set up yet";
@@ -1529,7 +1539,7 @@ void ErrorScreen::paint (juce::Graphics& g)
             text (g, Fonts::mono (14.0f), Theme::cream, lines[i], { x, box.getY() + 10.0f + 18.0f * (float) i, w, 18.0f },
                   juce::Justification::centredLeft);
     else
-        text (g, Fonts::mono (14.0f), Theme::cream, command, { x, box.getY(), w, box.getHeight() }, juce::Justification::centredLeft);
+        text (g, Fonts::mono (JUCE_MAC ? 12.5f : 14.0f), Theme::cream, command, { x, box.getY(), w, box.getHeight() }, juce::Justification::centredLeft);   // Mac: the log path is long
 }
 
 //==============================================================================

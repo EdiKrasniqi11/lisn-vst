@@ -96,7 +96,7 @@ def quick(mix, model_path, threads):
             result[..., start:end] += out[..., : end - start] * win
             divider[..., start:end] += win
             progress((k + 1) / len(starts) * 0.99)
-    harmonies = (result / divider)[0][:, trim:-trim][:, : mix.shape[-1]] * compensate
+    harmonies = (result / np.where(divider > 0, divider, 1))[0][:, trim:-trim][:, : mix.shape[-1]] * compensate
     return mix - harmonies, harmonies
 
 

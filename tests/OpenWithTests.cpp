@@ -6,7 +6,7 @@ struct OpenWithTests : juce::UnitTest
 
     void runTest() override
     {
-       #if JUCE_WINDOWS   // Task 2 adds the Mac cases
+       #if JUCE_WINDOWS   // the Windows command-line forms; macOS hands files over through the app delegate
         beginTest ("one absolute path, quoted or not");
         expectEquals (fileToOpen ("\"C:\\My Music\\a b.mp3\"").getFullPathName(), juce::String ("C:\\My Music\\a b.mp3"));
         expectEquals (fileToOpen ("  C:\\x.wav ").getFullPathName(), juce::String ("C:\\x.wav"));
