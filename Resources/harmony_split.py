@@ -35,8 +35,10 @@ def main():
         needs_setup("no model in " + model_dir)
     try:
         import onnxruntime as ort
+        import soundfile as sf
         import torch
         from audio_separator.separator import Separator
+        from audio_separator.separator.common_separator import CommonSeparator
     except ImportError as e:
         needs_setup(e)
 
@@ -49,14 +51,25 @@ def main():
         return o
 
     ort.SessionOptions = capped_options
-    Separator.check_ffmpeg_installed = lambda self: None   # WAVs go through soundfile; ffmpeg is never used
+    # Our own WAV writer: audio-separator's soundfile path casts the float audio to int16 (silence) and writes the
+    # interleaved channels as one mono track twice as long, and its other path needs ffmpeg. Stereo 16-bit, like demucs.
+    Separator.check_ffmpeg_installed = lambda self: None
+    CommonSeparator.write_audio = lambda self, path, source: sf.write(path, source, self.sample_rate, subtype="PCM_16")
 
-    sep = Separator(output_dir=out, model_file_dir=model_dir, output_format="WAV", use_soundfile=True, log_level=30)
+    # normalization_threshold 1: keep the vocal's level (lead + harmonies = vocals) unless it would clip.
+    sep = Separator(output_dir=out, model_file_dir=model_dir, output_format="WAV", normalization_threshold=1.0, log_level=30)
     sep.load_model(model_filename=MODEL)
-    # Full paths: audio-separator's soundfile writer ignores output_dir.
+    # Full paths: our writer gets the stem's path as audio-separator builds it, without output_dir.
     out = os.path.abspath(out)
     os.makedirs(out, exist_ok=True)
     sep.separate(src, custom_output_names={"Vocals": os.path.join(out, "lead"), "Instrumental": os.path.join(out, "harmonies")})
+
+    # Both parts must match the vocal's length and channels (a broken writer once made them mono, twice as long, silent).
+    want = sf.info(src)
+    for name in ("lead", "harmonies"):
+        got = sf.info(os.path.join(out, name + ".wav"))
+        if (got.frames, got.channels, got.samplerate) != (want.frames, want.channels, want.samplerate):
+            sys.exit(f"{name}.wav came out wrong: {got.frames} frames x {got.channels} ch, the vocal is {want.frames} x {want.channels}")
     print("100%|", flush=True)
 
 
