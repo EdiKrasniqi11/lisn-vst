@@ -31,7 +31,13 @@ chmod +x "$scripts/postinstall" "$scripts/setup-engine.sh" "$scripts/uv"
 
 # Installer.app otherwise "upgrades" any other copy of these bundles it finds (a build folder), not /Applications.
 pkgbuild --analyze --root "$root" "$work/components.plist" >/dev/null
-for i in 0 1; do /usr/libexec/PlistBuddy -c "Set :$i:BundleIsRelocatable false" "$work/components.plist"; done
+n=$(/usr/libexec/PlistBuddy -c "Print" "$work/components.plist" | grep -c "^    Dict")
+[ "$n" -eq 2 ] || { echo "expected 2 bundles in the component plist, found $n" >&2; exit 1; }
+for i in 0 1; do
+    /usr/libexec/PlistBuddy -c "Delete :$i:BundleIsRelocatable" "$work/components.plist" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :$i:BundleIsRelocatable bool false" "$work/components.plist"
+done
+/usr/libexec/PlistBuddy -c "Print" "$work/components.plist"
 pkgbuild --root "$root" --component-plist "$work/components.plist" --scripts "$scripts" \
     --identifier digital.lisn.pkg --version "$version" --install-location / "$work/lisn.pkg"
 
