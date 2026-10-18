@@ -31,16 +31,19 @@ struct HarmonyTests : juce::UnitTest
 
     // Writes the fake pass (a .cmd batch file on Windows, a /bin/sh script on Mac: %1 / $1 the .part dir, %2 / $2 the
     // quality) and returns the command that runs it in place of Python.
-    static juce::StringArray fakeCommand (const juce::File& file, const juce::String& windowsScript, const juce::String& shScript)
+    static juce::StringArray fakeCommand (const juce::File& fileNoExtension, const juce::String& windowsScript, const juce::String& shScript)
     {
        #if JUCE_WINDOWS
-        file.replaceWithText (windowsScript);
-        return { "cmd.exe", "/c", file.getFullPathName() };
+        juce::ignoreUnused (shScript);
+        const auto script = fileNoExtension.withFileExtension ("cmd");
+        script.replaceWithText (windowsScript);
+        return { "cmd.exe", "/c", script.getFullPathName() };
        #else
         juce::ignoreUnused (windowsScript);
-        file.replaceWithText (shScript);
-        file.setExecutePermission (true);
-        return { "/bin/sh", file.getFullPathName() };
+        const auto script = fileNoExtension.withFileExtension ("sh");
+        script.replaceWithText (shScript);
+        script.setExecutePermission (true);
+        return { "/bin/sh", script.getFullPathName() };
        #endif
     }
 
@@ -48,7 +51,7 @@ struct HarmonyTests : juce::UnitTest
     HarmonyJob::State runFake (HarmonyJob& job, const juce::File& dir, const juce::String& windowsScript, const juce::String& shScript,
                                const juce::String& quality = "quick")
     {
-        job.testCommand = fakeCommand (dir.getSiblingFile (JUCE_WINDOWS ? "fake.cmd" : "fake.sh"), windowsScript, shScript);
+        job.testCommand = fakeCommand (dir.getSiblingFile ("fake"), windowsScript, shScript);
         job.start (dir, {}, quality);
         for (int i = 0; i < 1000 && job.getState() == HarmonyJob::State::running; ++i) juce::Thread::sleep (10);
         return job.getState();
@@ -169,7 +172,7 @@ struct HarmonyTests : juce::UnitTest
         beginTest ("cancel kills the pass, leaves nothing and goes back to idle");
         {
             HarmonyJob job;
-            job.testCommand = fakeCommand (root.getChildFile (JUCE_WINDOWS ? "fake.cmd" : "fake.sh"),
+            job.testCommand = fakeCommand (root.getChildFile ("fake"),
                                            "@echo off\r\nping -n 4 127.0.0.1 >nul\r\n", "#!/bin/sh\nexec sleep 3\n");
             job.start (four, {});
             juce::Thread::sleep (300);
