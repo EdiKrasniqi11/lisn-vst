@@ -27,13 +27,22 @@ struct HarmonyTests : juce::UnitTest
         return names;
     }
 
-    // A HarmonyJob running `script` (a .cmd file) in place of Python, until it leaves running or 10 s pass.
-    HarmonyJob::State runFake (HarmonyJob& job, const juce::File& dir, const juce::String& script)
+    static juce::StringArray menuItems (const juce::PopupMenu& m)   // "text", or "text [ticked]"
+    {
+        juce::StringArray items;
+        for (juce::PopupMenu::MenuItemIterator it (m); it.next();)
+            items.add (it.getItem().text + (it.getItem().isTicked ? " [ticked]" : ""));
+        return items;
+    }
+
+    // A HarmonyJob running `script` (a .cmd file: %1 the .part dir, %2 the quality) in place of Python, until it leaves
+    // running or 10 s pass.
+    HarmonyJob::State runFake (HarmonyJob& job, const juce::File& dir, const juce::String& script, const juce::String& quality = "quick")
     {
         const auto cmd = dir.getSiblingFile ("fake.cmd");
         cmd.replaceWithText (script);
         job.testCommand = { "cmd.exe", "/c", cmd.getFullPathName() };
-        job.start (dir, {});
+        job.start (dir, {}, quality);
         for (int i = 0; i < 1000 && job.getState() == HarmonyJob::State::running; ++i) juce::Thread::sleep (10);
         return job.getState();
     }
@@ -83,6 +92,12 @@ struct HarmonyTests : juce::UnitTest
 
             s.setHarmonyButton ("Splitting 42%");
             expectEquals (s.harmonyText(), juce::String ("Splitting 42%"));
+
+            beginTest ("the menu: Quick and Best quality, the result's ticked, then Hide / Show");
+            s.setStems (four, "Song", true);
+            expectEquals (menuItems (s.harmonyMenu ({})).joinIntoString ("|"), juce::String ("Quick split|Best quality"));
+            expectEquals (menuItems (s.harmonyMenu ("best")).joinIntoString ("|"),
+                          juce::String ("Quick split|Best quality [ticked]|Hide Lead and Harmonies"));
         }
         four.getChildFile ("harmony").deleteRecursively();
 
@@ -90,10 +105,13 @@ struct HarmonyTests : juce::UnitTest
         {
             HarmonyJob job;
             const auto vocals = four.getChildFile ("vocals.wav").getFullPathName();
+            expectEquals (HarmonyJob::qualityOf (four), juce::String());
             const auto state = runFake (job, four, "@echo off\r\necho 37%%^|\r\ncopy /y \"" + vocals + "\" \"%~1\\lead.wav\" >nul\r\n"
-                                                    "copy /y \"" + vocals + "\" \"%~1\\harmonies.wav\" >nul\r\n");
+                                                    "copy /y \"" + vocals + "\" \"%~1\\harmonies.wav\" >nul\r\n"
+                                                    "echo %~2> \"%~1\\quality.txt\"\r\n", "best");
             expect (state == HarmonyJob::State::done, job.getError());
             expect (HarmonyJob::hasResult (four));
+            expectEquals (HarmonyJob::qualityOf (four), juce::String ("best"));
             expect (! four.getChildFile ("harmony.part").exists());
             expectEquals (job.getProgress(), 1.0f);
         }

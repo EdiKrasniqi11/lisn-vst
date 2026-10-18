@@ -55,8 +55,10 @@ private:
     RenderJob::Request renderRequest (const std::vector<float>& gains, double speed, int semitones = 0);
     juce::File renderFile (const std::vector<float>& gains, double speed);   // renderRequest's dest, rendered here unless cached
     void prepareMix();                               // at a speed other than 1, renders the mix on mixJob; sets the chip
-    // The Harmony Split button: starts a pass on harmonyJob, cancels a running one, or shows / hides its rows.
+    // The Harmony Split button: cancels a running pass, else opens its menu. A menu choice starts a pass of that quality
+    // on harmonyJob, or shows / hides the rows of the result that's there.
     void harmonyClicked();
+    void harmonyChosen (StemsScreen::HarmonyChoice);
     void updateHarmony();                            // a finished pass shows its rows; the button's text follows the job
     void startSplit (const juce::File&);             // cancels mixJob first: it must not hold stems a re-split replaces
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);

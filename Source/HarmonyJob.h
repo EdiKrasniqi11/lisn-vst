@@ -12,7 +12,8 @@ public:
     enum class State { idle, running, done, failed };
     HarmonyJob() : juce::Thread ("harmony split") {}
     ~HarmonyJob() override { cancel(); }
-    void start (const juce::File& stemDir, const juce::String& pythonHint);   // cancels any running pass first
+    // quality "quick" (MDX-Net Karaoke 2) or "best" (Mel-Band RoFormer karaoke, about 3x the time). Cancels any running pass.
+    void start (const juce::File& stemDir, const juce::String& pythonHint, const juce::String& quality = "quick");
     void cancel();                               // kills the script, deletes harmony.part; the state goes back to idle
     State getState() const { return state.load(); }
     float getProgress() const { return progress.load(); }   // 0..1
@@ -21,14 +22,15 @@ public:
 
     static juce::File dirFor (const juce::File& stemDir) { return stemDir.getChildFile ("harmony"); }
     static bool hasResult (const juce::File& stemDir);       // harmony/lead.wav and harmony/harmonies.wav exist
+    static juce::String qualityOf (const juce::File& stemDir);   // the result's quality ("quick" / "best"), or "" without one
 
-    // Test hook: run this instead of Python and the script, with the .part dir appended as its last argument.
+    // Test hook: run this instead of Python and the script, with the .part dir and the quality appended.
     juce::StringArray testCommand;
 
 private:
     void run() override;
     juce::File stemDir;
-    juce::String pythonHint, error;
+    juce::String pythonHint, quality, error;
     juce::CriticalSection procLock;
     juce::ChildProcess proc;
     std::atomic<State> state { State::idle };

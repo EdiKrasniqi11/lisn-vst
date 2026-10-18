@@ -96,6 +96,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
     stems.onToggleLoop = [this] { proc.player.setLooping (! proc.player.isLooping()); };
     stems.onHarmony = [this] { harmonyClicked(); };
+    stems.onHarmonyChoice = [this] (StemsScreen::HarmonyChoice c) { harmonyChosen (c); };
     stems.mixFile = [this]   // the mix: what you hear. A stretched mix only comes from mixJob's cache, never rendered here
     {
         const auto speed = proc.player.getSpeed();
@@ -414,16 +415,29 @@ void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
 
 void StemSplitterEditor::harmonyClicked()
 {
-    const auto dir = stems.getDir();
     if (harmonyJob.getState() == HarmonyJob::State::running)
         harmonyJob.cancel();
-    else if (HarmonyJob::hasResult (dir))
-    {
-        mixJob.cancel();                             // it may be rendering the rows that go
-        stems.setStems (dir, shown.has_value() ? shown->songName : juce::String(), ! stems.showsHarmony());
-    }
     else
-        harmonyJob.start (dir, proc.getPythonPath());
+        stems.showHarmonyMenu (HarmonyJob::qualityOf (stems.getDir()));
+}
+
+void StemSplitterEditor::harmonyChosen (StemsScreen::HarmonyChoice choice)
+{
+    using Choice = StemsScreen::HarmonyChoice;
+    const auto dir = stems.getDir();
+    const auto song = shown.has_value() ? shown->songName : juce::String();
+    const auto quality = choice == Choice::best ? juce::String ("best") : juce::String ("quick");
+    mixJob.cancel();                                 // it may be rendering rows that go
+    if (choice == Choice::toggleRows)
+        stems.setStems (dir, song, ! stems.showsHarmony());
+    else if (HarmonyJob::qualityOf (dir) == quality)
+        stems.setStems (dir, song, true);            // that result is here: just show it
+    else
+    {
+        // The rows go first, so the player lets go of the files the new pass replaces when it ends.
+        if (stems.showsHarmony()) stems.setStems (dir, song, false);
+        harmonyJob.start (dir, proc.getPythonPath(), quality);
+    }
 }
 
 void StemSplitterEditor::updateHarmony()

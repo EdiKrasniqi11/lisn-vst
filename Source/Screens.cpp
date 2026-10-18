@@ -427,6 +427,9 @@ namespace
 
     struct ResetMenuLook : juce::LookAndFeel_V4
     {
+        explicit ResetMenuLook (const char* d = Icons::reset) : icon (d) {}
+        const char* icon;
+
         int getPopupMenuBorderSizeWithOptions (const juce::PopupMenu::Options&) override { return menuBorder; }
         void drawResizableFrame (juce::Graphics&, int, int, const juce::BorderSize<int>&) override {}   // PopupMenu's frame for a menu in a parent
 
@@ -455,9 +458,10 @@ namespace
                 g.setColour (Theme::cream.withAlpha (0.1f));
                 g.fillRoundedRectangle (r, 7.0f);
             }
-            const auto c = Theme::cream.withAlpha (item.isEnabled ? 1.0f : 0.38f);
+            const auto c = item.isTicked ? findColour (juce::PopupMenu::highlightedTextColourId)   // the current choice: accent
+                                         : Theme::cream.withAlpha (item.isEnabled ? 1.0f : 0.38f);
             g.setColour (c);
-            strokeIcon (g, Icons::reset, { r.getX() + 10.0f, r.getCentreY() - 7.0f, 14.0f, 14.0f }, 2.2f);
+            strokeIcon (g, icon, { r.getX() + 10.0f, r.getCentreY() - 7.0f, 14.0f, 14.0f }, 2.2f);
             text (g, Fonts::body (13.0f, 500), c, item.text, r.withLeft (r.getX() + 33.0f), juce::Justification::centredLeft);
         }
     };
@@ -644,7 +648,7 @@ juce::String beatsText (double beats)
     return s + (juce::exactlyEqual (q, 1.0) ? " beat" : " beats");
 }
 
-StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
+StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost), menuLook (std::make_unique<ResetMenuLook> (Icons::layers))
 {
     newSong.icon = Icons::plus;                    // 16 px, stroke 2; 34 tall, border 0.22, font 13: the defaults
     newSong.padLeft = 10.0f;
@@ -672,6 +676,7 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
 
 StemsScreen::~StemsScreen()
 {
+    juce::PopupMenu::dismissAllActiveMenus();        // an open Harmony Split menu draws with menuLook
     pool.removeAllJobs (true, 2000);
 }
 
@@ -682,6 +687,8 @@ void StemsScreen::setTheme (const Theme& t)
     loopButton.repaint();
     harmonyButton.tint = harmonyRows ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     harmonyButton.repaint();
+    menuLook->setColour (juce::PopupMenu::backgroundColourId, t.panelTint.withAlpha (0.94f));
+    menuLook->setColour (juce::PopupMenu::highlightedTextColourId, t.accent());
     speedStrip.setTheme (t);
     for (auto* r : rows)
         r->setTheme (t);
@@ -969,6 +976,35 @@ void StemsScreen::setHarmonyButton (const juce::String& text)
     harmonyButton.setButtonText (text);
     resized();                                       // its width follows its text
     repaint (19, 17, 674, 36);                       // the song name's room changes with it
+}
+
+juce::PopupMenu StemsScreen::harmonyMenu (const juce::String& resultQuality)
+{
+    // ponytail: minutes of work per minute of song, measured on the dev PC (16 threads) at Harmony Split's half the cores.
+    // Ask harmony_split.py to time a few seconds first if other PCs turn out far off.
+    const auto about = [this] (double perMinute)
+    {
+        const auto minutes = juce::jmax (1, juce::roundToInt (perMinute * length / 60.0));
+        return length > 0.0 ? ", about " + juce::String (minutes) + " min" : juce::String();
+    };
+    juce::PopupMenu menu;
+    menu.setLookAndFeel (menuLook.get());
+    const auto choose = [safe = SafePointer<StemsScreen> (this)] (HarmonyChoice c)
+    {
+        return [safe, c] { if (safe != nullptr && safe->onHarmonyChoice != nullptr) safe->onHarmonyChoice (c); };
+    };
+    menu.addItem ("Quick split" + about (1.7), true, resultQuality == "quick", choose (HarmonyChoice::quick));
+    menu.addItem ("Best quality" + about (5.3), true, resultQuality == "best", choose (HarmonyChoice::best));
+    if (resultQuality.isNotEmpty())
+        menu.addItem (harmonyRows ? "Hide Lead and Harmonies" : "Show Lead and Harmonies", choose (HarmonyChoice::toggleRows));
+    return menu;
+}
+
+void StemsScreen::showHarmonyMenu (const juce::String& resultQuality)
+{
+    auto* top = getTopLevelComponent();
+    harmonyMenu (resultQuality).showMenuAsync (juce::PopupMenu::Options().withParentComponent (top)
+                                                   .withTargetScreenArea (harmonyButton.getScreenBounds()));
 }
 
 void StemsScreen::toggleLoop()

@@ -162,7 +162,13 @@ public:
     void setHarmonyButton (const juce::String& text);
     juce::String harmonyText() const { return harmonyButton.getButtonText(); }   // test hook
     bool hasHarmonyButton() const { return harmonyButton.isVisible(); }          // test hook
-    std::function<void()> onHarmony;
+    std::function<void()> onHarmony;                 // a click on the button
+    // Its menu, under the button: Quick and Best quality with their time for this song (the result's quality ticked;
+    // "" = no result yet) and, with a result, Hide / Show the rows.
+    enum class HarmonyChoice { quick = 1, best, toggleRows };
+    juce::PopupMenu harmonyMenu (const juce::String& resultQuality);
+    void showHarmonyMenu (const juce::String& resultQuality);
+    std::function<void (HarmonyChoice)> onHarmonyChoice;
     juce::File getDir() const { return dir; }
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
     void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
@@ -258,6 +264,7 @@ private:
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };
     LisnButton harmonyButton { "Harmony Split", LisnButton::Style::Ghost };
     bool harmonyRows = false;
+    std::unique_ptr<juce::LookAndFeel> menuLook;     // the Harmony Split menu's look (the speed strip's, with the layers icon)
     DragChip dragChip;
     SpeedStrip speedStrip;
     LisnButton newSong;

@@ -9,11 +9,19 @@ bool HarmonyJob::hasResult (const juce::File& stemDir)
     return d.getChildFile ("lead.wav").existsAsFile() && d.getChildFile ("harmonies.wav").existsAsFile();
 }
 
-void HarmonyJob::start (const juce::File& dir, const juce::String& hint)
+juce::String HarmonyJob::qualityOf (const juce::File& stemDir)
+{
+    if (! hasResult (stemDir)) return {};
+    const auto q = dirFor (stemDir).getChildFile ("quality.txt").loadFileAsString().trim();   // the script writes it
+    return q == "best" ? q : "quick";
+}
+
+void HarmonyJob::start (const juce::File& dir, const juce::String& hint, const juce::String& q)
 {
     cancel();
     stemDir = dir;
     pythonHint = hint;
+    quality = q;
     error.clear();
     progress = 0.0f;
     state = State::running;
@@ -54,6 +62,7 @@ void HarmonyJob::run()
         cmd = { found.exe, "-I", script.getFullPathName(), stemDir.getChildFile ("vocals.wav").getFullPathName() };
     }
     cmd.add (part.getFullPathName());
+    cmd.add (quality);
 
     bool started = false;
     {
