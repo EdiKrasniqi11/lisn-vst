@@ -28,7 +28,7 @@ public:
 
     // The model file for "quick" / "best" in the engine (beside pythonExe's venv, if known) or in userModelDir(); or none.
     static juce::File findModel (const juce::String& quality, const juce::String& pythonExe);
-    static juce::File userModelDir();            // %LOCALAPPDATA%\LISN\models\harmony
+    static juce::File userModelDir();            // %LOCALAPPDATA%\LISN\models\harmony; ~/Library/Application Support/LISN/models/harmony on Mac
     // Downloads `url` to `dest` through dest.part and keeps it only if its SHA-256 is `sha256`. `progress` gets 0..1 and
     // returns false to stop. False on any failure or a stop; nothing half-done stays.
     static bool download (const juce::URL& url, const juce::String& sha256, const juce::File& dest,

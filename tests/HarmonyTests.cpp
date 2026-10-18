@@ -126,6 +126,12 @@ struct HarmonyTests : juce::UnitTest
             expect (none());
         }
 
+       #if ! JUCE_WINDOWS
+        beginTest ("the Best quality model folder is in Application Support");
+        expect (HarmonyJob::userModelDir().getFullPathName().endsWith ("Library/Application Support/LISN/models/harmony"),
+                HarmonyJob::userModelDir().getFullPathName());
+       #endif
+
         beginTest ("the header's name: StemSplitter or Harmonies");
         {
             Header hd;

@@ -34,7 +34,7 @@ juce::File HarmonyJob::userModelDir()
    #if JUCE_WINDOWS
     return juce::File::getSpecialLocation (juce::File::windowsLocalAppData).getChildFile ("LISN/models/harmony");
    #else
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("LISN/models/harmony");   // ~/Library/Application Support
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Application Support/LISN/models/harmony");   // on Mac that special location is ~/Library
    #endif
 }
 
