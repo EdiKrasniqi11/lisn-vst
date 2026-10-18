@@ -79,7 +79,7 @@ jobs:
       - name: Build
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
-          cmake --build build --parallel --target lisn_tests StemSplitter_VST3 StemSplitter_Standalone
+          cmake --build build --parallel --target lisn_tests StemSplitter_VST3 StemSplitter_Standalone -- -k 0
 
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure

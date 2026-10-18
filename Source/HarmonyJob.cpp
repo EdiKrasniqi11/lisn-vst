@@ -31,7 +31,11 @@ juce::String HarmonyJob::qualityOf (const juce::File& stemDir)
 
 juce::File HarmonyJob::userModelDir()
 {
+   #if JUCE_WINDOWS
     return juce::File::getSpecialLocation (juce::File::windowsLocalAppData).getChildFile ("LISN/models/harmony");
+   #else
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("LISN/models/harmony");   // ~/Library/Application Support
+   #endif
 }
 
 juce::File HarmonyJob::findModel (const juce::String& q, const juce::String& pythonExe)
