@@ -69,12 +69,8 @@ struct PythonFinderTests : juce::UnitTest
 
             const auto hint = fakePython ("hint");
             const juce::StringArray expected { hint, engine, path1, path2 };
-            expectEquals (pythonCandidates (hint, dirs).joinIntoString ("
-"), expected.joinIntoString ("
-"));
-            expectEquals (pythonCandidates ("python3", dirs).joinIntoString ("
-"), juce::StringArray { engine, path1, path2 }.joinIntoString ("
-"));   // a bare name is dropped
+            expectEquals (pythonCandidates (hint, dirs).joinIntoString ("\n"), expected.joinIntoString ("\n"));
+            expectEquals (pythonCandidates ("python3", dirs).joinIntoString ("\n"), juce::StringArray { engine, path1, path2 }.joinIntoString ("\n"));   // a bare name is dropped
             root.deleteRecursively();
         }
        #endif
