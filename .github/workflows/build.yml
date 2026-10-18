@@ -102,18 +102,55 @@ jobs:
           ditto -c -k --keepParent "build/StemSplitter_artefacts/Release/VST3/LISN StemSplitter.vst3" mac-build/vst3.zip
           ditto -c -k --keepParent "build/StemSplitter_artefacts/Release/Standalone/LISN StemSplitter.app" mac-build/app.zip
 
-      - name: Screenshot the desktop app
-        continue-on-error: true   # best effort: the runner may have no display
+      - name: Screenshot the desktop app and try its window
+        continue-on-error: true   # best effort: the runner may have no display; a failed check still shows red here
         run: |
+          fail=0
+          note() { echo "$*" | tee -a snapshots/mac-app-input.txt; }
+          winpos() { osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose name is "LISN StemSplitter")' | tr -d ,; }
           "build/StemSplitter_artefacts/Release/Standalone/LISN StemSplitter.app/Contents/MacOS/LISN StemSplitter" &
           app=$!
           sleep 8
           osascript -e 'tell application "System Events" to set frontmost of (first process whose name is "LISN StemSplitter") to true' || true
           sleep 2
           screencapture -x snapshots/mac-app.png
-          # the window's own size and position, as macOS reports them
-          osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose name is "LISN StemSplitter")' > snapshots/mac-app-window.txt || true
+          winpos > snapshots/mac-app-window.txt || true   # x, y, width, height as macOS reports them
+          cat snapshots/mac-app-window.txt
+
+          swiftc -O .github/mac-input.swift -o mac-input || { note "FAIL: could not build the input helper"; exit 1; }
+          read -r wx wy ww wh <<< "$(winpos)"
+          region="$wx,$wy,$ww,$wh"
+
+          # 1. A click at the Midnight pill's top (window 513, 30), inside the 48 px strip: the theme must change.
+          screencapture -x -R$region snapshots/mac-app-dusk.png
+          before=$(./mac-input lum snapshots/mac-app-dusk.png)
+          ./mac-input click $((wx + 513)) $((wy + 30))
+          sleep 1
+          screencapture -x -R$region snapshots/mac-app-midnight.png
+          after=$(./mac-input lum snapshots/mac-app-midnight.png)
+          if awk -v b="$before" -v a="$after" 'BEGIN { d = a - b; exit ! (d > 10 || d < -10) }'; then
+            note "PASS click: a click at window (513, 30) switched the theme (mean luminance $before -> $after)"
+          else
+            note "FAIL click: a click at window (513, 30) did not switch the theme (mean luminance $before -> $after)"; fail=1
+          fi
+
+          # 2. A drag from empty header space inside the strip (window 350, 30) moves the window; 3. so does one below it (350, 54).
+          check_drag() {   # name, start y in the window, expected dx, dy
+            read -r x0 y0 _ _ <<< "$(winpos)"
+            ./mac-input drag $((x0 + 350)) $((y0 + $2)) $3 $4
+            sleep 1
+            read -r x1 y1 _ _ <<< "$(winpos)"
+            if [ $((x1 - x0 - $3)) -ge -6 ] && [ $((x1 - x0 - $3)) -le 6 ] && [ $((y1 - y0 - $4)) -ge -6 ] && [ $((y1 - y0 - $4)) -le 6 ]; then
+              note "PASS $1: the window moved from ($x0, $y0) to ($x1, $y1) for a drag of ($3, $4)"
+            else
+              note "FAIL $1: the window went from ($x0, $y0) to ($x1, $y1) for a drag of ($3, $4)"; fail=1
+            fi
+          }
+          check_drag "drag in the strip" 30 60 40
+          check_drag "drag below the strip" 54 -60 -40
+
           kill $app || true
+          exit $fail
 
       - uses: actions/upload-artifact@v4
         with:
