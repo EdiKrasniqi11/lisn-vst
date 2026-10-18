@@ -6,6 +6,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_audio_plugin_client/juce_audio_plugin_client.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#include "MacWindow.h"
 #include "OpenWith.h"
 #include "PluginEditor.h"
 
@@ -30,14 +31,25 @@ public:
         : DocumentWindow (name, juce::Colours::black, minimiseButton | closeButton)
     {
         // Board 1A: no Windows title bar; the editor's header is the title bar (drag to move, Minimise / Close).
+        // On the Mac the window keeps macOS's own buttons (see makeTitleBarTransparent), over the header.
+       #if JUCE_MAC
+        setUsingNativeTitleBar (true);
+       #else
         setUsingNativeTitleBar (false);
+       #endif
         setTitleBarHeight (0);
         setResizable (false, false);
         setDropShadowEnabled (true);
         setContentOwned (editor, true);   // the window deletes the editor, before the holder deletes the processor
         centreWithSize (getWidth(), getHeight());
         if (auto* lisn = dynamic_cast<StemSplitterEditor*> (editor))
+        {
+           #if JUCE_MAC
+            lisn->makeTitleBar ({}, {});
+           #else
             lisn->makeTitleBar ([this] { setMinimised (true); }, [this] { closeButtonPressed(); });
+           #endif
+        }
     }
 
     juce::BorderSize<int> getBorderThickness() const override { return {}; }
@@ -47,6 +59,13 @@ public:
     void visibilityChanged() override   // Windows 11 rounds the frameless window's corners like other apps
     {
         DocumentWindow::visibilityChanged();
+       #if JUCE_MAC
+        if (isVisible() && ! titleBarDone)
+        {
+            makeTitleBarTransparent (*this);
+            titleBarDone = true;
+        }
+       #endif
        #if JUCE_WINDOWS
         if (auto* peer = getPeer())
         {
@@ -55,6 +74,9 @@ public:
         }
        #endif
     }
+
+private:
+    bool titleBarDone = false;   // the Mac window's title bar is set up once, when it first shows
 };
 
 class LisnApp : public juce::JUCEApplication

@@ -28,7 +28,8 @@ public:
     std::function<void (juce::String)> onTheme;    // "dusk" / "midnight"
     std::function<void (bool)> onSixStems;
     // The desktop app (board 1A): the header is the title bar. It reads "LISN" after the symbol, gets Minimise / Close after
-    // the pills, and a drag anywhere else (the symbol and text too) moves the window.
+    // the pills, and a drag anywhere else (the symbol and text too) moves the window. With no callbacks (the Mac, whose
+    // window has its own buttons) it adds no buttons and no separator.
     void makeTitleBar (std::function<void()> minimise, std::function<void()> close);
     // "Update 0.2.5" in a pill 16 px after the title (the update-notice mockup, option A); empty hides it.
     void showUpdate (const juce::String& version);
@@ -73,7 +74,7 @@ private:
     SegmentedPill themePill, stemsPill;
     WindowButton minimiseButton { false }, closeButton { true };
     UpdatePill update;
-    bool titleBar = false;
+    bool titleBar = false, nativeButtons = false;
     juce::ComponentDragger dragger;
 };
 

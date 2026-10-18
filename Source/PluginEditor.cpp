@@ -225,7 +225,8 @@ void StemSplitterEditor::changeListenerCallback (juce::ChangeBroadcaster*)
 void StemSplitterEditor::resized()
 {
     waves.setBounds (getLocalBounds());
-    header.setBounds (24, 16, 712, 44);
+    const auto lights = nativeButtons ? 64 : 0;      // the pills stay right-aligned at x 736
+    header.setBounds (24 + lights, 16, 712 - lights, 44);
     panelContent.setBounds (panel);
     for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmony, &error, &help })
         s->setBounds (panel.withZeroOrigin());

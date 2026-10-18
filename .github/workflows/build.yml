@@ -102,6 +102,17 @@ jobs:
           ditto -c -k --keepParent "build/StemSplitter_artefacts/Release/VST3/LISN StemSplitter.vst3" mac-build/vst3.zip
           ditto -c -k --keepParent "build/StemSplitter_artefacts/Release/Standalone/LISN StemSplitter.app" mac-build/app.zip
 
+      - name: Screenshot the desktop app
+        continue-on-error: true   # best effort: the runner may have no display
+        run: |
+          "build/StemSplitter_artefacts/Release/Standalone/LISN StemSplitter.app/Contents/MacOS/LISN StemSplitter" &
+          app=$!
+          sleep 8
+          screencapture -x snapshots/mac-app.png
+          # the window's own size and position, as macOS reports them
+          osascript -e 'tell application "System Events" to get {position, size} of window 1 of (first process whose name is "LISN StemSplitter")' > snapshots/mac-app-window.txt || true
+          kill $app || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: mac-snapshots

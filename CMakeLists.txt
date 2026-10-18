@@ -68,6 +68,9 @@ juce_add_plugin(StemSplitter
 
 # Source/StandaloneApp.cpp is LISN, the desktop app: JUCE's Standalone wrapper runs it instead of its own app class.
 target_sources(StemSplitter PRIVATE ${LISN_SOURCES} Source/StandaloneApp.cpp)
+if(APPLE)
+    target_sources(StemSplitter PRIVATE Source/MacWindow.mm)   # the desktop app's title bar over the header
+endif()
 
 target_compile_definitions(StemSplitter PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)

@@ -206,6 +206,7 @@ int runSnapshots (const juce::File& outDir)
                                     "    out = model(mix)\nRuntimeError: CUDA out of memory. Tried to allocate 1.20 GiB (GPU 0; 4.00 GiB total capacity)\n"
                                     "Could not separate the song.";
     const auto titleBar = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.makeTitleBar ([] {}, [] {}); };   // the desktop app
+    const auto macTitleBar = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.makeTitleBar ({}, {}); };   // Mac: macOS's own buttons
     const auto update = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().showUpdate ("0.2.5"); };
     auto harmonyState = state (Screen::Stems, false);
     harmonyState.stemDir = harmony;
@@ -230,6 +231,7 @@ int runSnapshots (const juce::File& outDir)
         { "drop-midnight@2x", "midnight", state (Screen::Drop, false), 2.0f },
         { "titlebar-dusk", "dusk", state (Screen::Drop, false), 1.0f, titleBar },
         { "titlebar-midnight", "midnight", state (Screen::Drop, false), 1.0f, titleBar },
+        { "titlebar-mac-dusk", "dusk", state (Screen::Drop, false), 1.0f, macTitleBar },
         { "titlebar-dusk@1.25x", "dusk", state (Screen::Drop, false), 1.25f, titleBar },
         { "titlebar-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f, titleBar },
         { "titlebar-midnight@2x", "midnight", state (Screen::Drop, false), 2.0f, titleBar },
@@ -283,6 +285,12 @@ int runSnapshots (const juce::File& outDir)
             waitForPeaks (ed);
         if (shot.before != nullptr)
             shot.before (proc, ed);
+        if (shot.name == "titlebar-mac-dusk" && ed.headerBar().getX() < 88)   // macOS's buttons take the first 64 px of the header row
+        {
+            std::printf ("FAIL: %s: the header starts at x=%d, under the window buttons
+", shot.name.toRawUTF8(), ed.headerBar().getX());
+            ++failures;
+        }
 
         const auto image = ed.createComponentSnapshot (ed.getLocalBounds(), true, shot.scale);
         images[shot.name] = image;

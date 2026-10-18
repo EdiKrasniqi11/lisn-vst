@@ -273,10 +273,14 @@ void Header::setEnabledSwitches (bool on)
 void Header::makeTitleBar (std::function<void()> minimise, std::function<void()> close)
 {
     titleBar = true;
-    minimiseButton.onClick = std::move (minimise);
-    closeButton.onClick = std::move (close);
-    addAndMakeVisible (minimiseButton);
-    addAndMakeVisible (closeButton);
+    nativeButtons = ! minimise && ! close;          // the Mac: macOS draws the buttons, LISN adds none
+    if (! nativeButtons)
+    {
+        minimiseButton.onClick = std::move (minimise);
+        closeButton.onClick = std::move (close);
+        addAndMakeVisible (minimiseButton);
+        addAndMakeVisible (closeButton);
+    }
     resized();
     repaint();
 }
@@ -336,7 +340,7 @@ void Header::paint (juce::Graphics& g)
             w.glyphs.draw (g, at);
         }
     }
-    if (titleBar)   // the 1 px separator between the pills and the window buttons
+    if (titleBar && ! nativeButtons)   // the 1 px separator between the pills and the window buttons
     {
         g.setColour (Theme::cream.withAlpha (0.24f));
         g.fillRect (minimiseButton.getX() - 11, 11, 1, 22);
@@ -346,7 +350,7 @@ void Header::paint (juce::Graphics& g)
 void Header::resized()
 {
     auto right = getWidth();
-    if (titleBar)   // board 1A: pills, 8 + 2 px, separator, 2 + 8 px, Minimise, 8 px, Close
+    if (titleBar && ! nativeButtons)   // board 1A: pills, 8 + 2 px, separator, 2 + 8 px, Minimise, 8 px, Close
     {
         closeButton.setBounds (right - 32, 6, 32, 32);
         minimiseButton.setBounds (closeButton.getX() - 8 - 32, 6, 32, 32);

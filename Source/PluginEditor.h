@@ -23,8 +23,14 @@ public:
     // The keyboard (the editor takes it on any click; see the constructor). Space, L, 1-6, Shift+1-6 and Home on the Stems
     // screen; every other key returns false, and JUCE passes it on to the host.
     bool keyPressed (const juce::KeyPress&) override;
-    // The desktop app's window: the header becomes its title bar (board 1A).
-    void makeTitleBar (std::function<void()> minimise, std::function<void()> close) { header.makeTitleBar (std::move (minimise), std::move (close)); }
+    // The desktop app's window: the header becomes its title bar (board 1A). With no callbacks (the Mac) macOS's own buttons
+    // sit over the header's first 64 px, so it starts there.
+    void makeTitleBar (std::function<void()> minimise, std::function<void()> close)
+    {
+        nativeButtons = ! minimise && ! close;
+        header.makeTitleBar (std::move (minimise), std::move (close));
+        resized();
+    }
     bool keyStateChanged (bool isKeyDown) override;
     void mouseDown (const juce::MouseEvent&) override;
     void setHelpOpen (bool);                         // the help sheet in the panel in place of the screen, the info button lit
@@ -85,6 +91,7 @@ private:
     HelpSheet help;
     InfoButton info;                                 // bottom-right corner: opens and closes the help sheet
     bool helpOpen = false;
+    bool nativeButtons = false;                      // the title bar's buttons are macOS's, not LISN's
     std::optional<UiState> forced, shown;
     juce::String appliedThemeId;
     std::unique_ptr<juce::FileChooser> chooser;
