@@ -6,6 +6,7 @@ struct PythonFinderTests : juce::UnitTest
 
     void runTest() override
     {
+       #if JUCE_WINDOWS   // the candidate paths and python.exe are Windows'; Task 2 adds the Mac cases
         beginTest ("candidate order");
         const auto root = juce::File::getSpecialLocation (juce::File::tempDirectory).getNonexistentChildFile ("lisn-pyfinder", {});
         auto fakePython = [&] (const char* dir)   // empty file standing in for python.exe

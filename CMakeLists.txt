@@ -43,6 +43,12 @@ set(LISN_SOURCES
     Source/UpdateCheck.cpp
     Source/HarmonyJob.cpp)
 
+if(APPLE)
+    set(LISN_VST3_COPY_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/VST3")
+else()
+    set(LISN_VST3_COPY_DIR "$ENV{USERPROFILE}/VST3")   # no admin needed; add this folder to the DAW's scan paths
+endif()
+
 juce_add_plugin(StemSplitter
     COMPANY_NAME "LISN"
     PLUGIN_MANUFACTURER_CODE Lisn
@@ -58,7 +64,7 @@ juce_add_plugin(StemSplitter
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     COPY_PLUGIN_AFTER_BUILD TRUE
-    VST3_COPY_DIR "$ENV{USERPROFILE}/VST3")   # no admin needed; add this folder to the DAW's scan paths
+    VST3_COPY_DIR "${LISN_VST3_COPY_DIR}")
 
 # Source/StandaloneApp.cpp is LISN, the desktop app: JUCE's Standalone wrapper runs it instead of its own app class.
 target_sources(StemSplitter PRIVATE ${LISN_SOURCES} Source/StandaloneApp.cpp)

@@ -29,13 +29,26 @@ struct HarmonyTests : juce::UnitTest
         return items;
     }
 
-    // A HarmonyJob running `script` (a .cmd file: %1 the .part dir, %2 the quality) in place of Python, until it leaves
-    // running or 10 s pass.
-    HarmonyJob::State runFake (HarmonyJob& job, const juce::File& dir, const juce::String& script, const juce::String& quality = "quick")
+    // Writes the fake pass (a .cmd batch file on Windows, a /bin/sh script on Mac: %1 / $1 the .part dir, %2 / $2 the
+    // quality) and returns the command that runs it in place of Python.
+    static juce::StringArray fakeCommand (const juce::File& file, const juce::String& windowsScript, const juce::String& shScript)
     {
-        const auto cmd = dir.getSiblingFile ("fake.cmd");
-        cmd.replaceWithText (script);
-        job.testCommand = { "cmd.exe", "/c", cmd.getFullPathName() };
+       #if JUCE_WINDOWS
+        file.replaceWithText (windowsScript);
+        return { "cmd.exe", "/c", file.getFullPathName() };
+       #else
+        juce::ignoreUnused (windowsScript);
+        file.replaceWithText (shScript);
+        file.setExecutePermission (true);
+        return { "/bin/sh", file.getFullPathName() };
+       #endif
+    }
+
+    // A HarmonyJob running a fake pass until it leaves running or 10 s pass.
+    HarmonyJob::State runFake (HarmonyJob& job, const juce::File& dir, const juce::String& windowsScript, const juce::String& shScript,
+                               const juce::String& quality = "quick")
+    {
+        job.testCommand = fakeCommand (dir.getSiblingFile (JUCE_WINDOWS ? "fake.cmd" : "fake.sh"), windowsScript, shScript);
         job.start (dir, {}, quality);
         for (int i = 0; i < 1000 && job.getState() == HarmonyJob::State::running; ++i) juce::Thread::sleep (10);
         return job.getState();
@@ -128,9 +141,13 @@ struct HarmonyTests : juce::UnitTest
             HarmonyJob job;
             const auto vocals = four.getChildFile ("vocals.wav").getFullPathName();
             expectEquals (HarmonyJob::qualityOf (four), juce::String());
-            const auto state = runFake (job, four, "@echo off\r\necho 37%%^|\r\ncopy /y \"" + vocals + "\" \"%~1\\lead.wav\" >nul\r\n"
-                                                    "copy /y \"" + vocals + "\" \"%~1\\harmonies.wav\" >nul\r\n"
-                                                    "echo %~2> \"%~1\\quality.txt\"\r\n", "best");
+            const auto state = runFake (job, four,
+                "@echo off\r\necho 37%%^|\r\ncopy /y \"" + vocals + "\" \"%~1\\lead.wav\" >nul\r\n"
+                "copy /y \"" + vocals + "\" \"%~1\\harmonies.wav\" >nul\r\n"
+                "echo %~2> \"%~1\\quality.txt\"\r\n",
+                "#!/bin/sh\necho '37%|'\ncp \"" + vocals + "\" \"$1/lead.wav\"\n"
+                "cp \"" + vocals + "\" \"$1/harmonies.wav\"\n"
+                "echo \"$2\" > \"$1/quality.txt\"\n", "best");
             expect (state == HarmonyJob::State::done, job.getError());
             expect (HarmonyJob::hasResult (four));
             expectEquals (HarmonyJob::qualityOf (four), juce::String ("best"));
@@ -142,7 +159,8 @@ struct HarmonyTests : juce::UnitTest
         beginTest ("a failed pass leaves nothing and keeps the script's words");
         {
             HarmonyJob job;
-            const auto state = runFake (job, four, "@echo off\r\necho NEEDS SETUP: no model\r\nexit /b 3\r\n");
+            const auto state = runFake (job, four, "@echo off\r\necho NEEDS SETUP: no model\r\nexit /b 3\r\n",
+                                    "#!/bin/sh\necho NEEDS SETUP: no model\nexit 3\n");
             expect (state == HarmonyJob::State::failed);
             expect (job.getError().contains ("NEEDS SETUP"), job.getError());
             expect (! four.getChildFile ("harmony").exists() && ! four.getChildFile ("harmony.part").exists());
@@ -151,9 +169,8 @@ struct HarmonyTests : juce::UnitTest
         beginTest ("cancel kills the pass, leaves nothing and goes back to idle");
         {
             HarmonyJob job;
-            const auto cmd = root.getChildFile ("fake.cmd");
-            cmd.replaceWithText ("@echo off\r\nping -n 4 127.0.0.1 >nul\r\n");
-            job.testCommand = { "cmd.exe", "/c", cmd.getFullPathName() };
+            job.testCommand = fakeCommand (root.getChildFile (JUCE_WINDOWS ? "fake.cmd" : "fake.sh"),
+                                           "@echo off\r\nping -n 4 127.0.0.1 >nul\r\n", "#!/bin/sh\nexec sleep 3\n");
             job.start (four, {});
             juce::Thread::sleep (300);
             expect (job.getState() == HarmonyJob::State::running);
@@ -162,7 +179,7 @@ struct HarmonyTests : juce::UnitTest
             expect (! four.getChildFile ("harmony").exists() && ! four.getChildFile ("harmony.part").exists());
         }
 
-        juce::Thread::sleep (3500);   // the orphaned ping lets go of the folder
+        juce::Thread::sleep (3500);   // the orphaned ping/sleep lets go of the folder
         root.deleteRecursively();
     }
 };
