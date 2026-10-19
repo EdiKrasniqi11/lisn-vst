@@ -56,6 +56,12 @@ struct UpdateCheckTests : juce::UnitTest
             expectEquals (calls, 2);                                         // offline: the stored one stays
             expectEquals (seen.getValue ("checked"), juce::String (now - 25 * hour));
 
+            seen.setValue ("checked", juce::String (now - 25 * hour));       // GitHub's error body: not a release
+            const auto before = seen.getValue ("release");
+            expectEquals (UpdateCheck::releaseFor (seen, now, [] { return juce::JSON::parse (R"({"message":"API rate limit exceeded"})"); })["tag_name"].toString(), juce::String ("v1.0.0"));
+            expectEquals (seen.getValue ("release"), before);
+            expectEquals (seen.getValue ("checked"), juce::String (now - 25 * hour));
+
             seen.removeValue ("release");                                    // a 0.2.5 cache: only the tag
             seen.setValue ("latest", "v0.9.0");
             seen.setValue ("checked", juce::String (now - hour));

@@ -59,7 +59,7 @@ juce::var UpdateCheck::releaseFor (juce::PropertiesFile& seen, juce::int64 nowMs
     auto release = juce::JSON::parse (seen.getValue ("release"));
     if (! release.isObject() || nowMs - seen.getValue ("checked").getLargeIntValue() > 24 * 60 * 60 * 1000)
     {
-        if (const auto fresh = fetch(); fresh.isObject())
+        if (const auto fresh = fetch(); fresh["tag_name"].toString().isNotEmpty())   // an error body has no tag: keep what's stored
         {
             release = fresh;
             seen.setValue ("release", juce::JSON::toString (fresh, true));
