@@ -75,7 +75,13 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     addAndMakeVisible (info);
 
     header.onTheme = [this] (juce::String id) { proc.setTheme (id); applyTheme (themeFor (id)); };
-    header.onSixStems = [this] (bool six) { mixJob.cancel(); proc.setSixStems (six); };   // which may re-split
+    header.onSixStems = [this] (bool six)            // which may re-split: not after an update changed the engine
+    {
+        if (updateBlocksJobs())
+            return header.setSixStems (proc.isSixStems());
+        mixJob.cancel();
+        proc.setSixStems (six);
+    };
     header.onHarmonyQuality = [this] (bool best)
     {
         const juce::String q = best ? "best" : "quick";
@@ -192,11 +198,12 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
             u.startDownload (UpdateCheck::getInstance()->getRelease());
         }
         if (u.getStep() != Updater::Step::ready) return;
-        // The engine's ready.txt: python is <engine>/venv/Scripts/python.exe (bin/python3 on the Mac).
+        // The engine's ready.txt: python is <engine>/venv/Scripts/python.exe (bin/python3 on the Mac). Before any job set
+        // it, the engine LISN would use: the installer's, in ProgramData (/Library/Application Support on the Mac).
         const auto python = proc.getPythonPath();
         u.install (juce::File::isAbsolutePath (python)
                        ? juce::File (python).getParentDirectory().getParentDirectory().getParentDirectory().getChildFile ("ready.txt")
-                       : juce::File());
+                       : PythonSearchDirs::fromEnvironment().programData.getChildFile ("LISN").getChildFile ("engine").getChildFile ("ready.txt"));
     };
     updatePanel.onWebsite = [this]
     {
@@ -275,7 +282,7 @@ void StemSplitterEditor::syncUpdate()
     {
         pillText = pill;
         pillVersion = version;
-        header.showUpdate (version, pill);
+        header.showUpdate (version, pill, pill.startsWith ("Restart") ? "Restart to finish" : juce::String());   // the panel names the host
     }
 
     auto view = View::whatsNew;
@@ -314,16 +321,27 @@ void StemSplitterEditor::loadScreenshots()
     shotsAsked = true;
     const auto urls = UpdateCheck::getInstance()->getRelease().screenshots;
     if (urls.isEmpty()) return;
+    // A closing editor's pool asks the job to stop and waits 5 s: it checks between URLs and 64 KB chunks, and a stalled
+    // connection gives up after 3 s, so it always returns in time.
     shotPool.addJob ([urls, safe = juce::Component::SafePointer<StemSplitterEditor> (this)]
     {
+        const auto stop = [] { auto* job = juce::ThreadPoolJob::getCurrentThreadPoolJob(); return job != nullptr && job->shouldExit(); };
         juce::Array<juce::Image> images;
         for (const auto& url : urls)
         {
-            juce::MemoryBlock data;   // readEntireBinaryStream, with a timeout so a closing editor never waits long
+            if (stop()) return;
+            juce::MemoryOutputStream data;
             if (auto in = juce::URL (url).createInputStream (juce::URL::InputStreamOptions (juce::URL::ParameterHandling::inAddress)
-                                                                  .withConnectionTimeoutMs (5000).withNumRedirectsToFollow (5)))
-                in->readIntoMemoryBlock (data);
-            if (auto img = juce::ImageFileFormat::loadFrom (data.getData(), data.getSize()); img.isValid())
+                                                                  .withConnectionTimeoutMs (3000).withNumRedirectsToFollow (5)))
+            {
+                juce::HeapBlock<char> chunk (65536);
+                for (int n; (n = in->read (chunk, 65536)) > 0;)
+                {
+                    if (stop()) return;
+                    data.write (chunk, (size_t) n);
+                }
+            }
+            if (auto img = juce::ImageFileFormat::loadFrom (data.getData(), data.getDataSize()); img.isValid())
                 images.add (img);
         }
         if (! images.isEmpty())   // none: the panel keeps the LISN symbol
@@ -336,7 +354,7 @@ void StemSplitterEditor::loadScreenshots()
 
 bool StemSplitterEditor::updateBlocksJobs()
 {
-    if (! live || ! Updater::getInstance()->engineChanged()) return false;
+    if (! engineChangedForTests && ! (live && Updater::getInstance()->engineChanged())) return false;
     const bool right = shown.has_value() && shown->harmoniesProduct;
     error.setRestart (hostName());
     errorOnRight = right;

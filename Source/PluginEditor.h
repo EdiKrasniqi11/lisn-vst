@@ -6,6 +6,7 @@
 #include "UiState.h"
 #include "UpdateCheck.h"
 #include "Updater.h"
+#include "PythonFinder.h"
 #include "WaveBackground.h"
 #include <optional>
 
@@ -52,6 +53,7 @@ public:
     StemsScreen& stemsScreen() { return stems; }
     HelpSheet& helpSheet() { return help; }
     UpdateScreen& updateScreen() { return updatePanel; }
+    void setEngineChangedForTests() { engineChangedForTests = true; }   // as if an install changed the engine
     HarmonyScreen& harmonyScreen() { return harmony; }
     ErrorScreen& errorScreen() { return error; }
     HarmonyDropScreen& harmonyDropScreen() { return harmonyDrop; }
@@ -103,7 +105,7 @@ private:
     juce::TooltipWindow tooltips { this };           // the choir icon's and the Best side's tooltips
     bool helpOpen = false, updateOpen = false;
     bool live = false, standaloneApp = false;        // a real plugin or the app (not the tests); the desktop app
-    bool shotsAsked = false, quitAsked = false;
+    bool shotsAsked = false, quitAsked = false, engineChangedForTests = false;
     juce::String pillText, pillVersion;              // what the header's pill shows
     bool nativeButtons = false;                      // the title bar's buttons are macOS's, not LISN's
     std::optional<UiState> forced, shown;

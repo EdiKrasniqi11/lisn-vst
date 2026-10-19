@@ -270,7 +270,7 @@ int runSnapshots (const juce::File& outDir)
         return Setup ([=] (StemSplitterProcessor&, StemSplitterEditor& ed)
         {
             if (standalone) ed.makeTitleBar ([] {}, [] {});
-            ed.headerBar().showUpdate ("0.3.1", pill);
+            ed.headerBar().showUpdate ("0.3.1", pill, pill.startsWith ("Restart") ? "Restart to finish" : juce::String());
             ed.setUpdateOpen (true);
             auto& u = ed.updateScreen();
             u.setRelease (release, "0.3.0");
@@ -338,6 +338,8 @@ int runSnapshots (const juce::File& outDir)
         { "harmony-splitting-dusk", "dusk", harmonyWorking (0.42f, false) },
         { "harmony-downloading-midnight", "midnight", harmonyWorking (0.1f, true), 1.0f, best },
         { "harmony-reel-dusk", "dusk", harmonyState, 1.0f, reelMid },
+        { "update-restart-harmonies-dusk", "dusk", harmonies (Screen::HarmonyDrop), 1.0f, [] (StemSplitterProcessor&, StemSplitterEditor& ed)
+            { ed.headerBar().showUpdate ("0.3.1", "Restart FL Studio to finish", "Restart to finish"); } },
     };
 
     int failures = 0;

@@ -101,10 +101,26 @@ struct UpdateCheckTests : juce::UnitTest
             juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
             expectEquals (clicks, 1);
 
-            // A plugin's long text takes the name's place, clear of the pills (the desktop app's longest is "Downloading 99%").
-            h.showUpdate ("0.2.5", titleBar ? "Downloading 99%" : "Restart FL Studio to finish");
-            expect (pill->getButtonText() != "Update 0.2.5");
-            expect (pill->isVisible() && pill->getRight() + 12 <= firstPill->getX(), juce::String (pill->getRight()));
+            // The longest texts stay clear of the pills: the desktop app's "Downloading 99%"; in a plugin "Restart FL Studio
+            // to finish" becomes "Restart to finish" after the name, on StemSplitter and on Harmonies alike.
+            if (titleBar)
+            {
+                h.showUpdate ("0.2.5", "Downloading 99%");
+                expect (pill->isVisible() && pill->getRight() + 12 <= firstPill->getX(), juce::String (pill->getRight()));
+            }
+            else
+                for (const bool harmonies : { false, true })
+                {
+                    h.spinTo (harmonies, false);
+                    h.showUpdate ("0.2.5", "Restart FL Studio to finish", "Restart to finish");
+                    expect (pill->isVisible(), "on Harmonies: " + juce::String ((int) harmonies));
+                    expectEquals (pill->getButtonText(), juce::String ("Restart to finish"));
+                    expect (pill->getX() > 200, juce::String (pill->getX()));   // after "LISN StemSplitter", never over it
+                    expect (pill->getRight() + 12 <= firstPill->getX(), juce::String (pill->getRight()));
+                    h.showUpdate ("0.2.5", "Restart Ableton Live to finish", "Restart to finish");
+                    expect (pill->getRight() + 12 <= firstPill->getX(), juce::String (pill->getRight()));
+                }
+            h.spinTo (false, false);
 
             h.showUpdate ({});
             expect (! pill->isVisible());
@@ -132,6 +148,23 @@ struct UpdateCheckTests : juce::UnitTest
             expect (panel.isVisible() && ! ed.helpSheet().isVisible());
             panel.onLater();                                 // Later: back to the screen that was there
             expect (! panel.isVisible() && ! ed.helpSheet().isVisible() && ed.errorScreen().isVisible());
+        }
+        {
+            // An install changed the engine: no split starts, from a drop or from the 4/6 switch; the Error screen says why.
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            StemSplitterEditor ed (proc);
+            ed.forceState (UiState());
+            ed.tick();
+            ed.setEngineChangedForTests();
+            expect (! ed.errorScreen().isVisible());
+            const auto song = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("lisn-gate-test.wav");
+            ed.filesDropped ({ song.getFullPathName() }, 0, 0);
+            expect (proc.job.getState() != JobState::Running && proc.getLastInput() != song);
+            expect (ed.errorScreen().isVisible());
+            ed.headerBar().onSixStems (true);
+            expect (! proc.isSixStems() && proc.job.getState() != JobState::Running);
+            expect (ed.errorScreen().isVisible());
         }
         {
             UpdateScreen u;

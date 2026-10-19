@@ -131,22 +131,25 @@ Header::Header()
     addChildComponent (update);
 }
 
-void Header::showUpdate (const juce::String& version, const juce::String& label)
+void Header::showUpdate (const juce::String& version, const juce::String& label, const juce::String& shortLabel)
 {
-    update.setButtonText (label.isNotEmpty() ? label : "Update " + version);
     updateVersion = version;
+    updateLabel = label.isNotEmpty() ? label : "Update " + version;
+    updateShortLabel = shortLabel;
     placeUpdate();
 }
 
 void Header::placeUpdate()
 {
-    // The title bar has no room for the name and the pill, nor the plugin's header for a long pill ("Restart FL Studio to
-    // finish"): the pill takes the name's place (after "LISN") while it rests on StemSplitter, and steps aside while the
-    // reel spins to or shows Harmonies.
+    // The title bar has no room for the name and the pill: the pill takes the name's place (after "LISN") while it rests
+    // on StemSplitter, and steps aside while the reel spins to or shows Harmonies. In a plugin it stays after the name,
+    // with the short text when the long one would reach the theme pill.
     const auto reelBusy = spinning || reelTarget > 0.0 || reelPos != 0.0;
-    pillOverName = titleBar || nameArea().getRight() - 4 + 16 + update.preferredWidth() + 12 > themePill.getX();
-    update.setVisible (updateVersion.isNotEmpty() && ! (pillOverName && reelBusy));
-    const auto x = pillOverName ? juce::roundToInt (title.getBoundingBox (0, -1, true).getRight()) : nameArea().getRight() - 4;
+    update.setVisible (updateVersion.isNotEmpty() && ! (titleBar && reelBusy));
+    const auto x = titleBar ? juce::roundToInt (title.getBoundingBox (0, -1, true).getRight()) : nameArea().getRight() - 4;
+    update.setButtonText (updateLabel);
+    if (! titleBar && updateShortLabel.isNotEmpty() && x + 16 + update.preferredWidth() + 12 > themePill.getX())
+        update.setButtonText (updateShortLabel);
     update.setBounds (x + 16, 9, update.preferredWidth(), 26);   // 16 px after the title, centred on the capitals (y 22)
     repaint (nameArea().expanded (14, 0));
 }
@@ -362,7 +365,7 @@ void Header::paint (juce::Graphics& g)
 
     g.setColour (Theme::cream);
     title.draw (g);
-    if (! (pillOverName && update.isVisible()))      // the update pill sits where the name goes
+    if (! (titleBar && update.isVisible()))          // in the title bar the update pill sits where the name goes
     {
         // The reel: the words around reelPos, faded by their distance from the line. Mid-spin each word leaves two faint
         // copies along its path (motion blur); the landed "Harmonies" glows for 1.2 s.
@@ -2335,7 +2338,7 @@ void UpdateScreen::refresh()
             if (v == View::installing) label = "Installing" + ellipsis;
             break;
         case View::installed:      message = "Installed. " + next; break;
-        case View::waiting:        message = "Finish in the Installer. " + next; break;
+        case View::waiting:        message = app ? juce::String ("Finish in the Installer.") : "Finish in the Installer. " + next; break;   // the app quits
         case View::failedDownload: message = "The download didn't finish."; label = "Try again"; break;
         case View::failedInstall:  message = "The update didn't install."; label = "Try again"; break;
         case View::inUse:          message = "Close " + host + ", then click Install"; break;
@@ -2392,12 +2395,13 @@ void UpdateScreen::resized()
 
     // The notes, 10 px apart, as far as they fit above the buttons; "...and more" under them.
     auto notesBottom = bodyY;
+    bool cut = false;
     for (const auto& n : notes)
     {
-        if (notesBottom + n.getHeight() > buttonY - 40.0f) break;   // ponytail: notes that don't fit are cut; the link stays
+        if (notesBottom + n.getHeight() > buttonY - 40.0f) { cut = true; break; }   // ponytail: cut notes are on the release page
         notesBottom += n.getHeight() + 10.0f;
     }
-    more.setVisible (view == View::whatsNew && release.moreNotes);
+    more.setVisible (view == View::whatsNew && (release.moreNotes || cut));
     more.setBounds (juce::roundToInt (columnX + 16.0f), juce::roundToInt (notesBottom - 4.0f),
                     juce::roundToInt (juce::GlyphArrangement::getStringWidth (Fonts::body (14.0f), more.getButtonText()) + 4.0f), 22);
 

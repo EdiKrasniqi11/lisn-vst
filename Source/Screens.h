@@ -40,8 +40,9 @@ public:
     // window has its own buttons) it adds no buttons and no separator.
     void makeTitleBar (std::function<void()> minimise, std::function<void()> close);
     // "Update 0.2.5" in a pill 16 px after the title (the update-notice mockup, option A); an empty version hides it.
-    // `text` replaces "Update <version>" ("Downloading 58%", "Restart FL Studio to finish").
-    void showUpdate (const juce::String& version, const juce::String& text = {});
+    // `text` replaces "Update <version>" ("Downloading 58%", "Restart FL Studio to finish"); in a plugin, `shortText`
+    // ("Restart to finish") replaces it when it wouldn't fit after the name.
+    void showUpdate (const juce::String& version, const juce::String& text = {}, const juce::String& shortText = {});
     std::function<void()> onUpdate;
     // The name after "LISN" is a slot reel (the Harmony Split canvas, Main and Reel boards): spinTo (true) spins up through
     // the stem names in their colours and lands on "Harmonies" (a gold glow) in 1.9 s; spinTo (false) spins back to
@@ -76,7 +77,7 @@ private:
     double reelStart = 0.0, reelMs = 0.0, landedAt = 0.0;     // ms
     bool spinning = false, nameClickable = false;
     std::unique_ptr<juce::VBlankAttachment> reelFrames;      // while spinning or glowing
-    juce::String updateVersion;
+    juce::String updateVersion, updateLabel, updateShortLabel;
     void placeUpdate();                            // the update pill's place and visibility (see showUpdate)
     void makeReel (const Theme&);
     void reelFrame();
@@ -87,7 +88,6 @@ private:
     WindowButton minimiseButton { false }, closeButton { true };
     UpdatePill update;
     bool titleBar = false, nativeButtons = false;
-    bool pillOverName = false;                     // the update pill sits after "LISN" (see placeUpdate)
     juce::ComponentDragger dragger;
 };
 
