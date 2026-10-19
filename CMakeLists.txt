@@ -41,6 +41,7 @@ set(LISN_SOURCES
     Source/Screens.cpp
     Source/RenderJob.cpp
     Source/UpdateCheck.cpp
+    Source/ReleaseInfo.cpp
     Source/HarmonyJob.cpp
     Source/HarmonyFlow.cpp)
 
@@ -99,6 +100,7 @@ target_sources(lisn_tests PRIVATE
     tests/OpenWithTests.cpp
     tests/RenderJobTests.cpp
     tests/UpdateCheckTests.cpp
+    tests/ReleaseInfoTests.cpp
     tests/HarmonyTests.cpp
     tests/HarmonyFlowTests.cpp
     tests/Snapshots.cpp)
