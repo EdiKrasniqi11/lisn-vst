@@ -274,10 +274,12 @@ Their full licence texts are inside the engine (the Python install and its site-
 - The Demucs models htdemucs and htdemucs_6s, from Hugging Face (adefossez).
 - ONNX Runtime 1.31.0 by Microsoft: MIT License.
 - rotary-embedding-torch 0.6.5 by Phil Wang: MIT License.
-- Harmony Split's karaoke models from Ultimate Vocal Remover's public model set (github.com/TRvlvr/model_repo):
-  UVR-MDX-NET Karaoke 2 (installed with the engine) and the Mel-Band RoFormer karaoke model by aufr33 and viperx
-  (downloaded by the app when Best quality is first picked, into %LOCALAPPDATA%\LISN\models\harmony).
-  [Licence and permission to redistribute: to be confirmed with the authors before release.]
+- Harmony Split's karaoke models, from Ultimate Vocal Remover's public model set (github.com/TRvlvr/model_repo).
+  LISN does not include them: they are downloaded from that repository onto your computer, the way UVR itself does.
+  - UVR-MDX-NET Karaoke 2, by the Ultimate Vocal Remover team (Anjok07, aufr33), credited under UVR's MIT License
+    (github.com/Anjok07/ultimatevocalremovergui). Downloaded when the engine is installed.
+  - The Mel-Band RoFormer karaoke model by aufr33 and viperx. Downloaded by the app when Best quality is first picked,
+    into %LOCALAPPDATA%\LISN\models\harmony.
 - The other dependencies listed in requirements.txt, each under its own licence.
 
 ================================================================================
