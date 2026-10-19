@@ -10,14 +10,6 @@ struct HarmonyTests : juce::UnitTest
 {
     HarmonyTests() : juce::UnitTest ("Harmony Split") {}
 
-    static juce::StringArray menuItems (const juce::PopupMenu& m)   // "text", or "text [ticked]"
-    {
-        juce::StringArray items;
-        for (juce::PopupMenu::MenuItemIterator it (m); it.next();)
-            items.add (it.getItem().text + (it.getItem().isTicked ? " [ticked]" : ""));
-        return items;
-    }
-
     // A HarmonyJob running a fake pass until it leaves running or 10 s pass.
     HarmonyJob::State runFake (HarmonyJob& job, const juce::File& dir, const juce::String& windowsScript, const juce::String& shScript,
                                const juce::String& quality = "quick")
@@ -37,22 +29,96 @@ struct HarmonyTests : juce::UnitTest
         for (auto stem : { "vocals", "drums", "bass", "guitar", "piano", "other" })
             writeWav (six.getChildFile (juce::String (stem) + ".wav"));
 
-        beginTest ("the button is on 4-stem splits only; its menu ticks the result's quality and opens it");
+        beginTest ("the choir icon is on 4-stem splits only, has no text and says Harmonies");
         {
             StemsScreen s;
             s.setBounds (0, 0, 712, 398);
             s.setStems (four, "Song");
             expect (s.hasHarmonyButton());
             expectEquals (s.numRows(), 4);                   // Lead and Harmonies live on their own screen
+            expectEquals (s.harmonyText(), juce::String());
+            expectEquals (s.harmonyControl().getTooltip(), juce::String ("Harmonies"));
+            expectEquals (s.harmonyControl().getWidth(), s.harmonyControl().getHeight());   // square
+            int clicks = 0;
+            s.onHarmony = [&] { ++clicks; };
+            s.harmonyControl().onClick();
+            expectEquals (clicks, 1);
             s.setStems (six, "Song");
             expect (! s.hasHarmonyButton());
+        }
 
-            s.setHarmonyButton ("Splitting 42%");
-            expectEquals (s.harmonyText(), juce::String ("Splitting 42%"));
-            expectEquals (menuItems (s.harmonyMenu ({}, false)).joinIntoString ("|"),
-                          juce::String ("Quick split|Best quality, 900 MB download first"));
-            expectEquals (menuItems (s.harmonyMenu ("best", true)).joinIntoString ("|"),
-                          juce::String ("Quick split|Best quality [ticked]|Open Harmonies"));
+        beginTest ("Harmonies' drop screen: the offer shows the song, Browse and the offer call back");
+        {
+            HarmonyDropScreen d;
+            d.setBounds (0, 0, 712, 398);
+            d.setOffer ({});
+            expect (! d.offerButton().isVisible());
+            d.setOffer ("Liberian Girl");
+            expect (d.offerButton().isVisible());
+            expectEquals (d.offerButton().getButtonText(), juce::String ("Split the harmonies of Liberian Girl"));
+            expect (d.offerButton().getRight() <= 712);
+            int offered = 0, browsed = 0;
+            d.onOffer = [&] { ++offered; };
+            d.onBrowse = [&] { ++browsed; };
+            d.offerButton().onClick();
+            d.browseButton().onClick();
+            expectEquals (offered, 1);
+            expectEquals (browsed, 1);
+            d.setOffer (juce::String::repeatedString ("A very long song name ", 10));    // elided, never wider than the zone
+            expect (d.offerButton().getX() >= 20 && d.offerButton().getRight() <= 692);
+            d.setOffer ({});
+            expect (! d.offerButton().isVisible());
+        }
+
+        beginTest ("Harmonies' progress screen: the step's words and its percentage");
+        {
+            HarmonySplittingScreen p;
+            p.setBounds (0, 0, 712, 398);
+            p.setSong ("Liberian Girl");
+            p.setStep (1, 0.5f, false);
+            expectEquals (p.stepLabel (1), juce::String ("Finding the vocals"));
+            expectEquals (p.percentText(), juce::String ("50%"));
+            p.setStep (2, 0.42f, false);
+            expectEquals (p.stepLabel (2), juce::String ("Splitting the harmonies"));
+            expectEquals (p.percentText(), juce::String ("42%"));
+            p.setStep (2, 0.1f, true);
+            expectEquals (p.stepLabel (2), juce::String ("Downloading the Best quality model"));
+            expectEquals (p.percentText(), juce::String ("10%"));
+            int cancelled = 0;
+            p.onCancel = [&] { ++cancelled; };
+            p.cancelButton().onClick();
+            expectEquals (cancelled, 1);
+        }
+
+        beginTest ("the header's second pill: 4 stems | 6 stems, or Quick | Best quality in Harmonies");
+        {
+            Header hd;
+            hd.setBounds (24, 16, 712, 44);
+            expectEquals (hd.stemsPillControl().getItems().joinIntoString ("|"), juce::String ("4 stems|6 stems"));
+            hd.setSixStems (true);
+            hd.setProduct (true);
+            expectEquals (hd.stemsPillControl().getItems().joinIntoString ("|"), juce::String ("Quick|Best quality"));
+            expectEquals (hd.stemsPillControl().getSelected(), 0);        // the quality, not the 6 stems
+            hd.setHarmonyQuality (true);
+            expectEquals (hd.stemsPillControl().getSelected(), 1);
+            bool best = false;
+            hd.onHarmonyQuality = [&] (bool b) { best = b; };
+            hd.stemsPillControl().onChange (0);
+            expect (! best);
+            hd.setBestTooltip (true);
+            expectEquals (hd.stemsPillControl().tooltipFor (1), juce::String ("900 MB download first"));
+            expectEquals (hd.stemsPillControl().tooltipFor (0), juce::String());
+            hd.setBestTooltip (false);
+            expectEquals (hd.stemsPillControl().tooltipFor (1), juce::String());
+            hd.setProduct (false);
+            expectEquals (hd.stemsPillControl().getItems().joinIntoString ("|"), juce::String ("4 stems|6 stems"));
+            expectEquals (hd.stemsPillControl().getSelected(), 1);        // the 6 stems are back
+            bool sixPicked = false;
+            hd.onSixStems = [&] (bool b) { sixPicked = b; };
+            hd.stemsPillControl().onChange (0);
+            expect (! sixPicked);
+            hd.setBestTooltip (true);                        // not in StemSplitter
+            expectEquals (hd.stemsPillControl().tooltipFor (1), juce::String());
         }
 
         beginTest ("the Harmonies screen: Lead and Harmonies files, faders both ways");
@@ -72,6 +138,12 @@ struct HarmonyTests : juce::UnitTest
             expectEquals (h.fader (0).getValue(), 0.25f);
             h.setAudible (1u);                               // Lead soloed: Harmonies dims
             h.setPlayback (true, 0.5, 60.0);
+            int newSongs = 0;
+            h.onNewSong = [&] { ++newSongs; };
+            expectEquals (h.newSongButton().getButtonText(), juce::String ("New song"));
+            expect (h.newSongButton().getRight() < h.backButton().getX());   // left of "All stems"
+            h.newSongButton().onClick();
+            expectEquals (newSongs, 1);
         }
 
         beginTest ("a model download keeps the file only when its hash matches, and leaves nothing when stopped");

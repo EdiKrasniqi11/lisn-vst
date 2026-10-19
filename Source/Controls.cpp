@@ -12,7 +12,18 @@ namespace
 
 SegmentedPill::SegmentedPill (juce::StringArray itemTexts) : items (std::move (itemTexts))
 {
-    // The texts and font never change, so shape them once: the pill repaints on every motion frame.
+    shape();
+    for (int i = 0; i < items.size(); ++i)
+        tips.add ({});
+    setWantsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    setBufferedToImage (true);   // the header repaints with every motion frame; the pill itself rarely changes
+}
+
+void SegmentedPill::shape()
+{
+    // The texts and font rarely change, so shape them once: the pill repaints on every motion frame.
+    itemRects.clear();
     auto x = pillInset;
     for (const auto& item : items)
     {
@@ -21,10 +32,30 @@ SegmentedPill::SegmentedPill (juce::StringArray itemTexts) : items (std::move (i
         x += w + pillGap;
     }
     prefWidth = items.isEmpty() ? (int) (2 * pillInset) : (int) std::ceil (itemRects.getLast().getRight() + pillInset);
+}
 
-    setWantsKeyboardFocus (false);
-    setMouseCursor (juce::MouseCursor::PointingHandCursor);
-    setBufferedToImage (true);   // the header repaints with every motion frame; the pill itself rarely changes
+void SegmentedPill::setItems (juce::StringArray newItems)
+{
+    jassert (newItems.size() == items.size());
+    if (newItems == items) return;
+    items = std::move (newItems);
+    shape();
+    repaint();
+}
+
+void SegmentedPill::setItemTooltip (int index, const juce::String& tip)
+{
+    if (juce::isPositiveAndBelow (index, tips.size()))
+        tips.set (index, tip);
+}
+
+juce::String SegmentedPill::getTooltip()
+{
+    const auto p = getMouseXYRelative().toFloat();
+    for (int i = 0; i < items.size(); ++i)
+        if (itemRects[i].contains (p))
+            return tips[i];
+    return {};
 }
 
 void SegmentedPill::setSelected (int index)

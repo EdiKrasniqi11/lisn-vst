@@ -68,6 +68,29 @@ namespace
                              juce::roundToInt (area.getWidth()), j, leading);
     }
 
+    // The "You'll get" chips: 28 tall, padding 0 12 0 10, an 8 px dot, 7 px, Bold 12; 6 px apart, centred.
+    void chipRow (juce::Graphics& g, float y, const juce::StringArray& names, const juce::Array<juce::Colour>& dots)
+    {
+        const auto chipFont = Fonts::body (12.0f, 700);
+        juce::Array<float> widths;
+        auto total = -6.0f;
+        for (const auto& name : names)
+        {
+            widths.add (10.0f + 8.0f + 7.0f + juce::GlyphArrangement::getStringWidth (chipFont, name) + 12.0f);
+            total += widths.getLast() + 6.0f;
+        }
+        auto x = centreX - total / 2.0f;
+        for (int i = 0; i < names.size(); ++i)
+        {
+            g.setColour (Theme::cream.withAlpha (0.08f));
+            g.fillRoundedRectangle (x, y, widths[i], 28.0f, 14.0f);
+            g.setColour (dots[i]);
+            g.fillEllipse (x + 10.0f, y + 10.0f, 8.0f, 8.0f);
+            text (g, chipFont, Theme::cream, names[i], { x + 25.0f, y, widths[i], 28.0f }, juce::Justification::centredLeft);
+            x += widths[i] + 6.0f;
+        }
+    }
+
     juce::String pipFor (const juce::String& exe) { return "\"" + exe + "\" -m pip install demucs"; }
 
     // pipFor (exe) with the middle folders of exe replaced by "..." until it fits; the drive and the last two parts stay.
@@ -97,7 +120,11 @@ Header::Header()
     makeReel (themeFor ("dusk"));
 
     themePill.onChange = [this] (int i) { if (onTheme != nullptr) onTheme (i == 1 ? "midnight" : "dusk"); };
-    stemsPill.onChange = [this] (int i) { if (onSixStems != nullptr) onSixStems (i == 1); };
+    stemsPill.onChange = [this] (int i)
+    {
+        if (harmoniesPill) { bestSelected = i == 1; if (onHarmonyQuality != nullptr) onHarmonyQuality (bestSelected); }
+        else               { sixSelected = i == 1;  if (onSixStems != nullptr) onSixStems (sixSelected); }
+    };
     addAndMakeVisible (themePill);
     addAndMakeVisible (stemsPill);
     update.onClick = [this] { if (onUpdate != nullptr) onUpdate(); };
@@ -258,7 +285,35 @@ void Header::setTheme (const Theme& t)
 
 void Header::setSixStems (bool six)
 {
-    stemsPill.setSelected (six ? 1 : 0);
+    sixSelected = six;
+    refreshStemsPill();
+}
+
+void Header::setProduct (bool harmonies)
+{
+    harmoniesPill = harmonies;
+    refreshStemsPill();
+}
+
+void Header::setHarmonyQuality (bool best)
+{
+    bestSelected = best;
+    refreshStemsPill();
+}
+
+void Header::setBestTooltip (bool show)
+{
+    bestTip = show;
+    refreshStemsPill();
+}
+
+void Header::refreshStemsPill()
+{
+    stemsPill.setItems (harmoniesPill ? juce::StringArray { "Quick", "Best quality" } : juce::StringArray { "4 stems", "6 stems" });
+    stemsPill.setSelected ((harmoniesPill ? bestSelected : sixSelected) ? 1 : 0);
+    stemsPill.setItemTooltip (1, harmoniesPill && bestTip ? "900 MB download first" : "");
+    if (stemsPill.getWidth() != stemsPill.preferredWidth())
+        resized();                                     // "Best quality" is wider than "6 stems"
 }
 
 void Header::setEnabledSwitches (bool on)
@@ -469,29 +524,15 @@ void DropScreen::paint (juce::Graphics& g)
     text (g, small, Theme::cream.withAlpha (0.62f), "You'll get these stems", { 0.0f, y, panelW, small.getHeight() });
     y += small.getHeight() + 8.0f;
 
-    // Chips: 28 tall, padding 0 12 0 10, an 8 px dot, 7 px, Bold 12; 6 px apart, centred.
-    const auto chipFont = Fonts::body (12.0f, 700);
     const auto keys = stemKeys (six);
     juce::StringArray names;
-    juce::Array<float> widths;
-    auto total = -6.0f;
+    juce::Array<juce::Colour> dots;
     for (const auto& k : keys)
     {
-        const auto name = k.substring (0, 1).toUpperCase() + k.substring (1);
-        names.add (name);
-        widths.add (10.0f + 8.0f + 7.0f + juce::GlyphArrangement::getStringWidth (chipFont, name) + 12.0f);
-        total += widths.getLast() + 6.0f;
+        names.add (k.substring (0, 1).toUpperCase() + k.substring (1));
+        dots.add (theme.stemColour (k));
     }
-    auto x = centreX - total / 2.0f;
-    for (int i = 0; i < keys.size(); ++i)
-    {
-        g.setColour (Theme::cream.withAlpha (0.08f));
-        g.fillRoundedRectangle (x, y, widths[i], 28.0f, 14.0f);
-        g.setColour (theme.stemColour (keys[i]));
-        g.fillEllipse (x + 10.0f, y + 10.0f, 8.0f, 8.0f);
-        text (g, chipFont, Theme::cream, names[i], { x + 25.0f, y, widths[i], 28.0f }, juce::Justification::centredLeft);
-        x += widths[i] + 6.0f;
-    }
+    chipRow (g, y, names, dots);
 }
 
 //==============================================================================
@@ -580,6 +621,208 @@ void SplittingScreen::paint (juce::Graphics& g)
 
     paragraph (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.6f), note, { centreX - 210.0f, y, 420.0f, 0.0f }, 18.0f,
                juce::Justification::centred);
+}
+
+//==============================================================================
+HarmonyDropScreen::HarmonyDropScreen()
+    : offer ({}, LisnButton::Style::Primary), browse (juce::String (juce::CharPointer_UTF8 ("Browse\xe2\x80\xa6")), LisnButton::Style::Primary)
+{
+    offer.onClick = [this] { if (onOffer != nullptr) onOffer(); };
+    browse.onClick = [this] { if (onBrowse != nullptr) onBrowse(); };
+    addChildComponent (offer);
+    addAndMakeVisible (browse);
+}
+
+void HarmonyDropScreen::setTheme (const Theme& t)
+{
+    theme = t;
+    repaint();
+}
+
+void HarmonyDropScreen::setOffer (const juce::String& songName)
+{
+    auto name = songName;
+    const auto label = [] (const juce::String& n) { return "Split the harmonies of " + n; };
+    offer.setButtonText (label (name));
+    while (name.length() > 1 && offer.preferredWidth() > 600)   // a long file name is cut, with an ellipsis, to fit the zone
+    {
+        name = name.dropLastCharacters (1);
+        offer.setButtonText (label (name.trimEnd() + ellipsis));
+    }
+    offer.setVisible (songName.isNotEmpty());
+    resized();
+    repaint();
+}
+
+void HarmonyDropScreen::setBestNote (bool show)
+{
+    if (show == bestNote) return;
+    bestNote = show;
+    resized();
+    repaint();
+}
+
+void HarmonyDropScreen::setHighlighted (bool h)
+{
+    if (h != highlighted) { highlighted = h; repaint(); }
+}
+
+// Centred column like DropScreen's: circle 64, [offer 34], heading, copy, [note], Browse, "You'll get", chips.
+float HarmonyDropScreen::columnTop() const
+{
+    const auto total = 64.0f + 14.0f + offerHeight() + Fonts::display (24.0f).getHeight() + 10.0f + Fonts::body (14.0f).getHeight()
+                     + noteHeight() + 14.0f + 34.0f + 14.0f + Fonts::body (12.0f).getHeight() + 8.0f + 28.0f;
+    return 17.0f + (366.0f - total) / 2.0f;
+}
+
+void HarmonyDropScreen::resized()
+{
+    const auto top = columnTop() + 64.0f + 14.0f;
+    const auto ow = offer.preferredWidth();
+    offer.setBounds (juce::roundToInt (centreX - (float) ow / 2.0f), juce::roundToInt (top), ow, offer.height);
+    const auto bw = browse.preferredWidth();
+    browse.setBounds (juce::roundToInt (centreX - (float) bw / 2.0f),
+                      juce::roundToInt (top + offerHeight() + Fonts::display (24.0f).getHeight() + 10.0f + Fonts::body (14.0f).getHeight()
+                                        + noteHeight() + 14.0f), bw, browse.height);
+}
+
+void HarmonyDropScreen::paint (juce::Graphics& g)
+{
+    const juce::Rectangle<float> zone (15.0f, 15.0f, 682.0f, 370.0f);
+    if (highlighted)
+    {
+        g.setColour (Theme::cream.withAlpha (0.04f));
+        g.fillRoundedRectangle (zone, 16.0f);
+    }
+    drawDashedRoundedRect (g, zone.reduced (1.0f), 15.0f, 2.0f, 6.0f, 5.0f, Theme::cream.withAlpha (highlighted ? 0.7f : 0.36f));
+
+    auto y = columnTop();
+    g.setColour (Theme::cream.withAlpha (0.12f));
+    g.fillEllipse (centreX - 32.0f, y, 64.0f, 64.0f);
+    g.setColour (Theme::cream);
+    strokeIcon (g, Icons::choir, { centreX - 16.0f, y + 16.0f, 32.0f, 32.0f }, 1.8f);
+    y += 64.0f + 14.0f + offerHeight();
+
+    const auto titleFont = Fonts::display (24.0f);
+    text (g, titleFont, Theme::cream, "Drop a song here", { 0.0f, y, panelW, titleFont.getHeight() });
+    y += titleFont.getHeight() + 10.0f;
+
+    const auto body = Fonts::body (14.0f), small = Fonts::body (12.0f);
+    text (g, body, Theme::cream.withAlpha (0.72f), "LISN finds the vocals, then splits the lead from the harmonies.",
+          { 0.0f, y, panelW, body.getHeight() });
+    y += body.getHeight();
+    if (bestNote)
+    {
+        text (g, small, Theme::cream.withAlpha (0.68f), "Best quality downloads its 900 MB model the first time.",
+              { 0.0f, y + 6.0f, panelW, small.getHeight() });
+        y += noteHeight();
+    }
+    y += 14.0f + 34.0f + 14.0f;
+
+    text (g, small, Theme::cream.withAlpha (0.62f), "You'll get", { 0.0f, y, panelW, small.getHeight() });
+    y += small.getHeight() + 8.0f;
+    chipRow (g, y, { "Lead", "Harmonies" }, { theme.vocals, theme.guitar });
+}
+
+//==============================================================================
+namespace
+{
+    constexpr float stepsW = 580.0f, stepRow = 40.0f, stepGap = 10.0f;
+}
+
+HarmonySplittingScreen::HarmonySplittingScreen() : cancel ("Cancel", LisnButton::Style::Ghost)
+{
+    cancel.height = 36;
+    cancel.padLeft = cancel.padRight = 18.0f;
+    cancel.borderAlpha = 0.3f;
+    cancel.onClick = [this] { if (onCancel != nullptr) onCancel(); };
+    addAndMakeVisible (cancel);
+}
+
+void HarmonySplittingScreen::setTheme (const Theme& t)
+{
+    theme = t;
+    repaint();
+}
+
+void HarmonySplittingScreen::setSong (const juce::String& name)
+{
+    song = name;
+    repaint();
+}
+
+void HarmonySplittingScreen::setStep (int s, float progress, bool isDownloading)
+{
+    s = juce::jlimit (1, 2, s);
+    const auto pc = juce::jlimit (0, 100, (int) (progress * 100.0f + 1e-4f));
+    if (s == step && pc == percent && isDownloading == downloading) return;
+    step = s;
+    percent = pc;
+    downloading = isDownloading;
+    repaint();
+}
+
+juce::String HarmonySplittingScreen::stepLabel (int s) const
+{
+    if (s == 1) return "Finding the vocals";
+    return downloading && step == 2 ? "Downloading the Best quality model" : "Splitting the harmonies";
+}
+
+// Centred column like SplittingScreen's: the song (Bold 15), two 40 px rows 10 apart, Cancel (36), 18 / 24 px between.
+float HarmonySplittingScreen::columnTop() const
+{
+    const auto total = Fonts::body (15.0f, 700).getHeight() + 18.0f + 2.0f * stepRow + stepGap + 24.0f + 36.0f;
+    return 1.0f + (398.0f - total) / 2.0f;
+}
+
+void HarmonySplittingScreen::resized()
+{
+    const auto y = columnTop() + Fonts::body (15.0f, 700).getHeight() + 18.0f + 2.0f * stepRow + stepGap + 24.0f;
+    const auto w = cancel.preferredWidth();
+    cancel.setBounds (juce::roundToInt (centreX - (float) w / 2.0f), juce::roundToInt (y), w, cancel.height);
+}
+
+void HarmonySplittingScreen::paint (juce::Graphics& g)
+{
+    const auto nameFont = Fonts::body (15.0f, 700);
+    auto y = columnTop();
+    text (g, nameFont, Theme::cream, song, { 0.0f, y, panelW, nameFont.getHeight() });
+    y += nameFont.getHeight() + 18.0f;
+
+    // Each row: a 24 px circle (the step's number, a tick once done; gold from the current step on), the label, a 6 px bar in
+    // Harmonies' colour and, on the current step, its percentage.
+    const auto left = centreX - stepsW / 2.0f;
+    for (int i = 1; i <= 2; ++i)
+    {
+        const auto done = i < step, current = i == step;
+        const auto circle = juce::Rectangle<float> (left, y + (stepRow - 24.0f) / 2.0f, 24.0f, 24.0f);
+        g.setColour (done || current ? theme.guitar : Theme::cream.withAlpha (0.12f));
+        g.fillEllipse (circle);
+        if (done)
+        {
+            g.setColour (Theme::ink);
+            strokeIcon (g, "M7 12.5l3.5 3.5 6.5-7", circle, 2.2f);
+        }
+        else
+            text (g, Fonts::body (12.0f, 700), current ? Theme::ink : Theme::cream.withAlpha (0.7f), juce::String (i), circle);
+
+        text (g, Fonts::body (14.0f, current ? 700 : 500), Theme::cream.withAlpha (current ? 1.0f : done ? 0.9f : 0.5f), stepLabel (i),
+              { left + 36.0f, y, 262.0f, stepRow }, juce::Justification::centredLeft);
+
+        const juce::Rectangle<float> bar (left + 310.0f, y + (stepRow - 6.0f) / 2.0f, stepsW - 310.0f - 58.0f, 6.0f);
+        g.setColour (Theme::cream.withAlpha (0.12f));
+        g.fillRoundedRectangle (bar, 3.0f);
+        const auto filled = done ? 1.0f : current ? (float) percent / 100.0f : 0.0f;
+        if (filled > 0.0f)
+        {
+            g.setColour (theme.guitar);
+            g.fillRoundedRectangle (bar.withWidth (juce::jmax (6.0f, bar.getWidth() * filled)), 3.0f);
+        }
+        if (current)
+            text (g, Fonts::body (13.0f, 700), Theme::cream, percentText(), { bar.getRight() + 8.0f, y, 50.0f, stepRow },
+                  juce::Justification::centredLeft);
+        y += stepRow + stepGap;
+    }
 }
 
 //==============================================================================
@@ -820,7 +1063,7 @@ juce::String beatsText (double beats)
     return s + (juce::exactlyEqual (q, 1.0) ? " beat" : " beats");
 }
 
-StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost), menuLook (std::make_unique<ResetMenuLook> (Icons::layers))
+StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost)
 {
     newSong.icon = Icons::plus;                    // 16 px, stroke 2; 34 tall, border 0.22, font 13: the defaults
     newSong.padLeft = 10.0f;
@@ -831,9 +1074,11 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost), men
     loopButton.padLeft = 10.0f;
     loopButton.padRight = 14.0f;
     loopButton.onClick = [this] { toggleLoop(); };
-    harmonyButton.icon = Icons::layers;
-    harmonyButton.padLeft = 10.0f;
-    harmonyButton.padRight = 14.0f;
+    harmonyButton.icon = Icons::choir;              // icon only, 34 x 34 (setBounds): the border and 7 px put its 18 px in the middle
+    harmonyButton.iconSize = 18.0f;
+    harmonyButton.iconStroke = 1.8f;
+    harmonyButton.padLeft = 7.0f;
+    harmonyButton.setTooltip ("Harmonies");
     harmonyButton.onClick = [this] { if (onHarmony != nullptr) onHarmony(); };
     addChildComponent (harmonyButton);
     dragChip.fileToDrag = [this] { return mixFile != nullptr ? mixFile() : juce::File(); };
@@ -848,7 +1093,6 @@ StemsScreen::StemsScreen() : newSong ("New song", LisnButton::Style::Ghost), men
 
 StemsScreen::~StemsScreen()
 {
-    juce::PopupMenu::dismissAllActiveMenus();        // an open Harmony Split menu draws with menuLook
     pool.removeAllJobs (true, 2000);
 }
 
@@ -857,8 +1101,6 @@ void StemsScreen::setTheme (const Theme& t)
     theme = t;
     loopButton.tint = loopOn ? std::optional<juce::Colour> (theme.accent()) : std::nullopt;
     loopButton.repaint();
-    menuLook->setColour (juce::PopupMenu::backgroundColourId, t.panelTint.withAlpha (0.94f));
-    menuLook->setColour (juce::PopupMenu::highlightedTextColourId, t.accent());
     speedStrip.setTheme (t);
     for (auto* r : rows)
         r->setTheme (t);
@@ -1135,44 +1377,6 @@ void StemsScreen::setMixChip (const juce::String& text, std::optional<float> pro
     resized();                                       // the chip width follows its text
 }
 
-void StemsScreen::setHarmonyButton (const juce::String& text)
-{
-    if (text == harmonyButton.getButtonText()) return;
-    harmonyButton.setButtonText (text);
-    resized();                                       // its width follows its text
-    repaint (19, 17, 674, 36);                       // the song name's room changes with it
-}
-
-juce::PopupMenu StemsScreen::harmonyMenu (const juce::String& resultQuality, bool bestDownloaded)
-{
-    // ponytail: minutes of work per minute of song, measured on the dev PC (16 threads) at Harmony Split's half the cores.
-    // Ask harmony_split.py to time a few seconds first if other PCs turn out far off.
-    const auto about = [this] (double perMinute)
-    {
-        const auto minutes = juce::jmax (1, juce::roundToInt (perMinute * length / 60.0));
-        return length > 0.0 ? ", about " + juce::String (minutes) + " min" : juce::String();
-    };
-    juce::PopupMenu menu;
-    menu.setLookAndFeel (menuLook.get());
-    const auto choose = [safe = SafePointer<StemsScreen> (this)] (HarmonyChoice c)
-    {
-        return [safe, c] { if (safe != nullptr && safe->onHarmonyChoice != nullptr) safe->onHarmonyChoice (c); };
-    };
-    menu.addItem ("Quick split" + about (1.7), true, resultQuality == "quick", choose (HarmonyChoice::quick));
-    menu.addItem ("Best quality" + about (5.3) + (bestDownloaded ? "" : ", 900 MB download first"), true, resultQuality == "best",
-                  choose (HarmonyChoice::best));
-    if (resultQuality.isNotEmpty())
-        menu.addItem ("Open Harmonies", choose (HarmonyChoice::open));
-    return menu;
-}
-
-void StemsScreen::showHarmonyMenu (const juce::String& resultQuality, bool bestDownloaded)
-{
-    auto* top = getTopLevelComponent();
-    harmonyMenu (resultQuality, bestDownloaded).showMenuAsync (juce::PopupMenu::Options().withParentComponent (top)
-                                                   .withTargetScreenArea (harmonyButton.getScreenBounds()));
-}
-
 void StemsScreen::toggleLoop()
 {
     if (! loopRange.isEmpty())
@@ -1367,7 +1571,7 @@ void StemsScreen::resized()
     // While preparing, the chip keeps its widest width so the changing percent doesn't nudge the Loop button.
     const auto chipW = dragChipWidth (dragChip.isPreparing() ? juce::String ("Preparing 100%") : dragChip.getText());
     loopButton.setBounds (newSong.getX() - 8 - loopButton.preferredWidth(), 18, loopButton.preferredWidth(), loopButton.height);
-    harmonyButton.setBounds (loopButton.getX() - 8 - harmonyButton.preferredWidth(), 18, harmonyButton.preferredWidth(), harmonyButton.height);
+    harmonyButton.setBounds (loopButton.getX() - 8 - 34, 18, 34, 34);
     speedStrip.setBounds (19 + 10, 339, 674 - 20, 40);                               // board 5B: Tempo and Key boxes...
     dragChip.setBounds (19 + 674 - 10 - chipW, 339 + 2, chipW, 36);                  // ...and the mix chip at the right end
     auto y = 74;
@@ -1744,6 +1948,10 @@ HarmonyScreen::HarmonyScreen()
     back.padLeft = 10.0f;
     back.padRight = 14.0f;
     back.onClick = [this] { if (onBack != nullptr) onBack(); };
+    newSong.icon = Icons::plus;                    // as the stems screen's New song
+    newSong.padLeft = 10.0f;
+    newSong.padRight = 14.0f;
+    newSong.onClick = [this] { if (onNewSong != nullptr) onNewSong(); };
     both.setText ("Drag both");
     both.fileToDrag = [this] { return mixFile != nullptr ? mixFile() : juce::File(); };
     for (int i = 0; i < 2; ++i)
@@ -1778,6 +1986,7 @@ HarmonyScreen::HarmonyScreen()
     }
     addAndMakeVisible (playButton);
     addAndMakeVisible (back);
+    addAndMakeVisible (newSong);
     addAndMakeVisible (both);
     setTheme (theme);
 }
@@ -1901,6 +2110,8 @@ void HarmonyScreen::resized()
     playButton.setBounds (19, 17, 36, 36);
     const auto bw = back.preferredWidth();
     back.setBounds (19 + 674 - bw, 18, bw, back.height);
+    const auto nw = newSong.preferredWidth();
+    newSong.setBounds (back.getX() - 8 - nw, 18, nw, newSong.height);
     for (int i = 0; i < 2; ++i)
     {
         auto& l = lanes[i];
@@ -1926,7 +2137,7 @@ void HarmonyScreen::paint (juce::Graphics& g)
     g.fillRoundedRectangle (b, 22.0f);
 
     // The song name (Bold 15) over the time and where it came from (12, cream 0.64), as on the stems screen.
-    const auto x = 67.0f, w = (float) back.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
+    const auto x = 67.0f, w = (float) newSong.getX() - 12.0f - x, y = 17.0f + (36.0f - 34.4f) / 2.0f;
     text (g, Fonts::body (15.0f, 700), Theme::cream, song, { x, y, w, 18.0f }, juce::Justification::centredLeft);
     text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.64f),
           timeText + dot + "split from Vocals, " + (quality == "best" ? "best quality" : "quick"),

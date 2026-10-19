@@ -28,6 +28,7 @@ namespace Icons
     inline constexpr const char* speed  = "M4.5 18a8.5 8.5 0 1 1 15 0M12 13l3.5-3.5";   // stroked
     inline constexpr const char* note   = "M9 18V5l12-2v13M6 15a3 3 0 1 0 0 6a3 3 0 1 0 0-6M18 13a3 3 0 1 0 0 6a3 3 0 1 0 0-6";   // stroked
     inline constexpr const char* mouse  = "M12 3a6 6 0 0 0-6 6v6a6 6 0 0 0 12 0V9a6 6 0 0 0-6-6zM12 7v3";
+    inline constexpr const char* choir  = "M12 4.4a2.6 2.6 0 1 1 0 5.2a2.6 2.6 0 1 1 0-5.2M5.5 7.3a2.2 2.2 0 1 1 0 4.4a2.2 2.2 0 1 1 0-4.4M18.5 7.3a2.2 2.2 0 1 1 0 4.4a2.2 2.2 0 1 1 0-4.4M7.5 20c0-3 2-5.2 4.5-5.2S16.5 17 16.5 20M1.8 20c0-2.6 1.6-4.4 3.7-4.4 1 0 1.9.4 2.6 1.1M22.2 20c0-2.6-1.6-4.4-3.7-4.4-1 0-1.9.4-2.6 1.1";   // Harmonies: three singers, stroked
     inline constexpr const char* reset  = "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5";   // the speed strip's reset menu, stroked
 }
 

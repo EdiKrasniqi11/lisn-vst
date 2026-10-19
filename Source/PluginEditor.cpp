@@ -96,7 +96,6 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
     stems.onToggleLoop = [this] { proc.player.setLooping (! proc.player.isLooping()); };
     stems.onHarmony = [this] { harmonyClicked(); };
-    stems.onHarmonyChoice = [this] (StemsScreen::HarmonyChoice c) { harmonyChosen (c); };
     // The Harmonies screen: the player holds Lead and Harmonies while it shows, so lane i is stem i.
     harmony.onBack = [this] { backToStems (true); };
     harmony.onPlayPause = [this] { stems.onPlayPause(); };
@@ -465,24 +464,17 @@ void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
     startSplit (juce::File (files[0]));
 }
 
+// ponytail: the choir icon takes today's path (a Quick pass, or the result that's there) until Harmonies is its own product (the
+// next task rewires this).
 void StemSplitterEditor::harmonyClicked()
 {
+    const auto dir = stems.getDir();
     if (harmonyJob.getState() == HarmonyJob::State::running)
         harmonyJob.cancel();
+    else if (HarmonyJob::hasResult (dir))
+        openHarmonies (true);
     else
-        stems.showHarmonyMenu (HarmonyJob::qualityOf (stems.getDir()),
-                               HarmonyJob::findModel ("best", proc.getPythonPath()) != juce::File());
-}
-
-void StemSplitterEditor::harmonyChosen (StemsScreen::HarmonyChoice choice)
-{
-    using Choice = StemsScreen::HarmonyChoice;
-    const auto dir = stems.getDir();
-    const auto quality = choice == Choice::best ? juce::String ("best") : juce::String ("quick");
-    if (choice == Choice::open || HarmonyJob::qualityOf (dir) == quality)
-        openHarmonies (true);                        // that result is here
-    else
-        harmonyJob.start (dir, proc.getPythonPath(), quality);   // the player holds the stems now, not the files it replaces
+        harmonyJob.start (dir, proc.getPythonPath(), "quick");   // the player holds the stems now, not the files it replaces
 }
 
 void StemSplitterEditor::openHarmonies (bool animate)
@@ -557,13 +549,6 @@ void StemSplitterEditor::updateHarmony()
         harmonyJob.cancel();                         // back to idle: the result opens from the cache from now on
         openHarmonies (true);
     }
-    if (state == HarmonyJob::State::running)
-        stems.setHarmonyButton (juce::String (harmonyJob.isDownloading() ? "Downloading " : "Splitting ")
-                                + juce::String (juce::roundToInt (harmonyJob.getProgress() * 100.0f)) + "%");
-    else if (state == HarmonyJob::State::failed)
-        stems.setHarmonyButton ("Can't split");
-    else
-        stems.setHarmonyButton ("Harmony Split");
 }
 
 void StemSplitterEditor::startSplit (const juce::File& input)

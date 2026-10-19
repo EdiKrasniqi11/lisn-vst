@@ -64,11 +64,9 @@ private:
     RenderJob::Request renderRequest (const std::vector<float>& gains, double speed, int semitones = 0);
     juce::File renderFile (const std::vector<float>& gains, double speed);   // renderRequest's dest, rendered here unless cached
     void prepareMix();                               // at a speed other than 1, renders the mix on mixJob; sets the chip
-    // The Harmony Split button: cancels a running pass, else opens its menu. A menu choice starts a pass of that quality
-    // on harmonyJob, or opens the Harmonies screen for the result that's there.
+    // The choir icon: cancels a running pass, else starts a Quick one on harmonyJob or opens the result that's there.
     void harmonyClicked();
-    void harmonyChosen (StemsScreen::HarmonyChoice);
-    void updateHarmony();                            // a finished pass opens Harmonies; the button's text follows the job
+    void updateHarmony();                            // a finished pass opens Harmonies
     // To the Harmonies screen and back (the Harmony Split canvas, Main board): the header's name spins to "Harmonies",
     // then the panel slides left; back, it spins to "StemSplitter" while the panel slides right. Without `animate`: at once.
     void openHarmonies (bool animate);

@@ -23,7 +23,14 @@ class Header : public juce::Component
 public:
     Header();
     void setTheme (const Theme&);                  // pill tints and the theme selection
-    void setSixStems (bool);                       // selection only, no callback
+    void setSixStems (bool);                       // selection only, no callback (shown while StemSplitter's pill is up)
+    // The second pill is "4 stems | 6 stems" in StemSplitter and "Quick | Best quality" in Harmonies. setSixStems and
+    // setHarmonyQuality each keep their own selection, so a product switch shows the right one.
+    void setProduct (bool harmonies);
+    void setHarmonyQuality (bool best);            // selection only, no callback
+    void setBestTooltip (bool show);               // "900 MB download first" on the Best side, in Harmonies only
+    std::function<void (bool best)> onHarmonyQuality;
+    SegmentedPill& stemsPillControl() { return stemsPill; }   // test hook
     void setEnabledSwitches (bool);                // disabled pills are drawn at 0.55
     std::function<void (juce::String)> onTheme;    // "dusk" / "midnight"
     std::function<void (bool)> onSixStems;
@@ -71,7 +78,9 @@ private:
     void makeReel (const Theme&);
     void reelFrame();
     juce::Rectangle<int> nameArea() const;
+    void refreshStemsPill();
     SegmentedPill themePill, stemsPill;
+    bool harmoniesPill = false, sixSelected = false, bestSelected = false, bestTip = false;
     WindowButton minimiseButton { false }, closeButton { true };
     UpdatePill update;
     bool titleBar = false, nativeButtons = false;
@@ -119,6 +128,60 @@ private:
     juce::String song, subtitle;
     int percent = 0, noteLines = 1;
     juce::Path track;                              // the 440 x 40 wavy line
+    LisnButton cancel;
+};
+
+// Harmonies' own drop screen: the drop zone of DropScreen with the choir icon, one line of copy, Browse and the Lead /
+// Harmonies chips. With a stem-split song on screen (setOffer) a Primary button above the heading splits that song's harmonies.
+class HarmonyDropScreen : public juce::Component
+{
+public:
+    HarmonyDropScreen();
+    void setTheme (const Theme&);
+    void setOffer (const juce::String& songName);  // file name without extension; empty hides the button
+    void setBestNote (bool show);                  // "Best quality downloads its 900 MB model the first time." under the copy
+    void setHighlighted (bool);                    // a file is dragged over the window
+    std::function<void()> onBrowse, onOffer;
+    LisnButton& offerButton() { return offer; }    // test hooks
+    LisnButton& browseButton() { return browse; }
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    float columnTop() const;
+    float offerHeight() const { return offer.isVisible() ? 34.0f + 18.0f : 0.0f; }   // the button and its gap
+    float noteHeight() const { return bestNote ? 6.0f + 16.0f : 0.0f; }
+
+    Theme theme = themeFor ("dusk");
+    bool bestNote = false, highlighted = false;
+    LisnButton offer, browse;
+};
+
+// What Harmonies shows while it works: the song, two steps ("Finding the vocals", then "Splitting the harmonies" or, while Best's
+// model downloads, "Downloading the Best quality model") each with a circle, a progress bar and its percentage, and Cancel.
+class HarmonySplittingScreen : public juce::Component
+{
+public:
+    HarmonySplittingScreen();
+    void setTheme (const Theme&);
+    void setSong (const juce::String& name);
+    void setStep (int step, float progress, bool downloading);   // step 1 or 2; repaints only on a whole-percent or step change
+    std::function<void()> onCancel;
+    juce::String stepLabel (int step) const;       // test hooks
+    juce::String percentText() const { return juce::String (percent) + "%"; }
+    LisnButton& cancelButton() { return cancel; }
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    float columnTop() const;
+
+    Theme theme = themeFor ("dusk");
+    juce::String song;
+    int step = 1, percent = 0;
+    bool downloading = false;
     LisnButton cancel;
 };
 
@@ -180,17 +243,11 @@ public:
     // Rebuilds the rows (vocals, drums, bass, guitar, piano, other, then unknown stems A-Z; compact with more than 4)
     // and reads their peaks and the song length on a background thread.
     void setStems (const juce::File& dir, const juce::String& songName);
-    // The Harmony Split button, left of Loop; only for 4-stem splits. Its text: "Harmony Split", "Splitting 42%" ...
-    void setHarmonyButton (const juce::String& text);
-    juce::String harmonyText() const { return harmonyButton.getButtonText(); }   // test hook
+    // The choir icon, left of Loop (tooltip "Harmonies"); only for 4-stem splits.
     bool hasHarmonyButton() const { return harmonyButton.isVisible(); }          // test hook
-    std::function<void()> onHarmony;                 // a click on the button
-    // Its menu, under the button: Quick and Best quality with their time for this song (the result's quality ticked;
-    // "" = no result yet; Best says when its model is still a download) and, with a result, Open Harmonies.
-    enum class HarmonyChoice { quick = 1, best, open };
-    juce::PopupMenu harmonyMenu (const juce::String& resultQuality, bool bestDownloaded);
-    void showHarmonyMenu (const juce::String& resultQuality, bool bestDownloaded);
-    std::function<void (HarmonyChoice)> onHarmonyChoice;
+    LisnButton& harmonyControl() { return harmonyButton; }                       // test hook
+    juce::String harmonyText() const { return harmonyButton.getButtonText(); }   // test hook
+    std::function<void()> onHarmony;                 // a click on the icon
     juce::File getDir() const { return dir; }
     juce::Array<juce::File> getFiles() const;       // row order = the player's stem order
     void setPlayback (bool playing, double fraction, double lengthSeconds);   // repaints only what changed
@@ -284,8 +341,7 @@ private:
     juce::OwnedArray<StemRow> rows;
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };
-    LisnButton harmonyButton { "Harmony Split", LisnButton::Style::Ghost };
-    std::unique_ptr<juce::LookAndFeel> menuLook;     // the Harmony Split menu's look (the speed strip's, with the layers icon)
+    LisnButton harmonyButton { {}, LisnButton::Style::Ghost };
     DragChip dragChip;
     SpeedStrip speedStrip;
     LisnButton newSong;
@@ -330,7 +386,9 @@ public:
     void setVolume (int lane, float);                // its fader; no callback
     void setAudible (juce::uint32 mask);             // bit i = lane i heard: a silent lane dims, Solo / Mute light up
     Fader& fader (int lane) { return lanes[lane].fader; }   // test hook
-    std::function<void()> onBack, onPlayPause;
+    std::function<void()> onBack, onNewSong, onPlayPause;
+    LisnButton& newSongButton() { return newSong; }  // test hooks
+    LisnButton& backButton() { return back; }
     std::function<void (int)> onSolo, onToggleMute;
     std::function<void (int, float)> onVolume;
     std::function<void (double)> onSeek;             // fraction 0..0.999
@@ -360,7 +418,7 @@ private:
     bool playing = false, peaksReady = false;
     int generation = 0, lastHead = -1;
     CircleButton playButton;
-    LisnButton back { "All stems", LisnButton::Style::Ghost };
+    LisnButton newSong { "New song", LisnButton::Style::Ghost }, back { "All stems", LisnButton::Style::Ghost };
     DragChip both;
     juce::ThreadPool pool { 1 };                     // last member: its jobs stop before the lanes go
 };

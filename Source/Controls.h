@@ -5,10 +5,15 @@
 // Controls from the mockups. None of them takes keyboard focus, so the host keeps its shortcuts (spacebar etc.).
 
 // The header pill (Main.dc.html): outer 38 tall (1 px border + 3 px padding), items 30 tall with 14 px side padding and 2 px gaps.
-class SegmentedPill : public juce::Component
+class SegmentedPill : public juce::Component, public juce::TooltipClient
 {
 public:
     explicit SegmentedPill (juce::StringArray items);
+    void setItems (juce::StringArray);           // relabel (same count); the selection stays. The owner re-lays out: the width changes
+    juce::StringArray getItems() const { return items; }
+    void setItemTooltip (int index, const juce::String&);   // shown by a juce::TooltipWindow while the mouse is over that item
+    juce::String tooltipFor (int index) const { return tips[index]; }
+    juce::String getTooltip() override;
     void setSelected (int index);                // no callback
     int getSelected() const { return selected; }
     void setTheme (const Theme&);
@@ -19,8 +24,9 @@ public:
     void mouseUp (const juce::MouseEvent&) override;
 
 private:
-    juce::StringArray items;
-    juce::Array<juce::Rectangle<float>> itemRects;   // shaped once in the constructor
+    void shape();                                // itemRects and prefWidth from items
+    juce::StringArray items, tips;
+    juce::Array<juce::Rectangle<float>> itemRects;   // shaped when the items are set
     int prefWidth = 0;
     int selected = 0;
     juce::Colour tint = themeFor ("dusk").pillTint;

@@ -222,7 +222,49 @@ int runSnapshots (const juce::File& outDir)
             juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
     };
     const auto reelMid = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().setReelPosition (9.4); };
-    const auto splittingHarmony = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.stemsScreen().setHarmonyButton ("Splitting 42%"); };
+    // Harmonies' own screens, which the editor doesn't show yet: the editor's screens hidden, `make`'s screen in the panel, the
+    // name spun to Harmonies and the second pill on Quick | Best quality (Best selected, with its tooltip text, when `best`).
+    std::vector<std::unique_ptr<juce::Component>> standalone;
+    const auto harmonyPanel = [&standalone] (std::function<std::unique_ptr<juce::Component> (const Theme&)> make, bool best, bool working = false)
+    {
+        return Setup ([&standalone, make, best, working] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+        {
+            auto& h = ed.headerBar();
+            h.setProduct (true);
+            h.setHarmonyQuality (best);
+            h.setBestTooltip (best);
+            h.setEnabledSwitches (! working);
+            h.spinTo (true, false);
+            auto* panel = ed.stemsScreen().getParentComponent();
+            for (auto* c : panel->getChildren())
+                c->setVisible (false);
+            auto& screen = *standalone.emplace_back (make (themeFor (p.getTheme())));
+            panel->addAndMakeVisible (screen);
+            screen.setBounds (0, 0, 712, 400);
+        });
+    };
+    const auto harmonyDrop = [harmonyPanel] (const juce::String& offer, bool bestNote, bool best)
+    {
+        return harmonyPanel ([=] (const Theme& t)
+        {
+            auto d = std::make_unique<HarmonyDropScreen>();
+            d->setTheme (t);
+            d->setOffer (offer);
+            d->setBestNote (bestNote);
+            return std::unique_ptr<juce::Component> (std::move (d));
+        }, best);
+    };
+    const auto harmonyWorking = [harmonyPanel] (int step, float progress, bool downloading, bool best)
+    {
+        return harmonyPanel ([=] (const Theme& t)
+        {
+            auto w = std::make_unique<HarmonySplittingScreen>();
+            w->setTheme (t);
+            w->setSong ("Liberian Girl.mp3");
+            w->setStep (step, progress, downloading);
+            return std::unique_ptr<juce::Component> (std::move (w));
+        }, best, true);
+    };
     const auto appUpdate = [titleBar, update] (StemSplitterProcessor& p, StemSplitterEditor& ed) { titleBar (p, ed); update (p, ed); };
 
     const std::vector<Shot> shots {
@@ -265,7 +307,11 @@ int runSnapshots (const juce::File& outDir)
         { "update-titlebar-midnight", "midnight", state (Screen::Drop, false), 1.0f, appUpdate },
         { "harmony-dusk", "dusk", harmonyState, 1.0f, harmonyPlaying },
         { "harmony-midnight", "midnight", harmonyState, 1.0f, harmonyPlaying },
-        { "harmony-splitting-dusk", "dusk", state (Screen::Stems, false), 1.0f, splittingHarmony },
+        { "stems4-dusk-choir", "dusk", state (Screen::Stems, false), 1.0f, playing },
+        { "harmony-drop-dusk", "dusk", state (Screen::Drop, false), 1.0f, harmonyDrop ({}, false, false) },
+        { "harmony-drop-offer-midnight", "midnight", state (Screen::Drop, false), 1.0f, harmonyDrop ("Liberian Girl", true, true) },
+        { "harmony-splitting-dusk", "dusk", state (Screen::Drop, false), 1.0f, harmonyWorking (2, 0.42f, false, false) },
+        { "harmony-downloading-midnight", "midnight", state (Screen::Drop, false), 1.0f, harmonyWorking (2, 0.1f, true, true) },
         { "harmony-reel-dusk", "dusk", harmonyState, 1.0f, reelMid },
     };
 
