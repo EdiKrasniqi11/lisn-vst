@@ -40,7 +40,8 @@ public:
 private:
     void run() override;
     void setStep (Step s, Failure f = Failure::none);
-    bool waitForOldJob();
+    void launch();
+    void startPending();
 
     Step step = Step::idle;
     Failure failure = Failure::none;
@@ -50,6 +51,7 @@ private:
     int job = 0;   // a posted result for an older job (cancelled, replaced) is dropped
     std::shared_ptr<bool> alive = std::make_shared<bool> (true);   // posted results outlive a destroyed Updater
 
+    bool pendingStart = false;   // the job is set up, the thread is still finishing the last one
     bool installing = false;   // what run() does: install, or download
     ReleaseInfo release;
     juce::File file, stamp;

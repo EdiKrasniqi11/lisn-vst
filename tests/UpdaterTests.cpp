@@ -17,7 +17,7 @@ struct UpdaterTests : juce::UnitTest
     static void waitFor (const std::function<bool()>& cond)   // bounded: 2 s
     {
         for (int i = 0; i < 200 && ! cond(); ++i)
-            juce::Thread::sleep (10);
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (10);
     }
 
     static ReleaseInfo release (const juce::String& hash = {})
@@ -88,6 +88,35 @@ struct UpdaterTests : juce::UnitTest
             r.u.cancel();
             waitFor ([&] { return r.dir.getNumberOfChildFiles (juce::File::findFiles) == 0; });
             expectEquals (r.dir.getNumberOfChildFiles (juce::File::findFiles), 0);
+        }
+
+        beginTest ("Update now right after Cancel doesn't wait for the stuck download");
+        {
+            Rig r;
+            std::atomic<bool> stuck { false };
+            r.u.downloadFn = [&] (const juce::URL&, const juce::String&, const juce::File& dest, const std::function<bool (float)>&)
+            {
+                if (r.downloads++ == 0)
+                {
+                    stuck = true;
+                    juce::Thread::sleep (300);   // a connect that ignores progress and cancel
+                    return false;
+                }
+                dest.getParentDirectory().createDirectory();
+                dest.replaceWithText ("installer");
+                return true;
+            };
+            r.u.startDownload (release());
+            waitFor ([&] { return stuck.load(); });
+            r.u.cancel();
+            const auto t0 = juce::Time::getMillisecondCounter();
+            r.u.startDownload (release());
+            expect (juce::Time::getMillisecondCounter() - t0 < 50);
+            expect (r.u.getStep() == Step::downloading);
+            pump ([&] { return r.u.getStep() == Step::ready; });
+            expect (r.u.getStep() == Step::ready);
+            expectEquals (r.downloads.load(), 2);
+            expect (r.file().existsAsFile());
         }
 
         beginTest ("a failing download is failed/download until reset");

@@ -31,7 +31,6 @@ void Updater::setStep (Step s, Failure f)
 void Updater::startDownload (const ReleaseInfo& r)
 {
     if (step != Step::idle && step != Step::failed) return;
-    if (! waitForOldJob()) return;
     release = r;
     file = downloadDir.getChildFile (juce::URL (r.installerUrl).getFileName());
     progress = 0.0f;
@@ -48,13 +47,14 @@ void Updater::startDownload (const ReleaseInfo& r)
     installing = false;
     runJob = job;
     setStep (Step::downloading);
-    startThread (juce::Thread::Priority::low);
+    launch();
 }
 
 void Updater::cancel()
 {
     if (step != Step::downloading) return;
     ++job;
+    pendingStart = false;
     signalThreadShouldExit();   // never waits: run() sees it, deletes the file and .part, and returns
     progress = 0.0f;
     setStep (Step::idle);
@@ -62,20 +62,30 @@ void Updater::cancel()
 
 void Updater::install (const juce::File& engineStamp)
 {
-    if (step != Step::ready || ! waitForOldJob()) return;
+    if (step != Step::ready) return;
     stamp = engineStamp;
     stampBefore = stamp.loadFileAsString();
     installing = true;
     ++job;
     runJob = job;
     setStep (Step::installing);
-    startThread();
+    launch();
 }
 
-bool Updater::waitForOldJob()
+// The message thread never waits for a thread: one still running (a cancelled download stuck in a connect) starts the
+// job from its own exit, via startPending().
+void Updater::launch()
 {
-    // ponytail: a cancelled download can sit in a 20 s connect; past 30 s a new job is refused rather than killing the thread
-    return waitForThreadToExit (30000);
+    pendingStart = true;
+    if (! isThreadRunning()) startPending();
+}
+
+void Updater::startPending()
+{
+    if (! pendingStart) return;
+    waitForThreadToExit (1000);   // only ever the last instructions of a thread that has already posted its end
+    pendingStart = false;
+    startThread (installing ? juce::Thread::Priority::normal : juce::Thread::Priority::low);
 }
 
 void Updater::reset()
@@ -86,6 +96,15 @@ void Updater::reset()
 void Updater::run()
 {
     const auto id = runJob;
+    const auto isInstall = installing;
+    const auto myFile = file;
+    const auto url = juce::URL (release.installerUrl);
+    const auto sha = release.installerSha256;
+    struct Done   // whatever way run() ends, a request made meanwhile starts now
+    {
+        Updater* u; std::shared_ptr<bool> a;
+        ~Done() { juce::MessageManager::callAsync ([u = u, a = a] { if (*a) u->startPending(); }); }
+    } done { this, alive };
     const auto post = [this, id, a = alive] (std::function<void()> f)
     {
         juce::MessageManager::callAsync ([this, id, a, f = std::move (f)]
@@ -94,10 +113,10 @@ void Updater::run()
         });
     };
 
-    if (installing)
+    if (isInstall)
     {
-        const auto code = launchFn (file);
-        if (code == 0) file.deleteFile();
+        const auto code = launchFn (myFile);
+        if (code == 0) myFile.deleteFile();
         post ([this, code]
         {
             if (code == 0)
@@ -112,7 +131,7 @@ void Updater::run()
     }
 
     auto lastPosted = 0.0f;
-    const auto ok = downloadFn (juce::URL (release.installerUrl), release.installerSha256, file,
+    const auto ok = downloadFn (url, sha, myFile,
                                 [&] (float f)
                                 {
                                     if (f - lastPosted >= 0.01f || f >= 1.0f)
@@ -124,8 +143,8 @@ void Updater::run()
                                 });
     if (threadShouldExit())   // cancelled: nothing is left behind
     {
-        file.deleteFile();
-        file.getSiblingFile (file.getFileName() + ".part").deleteFile();
+        myFile.deleteFile();
+        myFile.getSiblingFile (myFile.getFileName() + ".part").deleteFile();
         return;
     }
     post ([this, ok]
