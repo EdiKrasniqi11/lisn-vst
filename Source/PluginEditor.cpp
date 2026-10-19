@@ -80,7 +80,8 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     {
         const juce::String q = best ? "best" : "quick";
         proc.setHarmonyQuality (q);
-        if (shown.has_value() && shown->screen == Screen::Harmonies && shown->harmonyQuality != q)
+        if (shown.has_value() && shown->screen == Screen::Harmonies && shown->harmonyQuality != q
+            && proc.getHarmonyInput().existsAsFile())    // a song that's gone keeps its result on screen
             startHarmonies (proc.getHarmonyInput(), false);   // redone at the new quality, as the 4/6 switch re-splits
         else
             refreshQuality();                        // (a redo's progress screen refreshes it)
@@ -111,6 +112,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.onToggleLoop = [this] { proc.player.setLooping (! proc.player.isLooping()); };
     stems.onHarmony = [this]                         // the choir icon: this song's harmonies (a result that's there opens)
     {
+        if (jobRunning()) return;                    // e.g. a double click: the first one started it
         proc.setProduct ("harmonies");
         startHarmonies (proc.getLastInput());
         header.spinTo (true, true);                  // onLanded slides over
@@ -429,7 +431,9 @@ void StemSplitterEditor::show (const UiState& s)
     // The player: the stems on Stems, Lead + Harmonies on Harmonies, nothing otherwise. Between a song's stems and its
     // Lead + Harmonies it picks up where it was (carry); switchProduct may have taken the position before a re-split.
     const bool playable = s.screen == Screen::Stems || s.screen == Screen::Harmonies;
-    const bool flips = playable && prev.has_value() && prev->screen != s.screen && prev->songName == s.songName
+    // The same song: its stem folders (4 or 6 stems, and Harmonies' 4) share the song's cache folder.
+    const auto songOf = [] (const UiState& u) { return (u.screen == Screen::Harmonies ? u.harmonyStemDir : u.stemDir).getParentDirectory(); };
+    const bool flips = playable && prev.has_value() && prev->screen != s.screen && songOf (*prev) == songOf (s)
                     && (prev->screen == Screen::Stems || prev->screen == Screen::Harmonies);
     if (s.screen != Screen::Stems || s.stemDir != stems.getDir() || flips)
         mixJob.cancel();                             // it renders the files the player is about to drop
@@ -468,6 +472,14 @@ void StemSplitterEditor::showScreen()
     harmonySplitting.setVisible (on (true, Screen::HarmonySplitting));
     harmony.setVisible (on (true, Screen::Harmonies));
     error.setVisible (on (errorOnRight, Screen::Error));
+    // The page being left (during the spin and the slide) takes no clicks: the player already holds the other page's files.
+    const bool right = shown.has_value() && shown->harmoniesProduct;
+    const bool settled = std::abs (slide - (right ? 1.0f : 0.0f)) < 0.001f;
+    for (auto* c : std::initializer_list<juce::Component*> { &drop, &splitting, &stems })
+        c->setInterceptsMouseClicks (settled && ! right, settled && ! right);
+    for (auto* c : std::initializer_list<juce::Component*> { &harmonyDrop, &harmonySplitting, &harmony })
+        c->setInterceptsMouseClicks (settled && right, settled && right);
+    error.setInterceptsMouseClicks (settled && errorOnRight == right, settled && errorOnRight == right);
     help.setVisible (helpOpen);
     info.setToggleState (helpOpen, juce::dontSendNotification);
 }
@@ -544,6 +556,7 @@ void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
 // when it was split at StemSplitter's 4/6 before).
 void StemSplitterEditor::switchProduct (bool toHarmonies)
 {
+    if (jobRunning()) return;                        // the name waits (it may still look clickable for up to a tick)
     const auto stemsSong = proc.getLastInput();
     if (toHarmonies && proc.hasStems() && stemsSong.existsAsFile())
     {
@@ -603,14 +616,18 @@ void StemSplitterEditor::layoutSlide()
     showScreen();
 }
 
+// Every start goes through these two, and nothing starts while a split or a Harmonies step runs (a double click, a file
+// chooser that returns after a job started, a click on the page being left while it slides).
 void StemSplitterEditor::startSplit (const juce::File& input)
 {
+    if (jobRunning()) return;
     mixJob.cancel();
     proc.startSplit (input);
 }
 
 void StemSplitterEditor::startHarmonies (const juce::File& song, bool keepExistingResult)
 {
+    if (jobRunning()) return;
     if (! song.existsAsFile())
     {
         proc.clearHarmonySong();                     // never a flow on nothing

@@ -116,6 +116,48 @@ struct HarmonyTests : juce::UnitTest
             juce::Thread::sleep (3500);                      // the orphaned ping/sleep lets go of the folder
         }
 
+        beginTest ("the editor: nothing restarts or starts beside a running Harmonies step");
+        {
+            CachedSong s, other;
+            const auto starts = s.root.getChildFile ("starts.txt");   // one line per pass started
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.harmonyFlow.harmonyJobForTests().testCommand = fakeCommand (s.root.getChildFile ("counted"),
+                "@echo off\r\necho x>>\"" + starts.getFullPathName() + "\"\r\nping -n 4 127.0.0.1 >nul\r\n",
+                "#!/bin/sh\necho x >> \"" + starts.getFullPathName() + "\"\nexec sleep 3\n");
+            proc.startSplit (s.file);
+            StemSplitterEditor ed (proc);
+            ed.stemsScreen().harmonyControl().onClick();
+            juce::Thread::sleep (300);
+            ed.stemsScreen().harmonyControl().onClick();     // a double click
+            juce::Thread::sleep (300);
+            expect (proc.harmonyFlow.getStep() == Step::harmonies && proc.harmonyFlow.getSong() == s.file);
+            expectEquals (starts.loadFileAsString().retainCharacters ("x").length(), 1, "one pass, not restarted");
+
+            proc.setProduct ("stems");                       // a song chosen for StemSplitter (New song, Browse, a drop) waits too
+            ed.filesDropped ({ other.file.getFullPathName() }, 0, 0);
+            expect (proc.getLastInput() == s.file && proc.job.getState() == JobState::Done, "no split started");
+            ed.headerBar().onName();
+            expectEquals (proc.getProduct(), juce::String ("stems"), "the name waits");
+            proc.harmonyFlow.cancel();
+            juce::Thread::sleep (3500);                      // the orphaned ping/sleep lets go of the folder
+        }
+
+        beginTest ("the editor: a quality click on a result whose song is gone keeps the result");
+        {
+            CachedSong s;
+            writeResult (s.stems, "quick");
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.setProduct ("harmonies");
+            proc.startHarmonies (s.file);
+            StemSplitterEditor ed (proc);
+            s.file.deleteFile();
+            ed.headerBar().onHarmonyQuality (true);
+            expect (proc.getHarmonyInput() == s.file && proc.harmonyFlow.getStep() == Step::done);
+            expect (uiStateFor (proc).screen == Screen::Harmonies);
+        }
+
         beginTest ("the editor: Best on a Quick result redoes it");
         {
             CachedSong s;
