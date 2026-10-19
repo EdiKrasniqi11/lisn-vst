@@ -31,7 +31,7 @@ void Updater::setStep (Step s, Failure f)
 void Updater::startDownload (const ReleaseInfo& r)
 {
     if (step != Step::idle && step != Step::failed) return;
-    stopThread (10000);   // the last job's thread may still be returning
+    if (! waitForOldJob()) return;
     release = r;
     file = downloadDir.getChildFile (juce::URL (r.installerUrl).getFileName());
     progress = 0.0f;
@@ -46,6 +46,7 @@ void Updater::startDownload (const ReleaseInfo& r)
     }
     file.deleteFile();
     installing = false;
+    runJob = job;
     setStep (Step::downloading);
     startThread (juce::Thread::Priority::low);
 }
@@ -54,24 +55,27 @@ void Updater::cancel()
 {
     if (step != Step::downloading) return;
     ++job;
-    signalThreadShouldExit();
-    stopThread (10000);
-    file.deleteFile();
-    file.getSiblingFile (file.getFileName() + ".part").deleteFile();
+    signalThreadShouldExit();   // never waits: run() sees it, deletes the file and .part, and returns
     progress = 0.0f;
     setStep (Step::idle);
 }
 
 void Updater::install (const juce::File& engineStamp)
 {
-    if (step != Step::ready) return;
-    stopThread (10000);
+    if (step != Step::ready || ! waitForOldJob()) return;
     stamp = engineStamp;
     stampBefore = stamp.loadFileAsString();
     installing = true;
     ++job;
+    runJob = job;
     setStep (Step::installing);
     startThread();
+}
+
+bool Updater::waitForOldJob()
+{
+    // ponytail: a cancelled download can sit in a 20 s connect; past 30 s a new job is refused rather than killing the thread
+    return waitForThreadToExit (30000);
 }
 
 void Updater::reset()
@@ -81,7 +85,7 @@ void Updater::reset()
 
 void Updater::run()
 {
-    const auto id = job;
+    const auto id = runJob;
     const auto post = [this, id, a = alive] (std::function<void()> f)
     {
         juce::MessageManager::callAsync ([this, id, a, f = std::move (f)]
@@ -118,7 +122,12 @@ void Updater::run()
                                     }
                                     return ! threadShouldExit();
                                 });
-    if (threadShouldExit()) return;   // cancel() cleans up
+    if (threadShouldExit())   // cancelled: nothing is left behind
+    {
+        file.deleteFile();
+        file.getSiblingFile (file.getFileName() + ".part").deleteFile();
+        return;
+    }
     post ([this, ok]
     {
         if (ok) { progress = 1.0f; setStep (Step::ready); }

@@ -40,11 +40,13 @@ public:
 private:
     void run() override;
     void setStep (Step s, Failure f = Failure::none);
+    bool waitForOldJob();
 
     Step step = Step::idle;
     Failure failure = Failure::none;
     float progress = 0.0f;
     bool changedEngine = false;
+    int runJob = 0;   // the job run() works for, set before the thread starts
     int job = 0;   // a posted result for an older job (cancelled, replaced) is dropped
     std::shared_ptr<bool> alive = std::make_shared<bool> (true);   // posted results outlive a destroyed Updater
 

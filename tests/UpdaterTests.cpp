@@ -14,6 +14,12 @@ struct UpdaterTests : juce::UnitTest
             juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
     }
 
+    static void waitFor (const std::function<bool()>& cond)   // bounded: 2 s
+    {
+        for (int i = 0; i < 200 && ! cond(); ++i)
+            juce::Thread::sleep (10);
+    }
+
     static ReleaseInfo release (const juce::String& hash = {})
     {
         ReleaseInfo r;
@@ -73,14 +79,15 @@ struct UpdaterTests : juce::UnitTest
                 return false;
             };
             r.u.startDownload (release());
-            juce::Thread::sleep (100);
+            waitFor ([&] { return r.downloads.load() == 1; });
             r.u.cancel();
-            expect (r.u.getStep() == Step::idle);
-            expectEquals (r.dir.getNumberOfChildFiles (juce::File::findFiles), 0);
-            r.u.startDownload (release());
-            juce::Thread::sleep (100);   // the thread has to get going
+            expect (r.u.getStep() == Step::idle);   // at once; the thread tidies up behind
+            r.u.startDownload (release());   // waits for the old thread to finish
+            waitFor ([&] { return r.downloads.load() == 2; });
             expectEquals (r.downloads.load(), 2);
             r.u.cancel();
+            waitFor ([&] { return r.dir.getNumberOfChildFiles (juce::File::findFiles) == 0; });
+            expectEquals (r.dir.getNumberOfChildFiles (juce::File::findFiles), 0);
         }
 
         beginTest ("a failing download is failed/download until reset");
