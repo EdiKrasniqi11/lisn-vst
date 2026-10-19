@@ -16,6 +16,7 @@ struct UiState
     juce::File stemDir;                      // Stems
     juce::String songName;                   // lastInput file name
     bool sixStems = false;
+    bool songGone = false;                   // Stems: the song file is gone, so no choir icon (Harmonies needs the song)
 
     // Harmonies (its own product): the three Harmony* screens, and Error when its flow failed.
     bool harmoniesProduct = false;

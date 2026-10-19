@@ -51,6 +51,9 @@ public:
     HelpSheet& helpSheet() { return help; }
     HarmonyScreen& harmonyScreen() { return harmony; }
     ErrorScreen& errorScreen() { return error; }
+    HarmonyDropScreen& harmonyDropScreen() { return harmonyDrop; }
+    HarmonySplittingScreen& harmonySplittingScreen() { return harmonySplitting; }
+    void setSlideForTests (float x) { slide = x; layoutSlide(); }   // a frame of the slide (0 = StemSplitter's page)
     Header& headerBar() { return header; }
 
 private:

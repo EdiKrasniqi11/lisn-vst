@@ -79,9 +79,11 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     header.onHarmonyQuality = [this] (bool best)
     {
         const juce::String q = best ? "best" : "quick";
+        const bool onResult = shown.has_value() && shown->screen == Screen::Harmonies;
+        if (onResult && ! proc.getHarmonyInput().existsAsFile())
+            return refreshQuality();                 // a song that's gone keeps its result, and the switch its quality
         proc.setHarmonyQuality (q);
-        if (shown.has_value() && shown->screen == Screen::Harmonies && shown->harmonyQuality != q
-            && proc.getHarmonyInput().existsAsFile())    // a song that's gone keeps its result on screen
+        if (onResult && shown->harmonyQuality != q)
             startHarmonies (proc.getHarmonyInput(), false);   // redone at the new quality, as the 4/6 switch re-splits
         else
             refreshQuality();                        // (a redo's progress screen refreshes it)
@@ -426,6 +428,8 @@ void StemSplitterEditor::show (const UiState& s)
     }
     if (s.screen == Screen::Error)
         error.setError (s.error, s.errorText, s.pythonExe);
+    if (s.screen == Screen::Harmonies && s.harmonyQuality.isNotEmpty())
+        proc.setHarmonyQuality (s.harmonyQuality);   // the switch, the next run and New song all use the result's quality
     refreshQuality();
 
     // The player: the stems on Stems, Lead + Harmonies on Harmonies, nothing otherwise. Between a song's stems and its
@@ -448,6 +452,8 @@ void StemSplitterEditor::show (const UiState& s)
     }
     if (s.screen == Screen::Stems && s.stemDir != stems.getDir())
         stems.setStems (s.stemDir, s.songName);
+    if (s.screen == Screen::Stems)
+        stems.setSongAvailable (! s.songGone);
     if (s.screen == Screen::Harmonies)
         harmony.setSong (s.harmonyStemDir, s.songName, s.harmonyQuality);
 }
@@ -488,8 +494,7 @@ void StemSplitterEditor::refreshQuality()
 {
     const bool best = proc.getHarmonyQuality() == "best";
     const bool bestMissing = HarmonyJob::findModel ("best", proc.getPythonPath()) == juce::File();
-    const bool onResult = shown.has_value() && shown->screen == Screen::Harmonies;   // the switch shows the result's quality
-    header.setHarmonyQuality (onResult ? shown->harmonyQuality == "best" : best);
+    header.setHarmonyQuality (best);
     header.setBestTooltip (bestMissing);
     harmonyDrop.setBestNote (best && bestMissing);
 }
@@ -622,6 +627,7 @@ void StemSplitterEditor::startSplit (const juce::File& input)
 {
     if (jobRunning()) return;
     mixJob.cancel();
+    proc.setProduct ("stems");                       // its progress and Cancel are on StemSplitter's page (show() snaps there)
     proc.startSplit (input);
 }
 
@@ -635,12 +641,13 @@ void StemSplitterEditor::startHarmonies (const juce::File& song, bool keepExisti
     }
     if (! keepExistingResult)
         proc.player.unload();                        // the redo replaces the Lead + Harmonies files it may hold
+    proc.setProduct ("harmonies");                   // its progress and Cancel are on Harmonies' page (show() snaps there)
     proc.startHarmonies (song, keepExistingResult);
 }
 
 void StemSplitterEditor::retry()
 {
-    if (proc.getProduct() == "harmonies") startHarmonies (proc.getHarmonyInput());
+    if (proc.getProduct() == "harmonies") startHarmonies (proc.getHarmonyInput(), false);   // a failed redo runs again
     else                                  startSplit (proc.getLastInput());
 }
 

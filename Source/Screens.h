@@ -246,6 +246,7 @@ public:
     void setStems (const juce::File& dir, const juce::String& songName);
     // The choir icon, left of Loop (tooltip "Harmonies"); only for 4-stem splits.
     bool hasHarmonyButton() const { return harmonyButton.isVisible(); }          // test hook
+    void setSongAvailable (bool);                  // the choir icon also needs the song file (the editor's call)
     LisnButton& harmonyControl() { return harmonyButton; }                       // test hook
     juce::String harmonyText() const { return harmonyButton.getButtonText(); }   // test hook
     std::function<void()> onHarmony;                 // a click on the icon
@@ -343,6 +344,7 @@ private:
     CircleButton playButton;
     LisnButton loopButton { "Loop", LisnButton::Style::Ghost };
     LisnButton harmonyButton { {}, LisnButton::Style::Ghost };
+    bool harmonyFits = false, songAvailable = true;   // a 4-stem split; the song file is there
     DragChip dragChip;
     SpeedStrip speedStrip;
     LisnButton newSong;

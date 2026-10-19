@@ -155,7 +155,161 @@ struct HarmonyTests : juce::UnitTest
             s.file.deleteFile();
             ed.headerBar().onHarmonyQuality (true);
             expect (proc.getHarmonyInput() == s.file && proc.harmonyFlow.getStep() == Step::done);
+            expectEquals (proc.getHarmonyQuality(), juce::String ("quick"), "the switch keeps the result's quality");
             expect (uiStateFor (proc).screen == Screen::Harmonies);
+        }
+
+        const auto slow = [] (const CachedSong& s)
+        {
+            return fakeCommand (s.root.getChildFile ("slow"), "@echo off\r\nping -n 4 127.0.0.1 >nul\r\n", "#!/bin/sh\nexec sleep 3\n");
+        };
+        const auto intercepts = [] (juce::Component& c)
+        {
+            bool self = false, children = false;
+            c.getInterceptsMouseClicks (self, children);
+            return self && children;
+        };
+
+        beginTest ("the editor: Retry after a failed redo runs the pass again");
+        {
+            CachedSong s;
+            writeResult (s.stems, "quick");
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.setProduct ("harmonies");
+            proc.startHarmonies (s.file);                    // the Quick result opens
+            StemSplitterEditor ed (proc);
+            proc.harmonyFlow.harmonyJobForTests().testCommand = fakeCommand (s.root.getChildFile ("bad"),
+                "@echo off\r\necho NEEDS SETUP: no model\r\nexit /b 3\r\n", "#!/bin/sh\necho NEEDS SETUP: no model\nexit 3\n");
+            ed.headerBar().onHarmonyQuality (true);          // the Best redo fails
+            waitForFlow (proc);
+            expect (proc.harmonyFlow.getStep() == Step::failed);
+            ed.tick();
+            expect (ed.errorScreen().isVisible());
+            proc.harmonyFlow.harmonyJobForTests().testCommand = slow (s);
+            ed.errorScreen().onRetry();
+            expect (proc.harmonyFlow.getStep() == Step::harmonies, "the pass runs again, not the old Quick result at once");
+            proc.harmonyFlow.cancel();
+            juce::Thread::sleep (3500);                      // the orphaned ping/sleep lets go of the folder
+        }
+
+        beginTest ("the editor: no offer and no choir icon when StemSplitter's song file is gone");
+        {
+            CachedSong s;
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.startSplit (s.file);
+            proc.syncWithJob();
+            s.file.deleteFile();
+            StemSplitterEditor ed (proc);
+            expect (ed.stemsScreen().isVisible() && ! ed.stemsScreen().hasHarmonyButton());
+            proc.setProduct ("harmonies");
+            const auto st = uiStateFor (proc);
+            expect (st.screen == Screen::HarmonyDrop && st.offerSong.isEmpty());
+        }
+
+        beginTest ("the editor: an opened result sets the quality the switch and the next run use");
+        {
+            CachedSong s;
+            writeResult (s.stems, "quick");
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.setHarmonyQuality ("best");
+            proc.setProduct ("harmonies");
+            proc.startHarmonies (s.file);
+            proc.harmonyFlow.harmonyJobForTests().testCommand = okPass (s);
+            StemSplitterEditor ed (proc);
+            expectEquals (proc.getHarmonyQuality(), juce::String ("quick"));
+            expectEquals (ed.headerBar().stemsPillControl().getSelected(), 0);
+            ed.headerBar().onHarmonyQuality (true);          // Best now redoes it
+            expect (proc.harmonyFlow.getStep() == Step::harmonies);
+            waitForFlow (proc);
+            expectEquals (HarmonyJob::qualityOf (s.stems), juce::String ("best"));
+        }
+
+        beginTest ("the editor: a start from the page being left takes the product along");
+        {
+            CachedSong s;
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.harmonyFlow.harmonyJobForTests().testCommand = okPass (s);
+            proc.startSplit (s.file);
+            proc.setProduct ("harmonies");
+            StemSplitterEditor ed (proc);
+            proc.setProduct ("stems");                       // switched back before a late click (or a chooser) answered
+            ed.tick();
+            ed.harmonyDropScreen().offerButton().onClick();
+            expectEquals (proc.getProduct(), juce::String ("harmonies"));
+            expect (proc.harmonyFlow.getSong() == s.file);
+            ed.tick();
+            expect (ed.headerBar().showsHarmonies() && ! ed.headerBar().isSpinning(), "the reel and the page follow at once");
+            waitForFlow (proc);
+        }
+
+        beginTest ("the editor: the page being left takes no clicks until the slide settles");
+        {
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            StemSplitterEditor ed (proc);
+            expect (intercepts (ed.stemsScreen()) && ! intercepts (ed.harmonyScreen()));
+            ed.headerBar().onName();                         // to Harmonies: the reel spins, the panel hasn't moved
+            ed.tick();
+            expect (! intercepts (ed.stemsScreen()) && ! intercepts (ed.harmonyScreen()));
+            ed.setSlideForTests (0.5f);
+            expect (! intercepts (ed.stemsScreen()) && ! intercepts (ed.harmonyScreen()));
+            ed.setSlideForTests (1.0f);
+            expect (! intercepts (ed.stemsScreen()) && intercepts (ed.harmonyScreen()));
+        }
+
+        beginTest ("the editor: reopened mid-flow, it shows the progress at once");
+        {
+            CachedSong s;
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.harmonyFlow.harmonyJobForTests().testCommand = slow (s);
+            proc.setProduct ("harmonies");
+            {
+                StemSplitterEditor first (proc);
+                proc.startHarmonies (s.file);
+                first.tick();
+            }                                                // the window closes during step 2
+            expect (proc.harmonyFlow.getStep() == Step::harmonies, "the flow keeps going");
+            StemSplitterEditor ed (proc);
+            expect (ed.harmonySplittingScreen().isVisible() && ed.harmonySplittingScreen().getX() == 0);
+            expect (ed.headerBar().showsHarmonies() && ! ed.headerBar().isSpinning());
+            expectEquals (uiStateFor (proc).harmonyStep, 2);
+            expect (proc.harmonyFlow.getStep() == Step::harmonies);
+            proc.harmonyFlow.cancel();
+            juce::Thread::sleep (3500);
+        }
+
+        beginTest ("the editor: Cancel goes back to the drop screen, or to the result a redo would have replaced");
+        {
+            CachedSong a, b;
+            writeResult (b.stems, "quick");
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.harmonyFlow.harmonyJobForTests().testCommand = slow (a);
+            proc.setProduct ("harmonies");
+            proc.startHarmonies (a.file);
+            StemSplitterEditor ed (proc);
+            expect (ed.harmonySplittingScreen().isVisible());
+            ed.harmonySplittingScreen().cancelButton().onClick();
+            expect (proc.harmonyFlow.getStep() == Step::idle);
+            ed.tick();
+            expect (ed.harmonyDropScreen().isVisible());
+
+            proc.startHarmonies (b.file);                    // b's Quick result opens; Best redoes it, Cancel keeps it
+            ed.tick();
+            ed.headerBar().onHarmonyQuality (true);
+            ed.tick();
+            expect (ed.harmonySplittingScreen().isVisible());
+            ed.harmonySplittingScreen().cancelButton().onClick();
+            expect (proc.harmonyFlow.getStep() == Step::idle);
+            ed.tick();
+            expect (ed.harmonyScreen().isVisible());
+            expectEquals (uiStateFor (proc).harmonyQuality, juce::String ("quick"));
+            juce::Thread::sleep (3500);
         }
 
         beginTest ("the editor: Best on a Quick result redoes it");

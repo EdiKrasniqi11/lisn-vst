@@ -4,7 +4,7 @@
 bool UiState::sameScreenAs (const UiState& o) const
 {
     return screen == o.screen && error == o.error && errorText == o.errorText && pythonExe == o.pythonExe
-        && stemDir == o.stemDir && songName == o.songName && sixStems == o.sixStems
+        && stemDir == o.stemDir && songName == o.songName && sixStems == o.sixStems && songGone == o.songGone
         && harmoniesProduct == o.harmoniesProduct && harmonyStep == o.harmonyStep && downloading == o.downloading
         && offerSong == o.offerSong && harmonyStemDir == o.harmonyStemDir && harmonyQuality == o.harmonyQuality;
 }
@@ -93,13 +93,16 @@ UiState uiStateFor (const StemSplitterProcessor& p)
         return harmoniesStateFor (step, p.harmonyFlow.getProgress(), p.harmonyFlow.isDownloading(), p.harmonyFlow.getErrorKind(),
                                   finished ? p.harmonyFlow.getError() : juce::String(), finished ? p.harmonyFlow.getPythonExe() : juce::String(),
                                   step == HarmonyFlow::Step::idle ? p.getHarmonyInput() : p.harmonyFlow.getSong(), r.dir, hasResult,
-                                  p.getLastInput(), p.hasStems() && ! r.offerHasResult,   // offer a split song only while it has no harmonies yet
+                                  p.getLastInput(), p.hasStems() && ! r.offerHasResult && r.offerExists,   // offer a split song while it's there and has no harmonies yet
                                   hasResult ? r.quality : p.getHarmonyQuality());
     }
     const auto state = p.job.getState();
     const bool finished = state == JobState::Done || state == JobState::Failed;   // the worker writes the strings before the state
-    return uiStateFor (state, p.job.getErrorKind(), p.job.getProgress(),
+    auto s = uiStateFor (state, p.job.getErrorKind(), p.job.getProgress(),
                        finished ? p.job.getError() : juce::String(), finished ? p.job.getPythonExe() : juce::String(),
                        state == JobState::Done ? p.job.getStemDir() : juce::File(),
                        p.hasStems() ? p.getStemDir() : juce::File(), p.getLastInput(), p.isSixStems());
+    if (s.screen == Screen::Stems)
+        s.songGone = ! p.harmonyResults().offerExists;   // cached: at most one disk check a second
+    return s;
 }

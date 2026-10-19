@@ -68,6 +68,7 @@ public:
         juce::File dir;                      // Harmonies' song's 4-stem folder
         juce::String quality;                // its harmony result's quality; empty = no result
         bool offerHasResult = false;         // the Stems product's song already has a harmony result
+        bool offerExists = false;            // the Stems product's song file is there (Harmonies needs it)
         bool valid = false;
         juce::uint32 at = 0;
     };

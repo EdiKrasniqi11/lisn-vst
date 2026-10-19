@@ -103,6 +103,7 @@ const StemSplitterProcessor::HarmonyResults& StemSplitterProcessor::harmonyResul
         c.dir = input == juce::File() ? juce::File() : step == Step::idle ? SeparationJob::stemDirFor (input, "htdemucs") : harmonyFlow.getStemDir();
         c.quality = c.dir == juce::File() ? juce::String() : HarmonyJob::qualityOf (c.dir);   // empty without a result: one read says both
         c.offerHasResult = offer != juce::File() && HarmonyJob::hasResult (SeparationJob::stemDirFor (offer, "htdemucs"));
+        c.offerExists = offer.existsAsFile();
     }
     return c;
 }

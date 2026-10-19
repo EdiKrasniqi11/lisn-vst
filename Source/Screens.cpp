@@ -1129,7 +1129,8 @@ void StemsScreen::setStems (const juce::File& newDir, const juce::String& songNa
 
     auto files = SeparationJob::stemsIn (dir);   // A-Z
     // ponytail: 4-stem splits only; 6 stems + 2 don't fit the panel. A taller panel or a scroll if 6-stem mode wants it.
-    harmonyButton.setVisible (files.size() == 4 && dir.getChildFile ("vocals.wav").existsAsFile());
+    harmonyFits = files.size() == 4 && dir.getChildFile ("vocals.wav").existsAsFile();
+    harmonyButton.setVisible (harmonyFits && songAvailable);
     std::stable_sort (files.begin(), files.end(), [] (const juce::File& a, const juce::File& b) { return stemRank (a) < stemRank (b); });
     for (int i = 0; i < files.size(); ++i)
     {
@@ -1580,6 +1581,14 @@ void StemsScreen::resized()
         r->setBounds (19, y, 674, r->getHeight());
         y += r->getHeight() + (rows.size() > 4 ? 6 : 8);
     }
+}
+
+void StemsScreen::setSongAvailable (bool on)
+{
+    songAvailable = on;
+    if (harmonyButton.isVisible() == (harmonyFits && on)) return;
+    harmonyButton.setVisible (harmonyFits && on);
+    repaint (0, 0, getWidth(), 60);                  // the title's width follows the icon
 }
 
 void StemsScreen::paint (juce::Graphics& g)
