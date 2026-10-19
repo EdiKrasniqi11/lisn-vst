@@ -80,7 +80,7 @@ bool HarmonyJob::download (const juce::URL& url, const juce::String& sha256, con
             ok = ok && out.getStatus().wasOk() && (total <= 0 || out.getPosition() == total);
         }
     }
-    ok = ok && juce::SHA256 (part).toHexString().equalsIgnoreCase (sha256);
+    ok = ok && (sha256.isEmpty() || juce::SHA256 (part).toHexString().equalsIgnoreCase (sha256));   // empty: the release gave no digest
     ok = ok && (! dest.exists() || dest.deleteFile()) && part.moveFileTo (dest);
     if (! ok) part.deleteFile();
     return ok;
