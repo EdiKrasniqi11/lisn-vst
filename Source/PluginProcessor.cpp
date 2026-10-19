@@ -78,6 +78,24 @@ void StemSplitterProcessor::startHarmonies (const juce::File& song, bool keepExi
     notifyHost (*this);
 }
 
+const StemSplitterProcessor::HarmonyResults& StemSplitterProcessor::harmonyResults() const
+{
+    using Step = HarmonyFlow::Step;
+    auto& c = harmonyResultsCache;
+    const auto step = harmonyFlow.getStep();
+    const auto input = step == Step::idle ? getHarmonyInput() : harmonyFlow.getSong();   // idle: a reopened window's song
+    const auto offer = getLastInput();
+    const auto now = juce::Time::getMillisecondCounter();
+    if (! c.valid || c.step != step || c.input != input || c.offer != offer || now - c.at >= 1000)
+    {
+        c.step = step; c.input = input; c.offer = offer; c.at = now; c.valid = true;
+        c.dir = input == juce::File() ? juce::File() : step == Step::idle ? SeparationJob::stemDirFor (input, "htdemucs") : harmonyFlow.getStemDir();
+        c.quality = c.dir == juce::File() ? juce::String() : HarmonyJob::qualityOf (c.dir);   // empty without a result: one read says both
+        c.offerHasResult = offer != juce::File() && HarmonyJob::hasResult (SeparationJob::stemDirFor (offer, "htdemucs"));
+    }
+    return c;
+}
+
 void StemSplitterProcessor::applyJobResults (juce::File& dir, juce::String& python) const
 {
     const auto s = job.getState();

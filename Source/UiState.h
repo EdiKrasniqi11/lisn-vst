@@ -32,7 +32,7 @@ struct UiState
 UiState uiStateFor (JobState, ErrorKind, double progress, const juce::String& errorText, const juce::String& pythonExe,
                     const juce::File& jobStemDir, const juce::File& savedStemDir, const juce::File& lastInput, bool sixStems);
 // Harmonies' mapping. harmonyStemDir is where the result lives (when hasResult); stemSplitterSong is the Stems product's song
-// (empty = none) and stemSplitterSongHasStems says it is already split.
+// (empty = none) and stemSplitterSongHasStems says it is split and still without harmonies, so worth offering.
 UiState harmoniesStateFor (HarmonyFlow::Step, float progress, bool downloading, ErrorKind, const juce::String& errorText,
                            const juce::String& pythonExe, const juce::File& harmonyInput, const juce::File& harmonyStemDir,
                            bool hasResult, const juce::File& stemSplitterSong, bool stemSplitterSongHasStems, const juce::String& quality);

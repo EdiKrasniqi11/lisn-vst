@@ -58,6 +58,20 @@ public:
     void startHarmonies (const juce::File& song, bool keepExistingResult = true);   // Harmonies' flow for this song
     void syncWithJob();                      // adopts a finished job's stem dir and working Python
 
+    // What the Harmonies screens need from disk, re-read when its inputs change and otherwise at most once a second (the
+    // editor asks 30 times a second). Message thread only.
+    struct HarmonyResults
+    {
+        HarmonyFlow::Step step = HarmonyFlow::Step::idle;
+        juce::File input, offer;             // the keys: Harmonies' song, and the Stems product's song
+        juce::File dir;                      // Harmonies' song's 4-stem folder
+        juce::String quality;                // its harmony result's quality; empty = no result
+        bool offerHasResult = false;         // the Stems product's song already has a harmony result
+        bool valid = false;
+        juce::uint32 at = 0;
+    };
+    const HarmonyResults& harmonyResults() const;
+
 private:
     void applyJobResults (juce::File& dir, juce::String& python) const;   // what syncWithJob adopts, applied to copies
 
@@ -71,6 +85,7 @@ private:
     juce::File harmonyInput;   // Harmonies' own song (its stems are the 4-stem split's cache, whatever model says)
     juce::File stemDir;        // folder of finished stems, empty if none
     bool stemDirHasWav = false;
+    mutable HarmonyResults harmonyResultsCache;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemSplitterProcessor)
 };

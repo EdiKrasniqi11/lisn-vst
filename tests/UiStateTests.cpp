@@ -1,4 +1,5 @@
 #include "../Source/PluginEditor.h"
+#include "FakeHarmony.h"
 
 struct UiStateTests : juce::UnitTest
 {
@@ -87,6 +88,55 @@ struct UiStateTests : juce::UnitTest
             expect (! a.sameScreenAs (b));
             b = a; b.harmoniesProduct = false;
             expect (! a.sameScreenAs (b));
+        }
+
+        beginTest ("Harmonies from the processor: the result, the offer and the cached disk checks");
+        {
+            FakeHarmony::CachedSong a, b;   // a is Harmonies' song, b the Stems product's
+            auto load = [&] (StemSplitterProcessor& p, const juce::File& harmonyIn, const juce::File& last, const juce::File& stems)
+            {
+                juce::ValueTree v ("StemSplitter");
+                v.setProperty ("product", "harmonies", nullptr);
+                v.setProperty ("harmonyInput", harmonyIn.getFullPathName(), nullptr);
+                v.setProperty ("input", last.getFullPathName(), nullptr);
+                v.setProperty ("stems", stems.getFullPathName(), nullptr);
+                juce::MemoryBlock mb;
+                if (auto xml = v.createXml()) juce::AudioProcessor::copyXmlToBinary (*xml, mb);
+                p.setStateInformation (mb.getData(), (int) mb.getSize());
+            };
+            auto writeResult = [] (const juce::File& stems, const juce::String& quality)
+            {
+                FakeHarmony::writeWav (HarmonyJob::dirFor (stems).getChildFile ("lead.wav"));
+                FakeHarmony::writeWav (HarmonyJob::dirFor (stems).getChildFile ("harmonies.wav"));
+                HarmonyJob::dirFor (stems).getChildFile ("quality.txt").replaceWithText (quality);
+            };
+
+            auto fresh = [&] (const juce::File& harmonyIn, const juce::File& last, const juce::File& stems)   // a new processor: no cached checks
+            {
+                auto q = std::make_unique<StemSplitterProcessor>();
+                load (*q, harmonyIn, last, stems);
+                return q;
+            };
+            auto p = fresh (a.file, b.file, b.stems);                 // no result for a; b is split and has none: offered
+            auto s = uiStateFor (*p);
+            expect (s.screen == Screen::HarmonyDrop && s.harmoniesProduct && s.offerSong == "song");
+
+            s = uiStateFor (*fresh ({}, {}, {}));                     // nothing at all
+            expect (s.screen == Screen::HarmonyDrop && s.offerSong.isEmpty());
+
+            writeResult (b.stems, "quick");                           // b already has harmonies: no offer
+            s = uiStateFor (*fresh (a.file, b.file, b.stems));
+            expect (s.screen == Screen::HarmonyDrop && s.offerSong.isEmpty());
+
+            writeResult (a.stems, "best");                            // a has a result: its reel
+            p = fresh (a.file, b.file, b.stems);
+            s = uiStateFor (*p);
+            expect (s.screen == Screen::Harmonies && s.harmonyStemDir == a.stems && s.harmonyQuality == "best" && s.songName == "song.wav");
+
+            HarmonyJob::dirFor (a.stems).deleteRecursively();         // deleted while showing: the drop screen within about a second
+            juce::Thread::sleep (1100);
+            s = uiStateFor (*p);
+            expect (s.screen == Screen::HarmonyDrop);
         }
 
         beginTest ("sameScreenAs ignores progress");
