@@ -20,6 +20,8 @@ DefaultDirName={autopf}\LISN StemSplitter
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
+; The in-app update runs this silently while a DAW may have the plugin loaded: never offer to close apps, move the DLL aside instead.
+CloseApplications=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -47,6 +49,9 @@ Source: "THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "vc_redist.x64.exe"; DestDir: "{tmp}"
 
+[InstallDelete]
+Type: files; Name: "{commoncf64}\VST3\LISN StemSplitter.vst3\Contents\x86_64-win\*.old"
+
 [UninstallDelete]
 ; The bundle folder too: Inno only removes folders it created, and a hand-copied beta may have created this one.
 Type: filesandordirs; Name: "{commoncf64}\VST3\LISN StemSplitter.vst3"
@@ -54,6 +59,32 @@ Type: filesandordirs; Name: "{#Engine}"
 Type: dirifempty; Name: "{commonappdata}\LISN"
 
 [Code]
+var
+  EngineFailed: Boolean;
+
+// A DAW that has the plugin loaded locks the DLL against overwrite, but not against rename: move it aside.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Dll, OldDll: String;
+begin
+  Result := '';
+  Dll := ExpandConstant('{commoncf64}\VST3\LISN StemSplitter.vst3\Contents\x86_64-win\LISN StemSplitter.vst3');
+  OldDll := Dll + '.old';
+  if not FileExists(Dll) then
+    Exit;
+  DeleteFile(OldDll);
+  if RenameFile(Dll, OldDll) then
+    RestartReplace(OldDll, '')
+  else if FileExists(Dll) then
+    Result := 'LISN is in use. Close your DAW, then run this installer again.';
+end;
+
+// Exit code 101: installed, but the AI engine setup failed (the in-app updater reads it).
+function GetCustomSetupExitCode(): Integer;
+begin
+  if EngineFailed then Result := 101 else Result := 0;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -70,8 +101,11 @@ begin
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
               ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{app}\engine-setup\setup-engine.ps1" -EngineDir "{#Engine}"'),
               '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
-    MsgBox('LISN StemSplitter is installed, but its AI engine could not be set up.' + #13#10#13#10 +
-           'Check your internet connection and run this installer again.' + #13#10 +
-           'Details: ' + ExpandConstant('{#Engine}\setup.log'), mbError, MB_OK);
+  begin
+    EngineFailed := True;
+    SuppressibleMsgBox('LISN StemSplitter is installed, but its AI engine could not be set up.' + #13#10#13#10 +
+                       'Check your internet connection and run this installer again.' + #13#10 +
+                       'Details: ' + ExpandConstant('{#Engine}\setup.log'), mbError, MB_OK, IDOK);
+  end;
   WizardForm.ProgressGauge.Style := npbstNormal;
 end;

@@ -321,7 +321,11 @@ jobs:
         run: |
           cd dl
           sha() { sha256sum "$1" | cut -d' ' -f1; }
-          notes="LISN-StemSplitter-Setup.exe is the VST3 for FL Studio and Ableton Live. SHA-256: $(sha LISN-StemSplitter-Setup.exe)
+          notes="## What's new
+
+          -
+
+          LISN-StemSplitter-Setup.exe is the VST3 for FL Studio and Ableton Live. SHA-256: $(sha LISN-StemSplitter-Setup.exe)
 
           LISN-Setup.exe is LISN, the desktop app. SHA-256: $(sha LISN-Setup.exe)
 

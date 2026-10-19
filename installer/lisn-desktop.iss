@@ -73,6 +73,8 @@ Root: HKCU; Subkey: "Software\Classes\.ogg\OpenWithProgids"; ValueType: string; 
 
 [Run]
 Filename: "{app}\LISN.exe"; Description: "Launch LISN"; Flags: postinstall nowait skipifsilent; Check: VCRuntimeIsCurrent
+; The in-app update passes /RELAUNCH=1 and quits: start the new LISN as the user, not as the installer.
+Filename: "{app}\LISN.exe"; Flags: nowait runasoriginaluser; Check: IsRelaunch and VCRuntimeIsCurrent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{#Engine}"
@@ -149,6 +151,26 @@ begin
   else
     Log('AI engine is ready');
   WizardForm.ProgressGauge.Style := npbstNormal;
+end;
+
+function IsRelaunch(): Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;
+
+// After an in-app update the old LISN.exe is still quitting: give it up to 15 s to release its mutex, then go on (Inno's in-use handling applies).
+function InitializeSetup(): Boolean;
+var
+  I: Integer;
+begin
+  Result := True;
+  if IsRelaunch() then
+    for I := 1 to 60 do
+    begin
+      if not CheckForMutexes('Global\juceAppLock_LISN,Local\juceAppLock_LISN') then
+        Break;
+      Sleep(250);
+    end;
 end;
 
 // Inno's CloseApplications covers Setup only. Without this, an uninstall with LISN open leaves the in-use LISN.exe behind.
