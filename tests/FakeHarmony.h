@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "../Source/SeparationJob.h"
+#include "../Source/HarmonyJob.h"
 
 // Shared by the tests that stand in for the harmony pass: short WAVs and a fake script that replaces Python.
 namespace FakeHarmony
@@ -66,5 +67,13 @@ inline juce::StringArray okPass (const CachedSong& s)
         "#!/bin/sh\necho '37%|'\ncp \"" + vocals + "\" \"$1/lead.wav\"\n"
         "cp \"" + vocals + "\" \"$1/harmonies.wav\"\n"
         "echo \"$2\" > \"$1/quality.txt\"\n");
+}
+
+// A finished harmony result of that quality in a stem folder, as a pass leaves it.
+inline void writeResult (const juce::File& stems, const juce::String& quality)
+{
+    writeWav (HarmonyJob::dirFor (stems).getChildFile ("lead.wav"));
+    writeWav (HarmonyJob::dirFor (stems).getChildFile ("harmonies.wav"));
+    HarmonyJob::dirFor (stems).getChildFile ("quality.txt").replaceWithText (quality);
 }
 }

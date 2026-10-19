@@ -9,7 +9,8 @@
 #include <optional>
 
 // Fixed 760 x 500: wave background, header and one screen per UiState::Screen. A 30 Hz timer maps the processor to a
-// UiState, updates the stem rows from the player and moves the waves while it plays.
+// UiState, updates the stem rows from the player and moves the waves while it plays. The panel has two pages: StemSplitter's
+// screens on the left, Harmonies' on the right; the name reel switches products and the panel slides between the pages.
 class StemSplitterEditor : public juce::AudioProcessorEditor,
                            public juce::FileDragAndDropTarget,
                            private juce::ChangeListener,
@@ -21,7 +22,7 @@ public:
     void resized() override;
 
     // The keyboard (the editor takes it on any click; see the constructor). Space, L, 1-6, Shift+1-6 and Home on the Stems
-    // screen; every other key returns false, and JUCE passes it on to the host.
+    // screen, Space on the Harmonies screen; every other key returns false, and JUCE passes it on to the host.
     bool keyPressed (const juce::KeyPress&) override;
     // The desktop app's window: the header becomes its title bar (board 1A). With no callbacks (the Mac) macOS's own buttons
     // sit over the header's first 64 px, so it starts there.
@@ -49,8 +50,7 @@ public:
     StemsScreen& stemsScreen() { return stems; }
     HelpSheet& helpSheet() { return help; }
     HarmonyScreen& harmonyScreen() { return harmony; }
-    void showHarmonies (bool on) { if (on) openHarmonies (false); else backToStems (false); }   // no reel, no slide
-    bool showsHarmonies() const { return harmonyView; }
+    ErrorScreen& errorScreen() { return error; }
     Header& headerBar() { return header; }
 
 private:
@@ -64,17 +64,16 @@ private:
     RenderJob::Request renderRequest (const std::vector<float>& gains, double speed, int semitones = 0);
     juce::File renderFile (const std::vector<float>& gains, double speed);   // renderRequest's dest, rendered here unless cached
     void prepareMix();                               // at a speed other than 1, renders the mix on mixJob; sets the chip
-    // The choir icon: cancels a running pass, else starts a Quick one on harmonyJob or opens the result that's there.
-    void harmonyClicked();
-    void updateHarmony();                            // a finished pass opens Harmonies
-    // To the Harmonies screen and back (the Harmony Split canvas, Main board): the header's name spins to "Harmonies",
-    // then the panel slides left; back, it spins to "StemSplitter" while the panel slides right. Without `animate`: at once.
-    void openHarmonies (bool animate);
-    void backToStems (bool animate);
-    void setHarmonyView (bool);                      // which files the player holds; it keeps the position and play state
-    void slideTo (float target, bool animate);       // 0 = the stems, 1 = Harmonies; 0.7 s, ease in-out
+    // The name reel's switch: the song on screen comes along (see the .cpp), the reel spins, and the panel slides once it lands.
+    void switchProduct (bool toHarmonies);
+    void slideTo (float target, bool animate);       // 0 = StemSplitter's page, 1 = Harmonies'; 0.7 s, ease in-out
     void layoutSlide();
     void startSplit (const juce::File&);             // cancels mixJob first: it must not hold stems a re-split replaces
+    // Harmonies' flow for that song; a song that's gone (a restored path) shows Harmonies' drop screen instead.
+    void startHarmonies (const juce::File& song, bool keepExistingResult = true);
+    void retry();                                    // the Error screen's Retry, in the product it failed in
+    void refreshQuality();                           // the Quick | Best switch, its Best tooltip and the drop screen's note
+    bool jobRunning() const;                         // a StemSplitter split or a Harmonies step
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
     StemSplitterProcessor& proc;
@@ -84,13 +83,18 @@ private:
     DropScreen drop;
     SplittingScreen splitting;
     StemsScreen stems;
-    HarmonyScreen harmony;                           // right of the stems; the panel slides between them
-    ErrorScreen error;
+    HarmonyDropScreen harmonyDrop;                   // Harmonies' page, right of StemSplitter's
+    HarmonySplittingScreen harmonySplitting;
+    HarmonyScreen harmony;
+    ErrorScreen error;                               // on the page of the product that failed
     HelpSheet help;
     InfoButton info;                                 // bottom-right corner: opens and closes the help sheet
+    juce::TooltipWindow tooltips { this };           // the choir icon's and the Best side's tooltips
     bool helpOpen = false;
     bool nativeButtons = false;                      // the title bar's buttons are macOS's, not LISN's
     std::optional<UiState> forced, shown;
+    Screen pageScreen[2] { Screen::Drop, Screen::HarmonyDrop };   // the last screen of each page (StemSplitter, Harmonies)
+    bool errorOnRight = false;
     juce::String appliedThemeId;
     std::unique_ptr<juce::FileChooser> chooser;
     float flow = 0.0f, pulse = 0.0f;                 // wave motion
@@ -102,8 +106,6 @@ private:
     RenderJob::Request mixKey;                       // the mix settings of the last tick (dest, from, to)
     double mixKeySince = 0.0;                        // when they last changed (ms); a render starts once they settle for 0.5 s
     RenderJob mixJob;                                // last: it stops before anything it reads goes
-    HarmonyJob harmonyJob;
-    bool harmonyView = false;                        // the player holds Lead + Harmonies (the Harmonies screen's files)
     std::optional<std::pair<double, bool>> carry;    // the position and play state to restore once the player reloads
     float slide = 0.0f, slideFrom = 0.0f, slideTarget = 0.0f;
     double slideStart = 0.0;

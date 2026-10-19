@@ -51,6 +51,7 @@ public:
     std::function<void()> onLanded;
     // A click on the name (not a drag) calls onName while it is clickable; the cursor says so.
     void setNameClickable (bool on) { nameClickable = on; }
+    bool isNameClickable() const { return nameClickable; }
     std::function<void()> onName;
 
     void paint (juce::Graphics&) override;

@@ -78,6 +78,17 @@ void StemSplitterProcessor::startHarmonies (const juce::File& song, bool keepExi
     notifyHost (*this);
 }
 
+void StemSplitterProcessor::clearHarmonySong()
+{
+    harmonyFlow.cancel();   // not under the lock, as in startHarmonies
+    {
+        const juce::ScopedLock sl (settingsLock);
+        if (harmonyInput == juce::File()) return;
+        harmonyInput = juce::File();
+    }
+    notifyHost (*this);
+}
+
 const StemSplitterProcessor::HarmonyResults& StemSplitterProcessor::harmonyResults() const
 {
     using Step = HarmonyFlow::Step;

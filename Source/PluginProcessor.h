@@ -56,6 +56,7 @@ public:
     void setProduct (const juce::String& id);          // anything but "harmonies" means "stems"
     void setHarmonyQuality (const juce::String& q);    // anything but "best" means "quick"
     void startHarmonies (const juce::File& song, bool keepExistingResult = true);   // Harmonies' flow for this song
+    void clearHarmonySong();                 // stops the flow and forgets its song: Harmonies' drop screen
     void syncWithJob();                      // adopts a finished job's stem dir and working Python
 
     // What the Harmonies screens need from disk, re-read when its inputs change and otherwise at most once a second (the

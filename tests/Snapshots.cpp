@@ -211,60 +211,44 @@ int runSnapshots (const juce::File& outDir)
     auto harmonyState = state (Screen::Stems, false);
     harmonyState.stemDir = harmony;
     harmonyState.songName = "Michael Jackson - Liberian Girl (Acapella).mp3";
-    const auto harmonyPlaying = [] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    // Harmonies' page: the editor on its own screens (the name on Harmonies, the second pill on Quick | Best quality).
+    auto harmonies = [] (Screen screen)
     {
-        ed.showHarmonies (true);                     // the name says Harmonies, the panel is on the Harmonies screen
-        ed.tick();                                   // the player loads Lead + Harmonies
-        p.player.setVolume (1, 0.7f);
-        p.player.setPositionFraction (0.38);
-        ed.tick();
+        UiState s;
+        s.screen = screen;
+        s.harmoniesProduct = true;
+        return s;
+    };
+    auto harmoniesState = harmonies (Screen::Harmonies);
+    harmoniesState.harmonyStemDir = harmony;
+    harmoniesState.harmonyQuality = "best";
+    harmoniesState.songName = "Michael Jackson - Liberian Girl (Acapella).mp3";
+    auto harmonyOffer = harmonies (Screen::HarmonyDrop);
+    harmonyOffer.offerSong = "Liberian Girl";
+    auto harmonyWorking = [&] (float progress, bool downloading)
+    {
+        auto s = harmonies (Screen::HarmonySplitting);
+        s.harmonyStep = 2;
+        s.progress = progress;
+        s.downloading = downloading;
+        s.songName = "Liberian Girl.mp3";
+        return s;
+    };
+    const auto harmonyPeaks = [] (StemSplitterEditor& ed)
+    {
         for (int i = 0; i < 60 && ! ed.harmonyScreen().hasPeaks(); ++i)
             juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
     };
+    const auto harmonyPlaying = [harmonyPeaks] (StemSplitterProcessor& p, StemSplitterEditor& ed)
+    {
+        p.player.setVolume (1, 0.7f);                // the player holds Lead + Harmonies since the first tick
+        p.player.setPositionFraction (0.38);
+        ed.tick();
+        harmonyPeaks (ed);
+    };
+    const auto reopened = [harmonyPeaks] (StemSplitterProcessor&, StemSplitterEditor& ed) { harmonyPeaks (ed); };
     const auto reelMid = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().setReelPosition (9.4); };
-    // Harmonies' own screens, which the editor doesn't show yet: the editor's screens hidden, `make`'s screen in the panel, the
-    // name spun to Harmonies and the second pill on Quick | Best quality (Best selected, with its tooltip text, when `best`).
-    std::vector<std::unique_ptr<juce::Component>> standalone;
-    const auto harmonyPanel = [&standalone] (std::function<std::unique_ptr<juce::Component> (const Theme&)> make, bool best, bool working = false)
-    {
-        return Setup ([&standalone, make, best, working] (StemSplitterProcessor& p, StemSplitterEditor& ed)
-        {
-            auto& h = ed.headerBar();
-            h.setProduct (true);
-            h.setHarmonyQuality (best);
-            h.setBestTooltip (best);
-            h.setEnabledSwitches (! working);
-            h.spinTo (true, false);
-            auto* panel = ed.stemsScreen().getParentComponent();
-            for (auto* c : panel->getChildren())
-                c->setVisible (false);
-            auto& screen = *standalone.emplace_back (make (themeFor (p.getTheme())));
-            panel->addAndMakeVisible (screen);
-            screen.setBounds (0, 0, 712, 400);
-        });
-    };
-    const auto harmonyDrop = [harmonyPanel] (const juce::String& offer, bool bestNote, bool best)
-    {
-        return harmonyPanel ([=] (const Theme& t)
-        {
-            auto d = std::make_unique<HarmonyDropScreen>();
-            d->setTheme (t);
-            d->setOffer (offer);
-            d->setBestNote (bestNote);
-            return std::unique_ptr<juce::Component> (std::move (d));
-        }, best);
-    };
-    const auto harmonyWorking = [harmonyPanel] (int step, float progress, bool downloading, bool best)
-    {
-        return harmonyPanel ([=] (const Theme& t)
-        {
-            auto w = std::make_unique<HarmonySplittingScreen>();
-            w->setTheme (t);
-            w->setSong ("Liberian Girl.mp3");
-            w->setStep (step, progress, downloading);
-            return std::unique_ptr<juce::Component> (std::move (w));
-        }, best, true);
-    };
+    const auto best = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().onHarmonyQuality (true); };
     const auto appUpdate = [titleBar, update] (StemSplitterProcessor& p, StemSplitterEditor& ed) { titleBar (p, ed); update (p, ed); };
 
     const std::vector<Shot> shots {
@@ -305,13 +289,14 @@ int runSnapshots (const juce::File& outDir)
         { "update-dusk", "dusk", state (Screen::Stems, false), 1.0f, update },
         { "update-titlebar-dusk@2x", "dusk", state (Screen::Stems, false), 2.0f, appUpdate },
         { "update-titlebar-midnight", "midnight", state (Screen::Drop, false), 1.0f, appUpdate },
-        { "harmony-dusk", "dusk", harmonyState, 1.0f, harmonyPlaying },
-        { "harmony-midnight", "midnight", harmonyState, 1.0f, harmonyPlaying },
+        { "harmony-dusk", "dusk", harmoniesState, 1.0f, harmonyPlaying },
+        { "harmony-midnight", "midnight", harmoniesState, 1.0f, harmonyPlaying },
+        { "harmonies-reopened-dusk", "dusk", harmoniesState, 1.0f, reopened },
         { "stems4-dusk-choir", "dusk", state (Screen::Stems, false), 1.0f, playing },
-        { "harmony-drop-dusk", "dusk", state (Screen::Drop, false), 1.0f, harmonyDrop ({}, false, false) },
-        { "harmony-drop-offer-midnight", "midnight", state (Screen::Drop, false), 1.0f, harmonyDrop ("Liberian Girl", true, true) },
-        { "harmony-splitting-dusk", "dusk", state (Screen::Drop, false), 1.0f, harmonyWorking (2, 0.42f, false, false) },
-        { "harmony-downloading-midnight", "midnight", state (Screen::Drop, false), 1.0f, harmonyWorking (2, 0.1f, true, true) },
+        { "harmony-drop-dusk", "dusk", harmonies (Screen::HarmonyDrop) },
+        { "harmony-drop-offer-midnight", "midnight", harmonyOffer, 1.0f, best },
+        { "harmony-splitting-dusk", "dusk", harmonyWorking (0.42f, false) },
+        { "harmony-downloading-midnight", "midnight", harmonyWorking (0.1f, true), 1.0f, best },
         { "harmony-reel-dusk", "dusk", harmonyState, 1.0f, reelMid },
     };
 

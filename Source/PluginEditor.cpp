@@ -70,18 +70,32 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     addAndMakeVisible (header);
     panelContent.setInterceptsMouseClicks (false, true);
     addAndMakeVisible (panelContent);
-    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmony, &error, &help })
+    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmonyDrop, &harmonySplitting, &harmony, &error, &help })
         panelContent.addChildComponent (s);
     addAndMakeVisible (info);
 
     header.onTheme = [this] (juce::String id) { proc.setTheme (id); applyTheme (themeFor (id)); };
     header.onSixStems = [this] (bool six) { mixJob.cancel(); proc.setSixStems (six); };   // which may re-split
+    header.onHarmonyQuality = [this] (bool best)
+    {
+        const juce::String q = best ? "best" : "quick";
+        proc.setHarmonyQuality (q);
+        if (shown.has_value() && shown->screen == Screen::Harmonies && shown->harmonyQuality != q)
+            startHarmonies (proc.getHarmonyInput(), false);   // redone at the new quality, as the 4/6 switch re-splits
+        else
+            refreshQuality();                        // (a redo's progress screen refreshes it)
+    };
     info.onClick = [this] { setHelpOpen (! helpOpen); };
     help.onClose = [this] { setHelpOpen (false); };
     const auto browse = [this] { choose ("Choose a song", audioPatterns, [this] (const juce::File& f) { startSplit (f); }); };
     drop.onBrowse = browse;
     stems.onNewSong = browse;
     splitting.onCancel = [this] { proc.job.cancel(); };
+    const auto browseHarmonies = [this] { choose ("Choose a song", audioPatterns, [this] (const juce::File& f) { startHarmonies (f); }); };
+    harmonyDrop.onBrowse = browseHarmonies;
+    harmony.onNewSong = browseHarmonies;
+    harmonyDrop.onOffer = [this] { startHarmonies (proc.getLastInput()); };
+    harmonySplitting.onCancel = [this] { proc.harmonyFlow.cancel(); };   // back to its drop screen; stems made stay cached
     stems.onPlayPause = [this]
     {
         if (proc.player.isPlaying()) proc.player.pause();
@@ -95,24 +109,22 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     stems.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
     stems.onSetLoop = [this] (double a, double b) { proc.player.setLoop (a, b); };
     stems.onToggleLoop = [this] { proc.player.setLooping (! proc.player.isLooping()); };
-    stems.onHarmony = [this] { harmonyClicked(); };
+    stems.onHarmony = [this]                         // the choir icon: this song's harmonies (a result that's there opens)
+    {
+        proc.setProduct ("harmonies");
+        startHarmonies (proc.getLastInput());
+        header.spinTo (true, true);                  // onLanded slides over
+    };
     // The Harmonies screen: the player holds Lead and Harmonies while it shows, so lane i is stem i.
-    harmony.onBack = [this] { backToStems (true); };
+    harmony.onBack = [this] { switchProduct (false); };
     harmony.onPlayPause = [this] { stems.onPlayPause(); };
     harmony.onSolo = [this] (int i) { proc.player.solo (i); };
     harmony.onToggleMute = [this] (int i) { proc.player.setMuted (i, ! proc.player.isMuted (i)); };
     harmony.onVolume = [this] (int i, float v) { proc.player.setVolume (i, v); };
     harmony.onSeek = [this] (double f) { proc.player.setPositionFraction (f); };
     harmony.mixFile = [this] { return renderFile (proc.player.mixGains(), 1.0); };
-    header.onName = [this] { if (harmonyView) backToStems (true); else openHarmonies (true); };
-    header.onLanded = [this]
-    {
-        if (header.showsHarmonies() && ! harmonyView)
-        {
-            setHarmonyView (true);
-            slideTo (1.0f, true);
-        }
-    };
+    header.onName = [this] { switchProduct (proc.getProduct() != "harmonies"); };
+    header.onLanded = [this] { slideTo (header.showsHarmonies() ? 1.0f : 0.0f, true); };
     stems.mixFile = [this]   // the mix: what you hear. A stretched mix only comes from mixJob's cache, never rendered here
     {
         const auto speed = proc.player.getSpeed();
@@ -128,7 +140,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
         if (juce::isPositiveAndBelow (i, (int) one.size())) one[(size_t) i] = 1.0f;
         return renderFile (one, 1.0);
     };
-    error.onRetry = [this] { startSplit (proc.getLastInput()); };
+    error.onRetry = [this] { retry(); };
     error.onFindPython = [this]
     {
        #if JUCE_MAC
@@ -138,7 +150,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
        #endif
         {
             proc.setPythonPath (f.getFullPathName());
-            startSplit (proc.getLastInput());
+            retry();
         });
     };
 
@@ -227,7 +239,7 @@ void StemSplitterEditor::resized()
     const auto lights = nativeButtons ? 64 : 0;      // the pills stay right-aligned at x 736
     header.setBounds (24 + lights, 16, 712 - lights, 44);
     panelContent.setBounds (panel);
-    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmony, &error, &help })
+    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmonyDrop, &harmonySplitting, &harmony, &error, &help })
         s->setBounds (panel.withZeroOrigin());
     layoutSlide();
     info.setBounds (716, 476, 24, 24);   // its 16 px ring centred under the panel's right edge, in the 24 px bottom margin
@@ -243,9 +255,16 @@ void StemSplitterEditor::mouseDown (const juce::MouseEvent&)
 bool StemSplitterEditor::keyPressed (const juce::KeyPress& key)
 {
     const auto mods = key.getModifiers();
-    if (! shown.has_value() || shown->screen != Screen::Stems || mods.isCtrlDown() || mods.isAltDown())
+    if (! shown.has_value() || mods.isCtrlDown() || mods.isAltDown())
         return false;                                // FL's shortcuts stay FL's
     const auto code = key.getKeyCode();
+    if (shown->screen == Screen::Harmonies && code == juce::KeyPress::spaceKey)
+    {
+        harmony.onPlayPause();
+        return true;
+    }
+    if (shown->screen != Screen::Stems)
+        return false;
     auto& p = proc.player;
     if (code == juce::KeyPress::spaceKey)
         stems.onPlayPause();
@@ -276,7 +295,11 @@ bool StemSplitterEditor::keyStateChanged (bool isKeyDown)
     // ponytail: isKeyCurrentlyDown reads the live key state (GetAsyncKeyState), so a UI stall longer than a tap can let the
     // key-down leak to FL. Upgrade path: ::GetKeyState (message-synchronous), or the remembered key above.
     const auto mods = juce::ModifierKeys::currentModifiers;
-    if (! isKeyDown || ! shown.has_value() || shown->screen != Screen::Stems || mods.isCtrlDown() || mods.isAltDown())
+    if (! isKeyDown || ! shown.has_value() || mods.isCtrlDown() || mods.isAltDown())
+        return false;
+    if (shown->screen == Screen::Harmonies)
+        return juce::KeyPress::isKeyCurrentlyDown (juce::KeyPress::spaceKey);
+    if (shown->screen != Screen::Stems)
         return false;
     for (const int k : { (int) juce::KeyPress::spaceKey, (int) 'L', (int) '1', (int) '2', (int) '3', (int) '4', (int) '5', (int) '6' })
         if (juce::KeyPress::isKeyCurrentlyDown (k))
@@ -294,12 +317,14 @@ void StemSplitterEditor::tick()
         show (s);
     // The player always holds the stems on screen: a reopened window keeps its mix, position and loop (same files), and a
     // re-split of the same song (same stem dir, so the screen didn't change) reloads what startSplit() unloaded.
-    // On the Harmonies screen it holds Lead + Harmonies instead, picking up where the stems were.
-    const auto wanted = harmonyView ? harmony.getFiles() : stems.getFiles();
-    if (s.screen == Screen::Stems && stems.getDir() != unloadableDir && proc.player.getFiles() != wanted && ! wanted.isEmpty())
+    // On the Harmonies screen it holds Lead + Harmonies instead, picking up where the same song's stems were.
+    const bool onHarmonies = s.screen == Screen::Harmonies, onStems = s.screen == Screen::Stems;
+    const auto wanted = onHarmonies ? harmony.getFiles() : onStems ? stems.getFiles() : juce::Array<juce::File>();
+    const auto filesDir = onHarmonies ? HarmonyJob::dirFor (s.harmonyStemDir) : stems.getDir();
+    if (! wanted.isEmpty() && filesDir != unloadableDir && proc.player.getFiles() != wanted)
     {
         if (! proc.player.load (wanted))
-            unloadableDir = stems.getDir();
+            unloadableDir = filesDir;
         else if (carry.has_value())
         {
             proc.player.setPositionFraction (carry->first);
@@ -309,20 +334,26 @@ void StemSplitterEditor::tick()
     }
     if (s.screen == Screen::Splitting)
         splitting.setProgress (s.progress);
+    if (s.screen == Screen::HarmonySplitting)
+        harmonySplitting.setStep (s.harmonyStep, (float) s.progress, s.downloading);
+    // While a split or a Harmonies step runs, the switches and the name wait (file drops too: isInterestedInFileDrag).
+    const bool busy = s.screen == Screen::Splitting || s.screen == Screen::HarmonySplitting || jobRunning();
+    header.setEnabledSwitches (! busy);
+    header.setNameClickable (! busy);
     if (proc.getTheme() != appliedThemeId)           // e.g. the host restored another project
         applyTheme (themeFor (proc.getTheme()));
 
     auto& player = proc.player;
     if (player.takeReachedEnd())                     // the song played to its end: back to 0:00
         player.setPositionFraction (0.0);
-    if (harmonyView)
+    if (onHarmonies)
     {
         harmony.setPlayback (player.isPlaying(), player.getPositionFraction(), player.getLengthSeconds());
         harmony.setAudible (player.audibleMask());
         for (int i = 0; i < 2; ++i)
             harmony.setVolume (i, player.getVolume (i));
     }
-    else
+    else if (onStems)
     {
         stems.setPlayback (player.isPlaying(), player.getPositionFraction(), player.getLengthSeconds());
         stems.setAudible (player.audibleMask());
@@ -331,11 +362,7 @@ void StemSplitterEditor::tick()
         stems.setSpeed (player.getSpeed());
         stems.setPitch (player.getPitch());
         stems.setLoop (player.getLoop(), player.isLooping());
-    }
-    if (s.screen == Screen::Stems)
-    {
-        if (! harmonyView) prepareMix();
-        updateHarmony();
+        prepareMix();
     }
 
     // Beat motion: fast attack, slow release; after the player stops the waves settle and stop.
@@ -364,38 +391,61 @@ void StemSplitterEditor::tick()
 
 void StemSplitterEditor::show (const UiState& s)
 {
+    const auto prev = shown;
     shown = s;
-    showScreen();
-
-    const float tints[] = { 0.60f, 0.66f, 0.66f, 0.70f };   // Drop, Splitting, Stems, Error
-    waves.setPanel (panel, 22.0f, tints[(int) s.screen]);
-    header.setEnabledSwitches (s.screen != Screen::Splitting);
-    header.setSixStems (s.sixStems);
-    drop.setSixStems (s.sixStems);
-    drop.setHighlighted (false);
-    splitting.setSong (s.songName, s.sixStems);
-    error.setError (s.error, s.errorText, s.pythonExe);
-
-    if (s.screen != Screen::Stems || s.stemDir != stems.getDir())   // another song or screen: back on the stems, no reel
+    const bool right = s.harmoniesProduct;
+    pageScreen[right ? 1 : 0] = s.screen;
+    if (s.screen == Screen::Error)
+        errorOnRight = right;
+    // A product the reel isn't on (a reopened window, a host restoring another project): its page at once, no spin, no
+    // slide. A click on the name or the choir icon spins the reel first, and the panel slides once it lands.
+    if (header.showsHarmonies() != right)
     {
-        mixJob.cancel();
-        harmonyJob.cancel();
-        harmonyView = false;
-        carry.reset();
-        slideTo (0.0f, false);
-        header.spinTo (false, false);
-        header.setNameClickable (false);
+        header.spinTo (right, false);
+        slideTo (right ? 1.0f : 0.0f, false);
     }
-    if (s.screen != Screen::Stems)
+    layoutSlide();
+
+    const float tints[] = { 0.60f, 0.66f, 0.66f, 0.70f, 0.60f, 0.66f, 0.66f };   // by Screen: Drop, Splitting, Stems, Error,
+    waves.setPanel (panel, 22.0f, tints[(int) s.screen]);                         // HarmonyDrop, HarmonySplitting, Harmonies
+    header.setProduct (right);
+    if (right)
+    {
+        harmonyDrop.setOffer (s.offerSong);
+        harmonyDrop.setHighlighted (false);
+        harmonySplitting.setSong (s.songName);
+    }
+    else                                             // StemSplitter's page keeps its screens while Harmonies shows
+    {
+        header.setSixStems (s.sixStems);
+        drop.setSixStems (s.sixStems);
+        drop.setHighlighted (false);
+        splitting.setSong (s.songName, s.sixStems);
+    }
+    if (s.screen == Screen::Error)
+        error.setError (s.error, s.errorText, s.pythonExe);
+    refreshQuality();
+
+    // The player: the stems on Stems, Lead + Harmonies on Harmonies, nothing otherwise. Between a song's stems and its
+    // Lead + Harmonies it picks up where it was (carry); switchProduct may have taken the position before a re-split.
+    const bool playable = s.screen == Screen::Stems || s.screen == Screen::Harmonies;
+    const bool flips = playable && prev.has_value() && prev->screen != s.screen && prev->songName == s.songName
+                    && (prev->screen == Screen::Stems || prev->screen == Screen::Harmonies);
+    if (s.screen != Screen::Stems || s.stemDir != stems.getDir() || flips)
+        mixJob.cancel();                             // it renders the files the player is about to drop
+    if (! flips)
+        carry.reset();
+    else if (! carry.has_value())
+        carry = std::make_pair (proc.player.getPositionFraction(), proc.player.isPlaying());
+    if (! playable)
     {
         proc.player.unload();
         unloadableDir = juce::File();
     }
-    else if (s.stemDir != stems.getDir())
-    {
+    if (s.screen == Screen::Stems && s.stemDir != stems.getDir())
         stems.setStems (s.stemDir, s.songName);
-        header.setNameClickable (HarmonyJob::hasResult (s.stemDir));   // a song split before: its name opens Harmonies
-    }
+    if (s.screen == Screen::Harmonies)
+        harmony.setSong (s.harmonyStemDir, s.songName, s.harmonyQuality);
 }
 
 void StemSplitterEditor::setHelpOpen (bool open)
@@ -406,14 +456,30 @@ void StemSplitterEditor::setHelpOpen (bool open)
 
 void StemSplitterEditor::showScreen()
 {
-    const auto is = [this] (Screen x) { return ! helpOpen && shown.has_value() && shown->screen == x; };
-    drop.setVisible (is (Screen::Drop));
-    splitting.setVisible (is (Screen::Splitting));
-    stems.setVisible (is (Screen::Stems) && slide < 1.0f);
-    harmony.setVisible (is (Screen::Stems) && slide > 0.0f);
-    error.setVisible (is (Screen::Error));
+    // Each page shows its last screen while any of it is in the panel.
+    const auto on = [this] (bool right, Screen x)
+    {
+        return ! helpOpen && shown.has_value() && pageScreen[right ? 1 : 0] == x && (right ? slide > 0.0f : slide < 1.0f);
+    };
+    drop.setVisible (on (false, Screen::Drop));
+    splitting.setVisible (on (false, Screen::Splitting));
+    stems.setVisible (on (false, Screen::Stems));
+    harmonyDrop.setVisible (on (true, Screen::HarmonyDrop));
+    harmonySplitting.setVisible (on (true, Screen::HarmonySplitting));
+    harmony.setVisible (on (true, Screen::Harmonies));
+    error.setVisible (on (errorOnRight, Screen::Error));
     help.setVisible (helpOpen);
     info.setToggleState (helpOpen, juce::dontSendNotification);
+}
+
+void StemSplitterEditor::refreshQuality()
+{
+    const bool best = proc.getHarmonyQuality() == "best";
+    const bool bestMissing = HarmonyJob::findModel ("best", proc.getPythonPath()) == juce::File();
+    const bool onResult = shown.has_value() && shown->screen == Screen::Harmonies;   // the switch shows the result's quality
+    header.setHarmonyQuality (onResult ? shown->harmonyQuality == "best" : best);
+    header.setBestTooltip (bestMissing);
+    harmonyDrop.setBestNote (best && bestMissing);
 }
 
 void StemSplitterEditor::applyTheme (const Theme& t)
@@ -424,6 +490,8 @@ void StemSplitterEditor::applyTheme (const Theme& t)
     drop.setTheme (t);
     splitting.setTheme (t);
     stems.setTheme (t);
+    harmonyDrop.setTheme (t);
+    harmonySplitting.setTheme (t);
     harmony.setTheme (t);
     error.setTheme (t);
     help.setTheme (t);
@@ -442,68 +510,59 @@ void StemSplitterEditor::choose (const juce::String& title, const juce::String& 
 
 bool StemSplitterEditor::isInterestedInFileDrag (const juce::StringArray& files)
 {
-    if (files.size() != 1) return false;
+    if (files.size() != 1 || jobRunning()) return false;
     const juce::File f (files[0]);
-    return f.hasFileExtension ("wav;mp3;flac;aif;aiff;ogg") && ! f.isAChildOf (stems.getDir());   // not our own stems dragged back
+    const auto harmonies = shown.has_value() ? shown->harmonyStemDir : juce::File();
+    return f.hasFileExtension ("wav;mp3;flac;aif;aiff;ogg")
+        && ! f.isAChildOf (stems.getDir()) && ! f.isAChildOf (harmonies);   // not our own stems dragged back
 }
 
 void StemSplitterEditor::fileDragEnter (const juce::StringArray&, int, int)
 {
     drop.setHighlighted (true);
+    harmonyDrop.setHighlighted (true);
 }
 
 void StemSplitterEditor::fileDragExit (const juce::StringArray&)
 {
     drop.setHighlighted (false);
+    harmonyDrop.setHighlighted (false);
 }
 
 void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
 {
     setHelpOpen (false);
     drop.setHighlighted (false);
-    startSplit (juce::File (files[0]));
+    harmonyDrop.setHighlighted (false);
+    const juce::File f (files[0]);
+    if (proc.getProduct() == "harmonies") startHarmonies (f);
+    else                                  startSplit (f);
 }
 
-// ponytail: the choir icon takes today's path (a Quick pass, or the result that's there) until Harmonies is its own product (the
-// next task rewires this).
-void StemSplitterEditor::harmonyClicked()
+// The song on screen follows the switch. To Harmonies: StemSplitter's split song opens its harmonies when it has them, else
+// Harmonies' drop screen offers it. To StemSplitter: the song on the Harmonies screen is split there too (a cache hit
+// when it was split at StemSplitter's 4/6 before).
+void StemSplitterEditor::switchProduct (bool toHarmonies)
 {
-    const auto dir = stems.getDir();
-    if (harmonyJob.getState() == HarmonyJob::State::running)
-        harmonyJob.cancel();
-    else if (HarmonyJob::hasResult (dir))
-        openHarmonies (true);
-    else
-        harmonyJob.start (dir, proc.getPythonPath(), "quick");   // the player holds the stems now, not the files it replaces
-}
-
-void StemSplitterEditor::openHarmonies (bool animate)
-{
-    const auto dir = stems.getDir();
-    if (! HarmonyJob::hasResult (dir)) return;
-    harmony.setSong (dir, shown.has_value() ? shown->songName : juce::String(), HarmonyJob::qualityOf (dir));
-    header.setNameClickable (true);
-    header.spinTo (true, animate);                   // animated, onLanded slides over
-    if (! animate)
+    const auto stemsSong = proc.getLastInput();
+    if (toHarmonies && proc.hasStems() && stemsSong.existsAsFile())
     {
-        setHarmonyView (true);
-        slideTo (1.0f, false);
+        if (HarmonyJob::hasResult (SeparationJob::stemDirFor (stemsSong, "htdemucs")))
+            startHarmonies (stemsSong);
+        else
+            proc.clearHarmonySong();
     }
-}
-
-void StemSplitterEditor::backToStems (bool animate)
-{
-    header.spinTo (false, animate);
-    setHarmonyView (false);
-    slideTo (0.0f, animate);
-}
-
-void StemSplitterEditor::setHarmonyView (bool on)
-{
-    if (on == harmonyView) return;
-    mixJob.cancel();                                 // it renders the files the player is about to drop
-    carry = std::make_pair (proc.player.getPositionFraction(), proc.player.isPlaying());
-    harmonyView = on;
+    else if (! toHarmonies && shown.has_value() && shown->screen == Screen::Harmonies)
+    {
+        const auto song = proc.getHarmonyInput();
+        if (song != stemsSong && song.existsAsFile())
+        {
+            carry = std::make_pair (proc.player.getPositionFraction(), proc.player.isPlaying());   // before the split unloads it
+            startSplit (song);
+        }
+    }
+    proc.setProduct (toHarmonies ? "harmonies" : "stems");
+    header.spinTo (toHarmonies, true);               // onLanded slides
 }
 
 void StemSplitterEditor::slideTo (float target, bool animate)
@@ -536,26 +595,42 @@ void StemSplitterEditor::slideTo (float target, bool animate)
 void StemSplitterEditor::layoutSlide()
 {
     const auto x = juce::roundToInt (slide * (float) panel.getWidth());
-    stems.setTopLeftPosition (-x, 0);
-    harmony.setTopLeftPosition (panel.getWidth() - x, 0);
+    for (auto* c : std::initializer_list<juce::Component*> { &drop, &splitting, &stems })
+        c->setTopLeftPosition (-x, 0);
+    for (auto* c : std::initializer_list<juce::Component*> { &harmonyDrop, &harmonySplitting, &harmony })
+        c->setTopLeftPosition (panel.getWidth() - x, 0);
+    error.setTopLeftPosition (errorOnRight ? panel.getWidth() - x : -x, 0);
     showScreen();
-}
-
-void StemSplitterEditor::updateHarmony()
-{
-    const auto state = harmonyJob.getState();
-    if (state == HarmonyJob::State::done)
-    {
-        harmonyJob.cancel();                         // back to idle: the result opens from the cache from now on
-        openHarmonies (true);
-    }
 }
 
 void StemSplitterEditor::startSplit (const juce::File& input)
 {
     mixJob.cancel();
-    harmonyJob.cancel();
     proc.startSplit (input);
+}
+
+void StemSplitterEditor::startHarmonies (const juce::File& song, bool keepExistingResult)
+{
+    if (! song.existsAsFile())
+    {
+        proc.clearHarmonySong();                     // never a flow on nothing
+        return;
+    }
+    if (! keepExistingResult)
+        proc.player.unload();                        // the redo replaces the Lead + Harmonies files it may hold
+    proc.startHarmonies (song, keepExistingResult);
+}
+
+void StemSplitterEditor::retry()
+{
+    if (proc.getProduct() == "harmonies") startHarmonies (proc.getHarmonyInput());
+    else                                  startSplit (proc.getLastInput());
+}
+
+bool StemSplitterEditor::jobRunning() const
+{
+    const auto step = proc.harmonyFlow.getStep();
+    return proc.job.getState() == JobState::Running || step == HarmonyFlow::Step::vocals || step == HarmonyFlow::Step::harmonies;
 }
 
 RenderJob::Request StemSplitterEditor::renderRequest (const std::vector<float>& gains, double speed, int semitones)
@@ -571,7 +646,8 @@ RenderJob::Request StemSplitterEditor::renderRequest (const std::vector<float>& 
     const auto name = StemPlayer::renderName (shown->songName, names, gains, speed, loopSec, semitones);
     if (name.isEmpty()) return {};
     const auto from = p.isLooping() ? loopSec.getStart() : 0.0, to = p.isLooping() ? loopSec.getEnd() : len;
-    return { files, gains, from, to, speed, stems.getDir().getChildFile ("renders").getChildFile (name), semitones };
+    const auto dir = shown->screen == Screen::Harmonies ? shown->harmonyStemDir : stems.getDir();
+    return { files, gains, from, to, speed, dir.getChildFile ("renders").getChildFile (name), semitones };
 }
 
 juce::File StemSplitterEditor::renderFile (const std::vector<float>& gains, double speed)

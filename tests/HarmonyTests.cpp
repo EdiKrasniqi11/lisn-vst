@@ -1,5 +1,6 @@
 #include "FakeHarmony.h"
 #include "../Source/HarmonyJob.h"
+#include "../Source/PluginEditor.h"
 #include "../Source/Screens.h"
 #include "../Source/Theme.h"
 #include <juce_cryptography/juce_cryptography.h>
@@ -18,6 +19,159 @@ struct HarmonyTests : juce::UnitTest
         job.start (dir, {}, quality);
         for (int i = 0; i < 1000 && job.getState() == HarmonyJob::State::running; ++i) juce::Thread::sleep (10);
         return job.getState();
+    }
+
+    static void waitForFlow (StemSplitterProcessor& p)   // the flow's timer needs the message loop
+    {
+        using Step = HarmonyFlow::Step;
+        for (int i = 0; i < 100 && (p.harmonyFlow.getStep() == Step::vocals || p.harmonyFlow.getStep() == Step::harmonies); ++i)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (100);
+    }
+
+    // The editor wired to the processor: the reel, the choir icon, the switch, Retry and a reopened window.
+    void editorTests()
+    {
+        using Step = HarmonyFlow::Step;
+
+        beginTest ("the editor: the choir icon spins to Harmonies and starts that song's harmonies");
+        {
+            CachedSong s;
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.harmonyFlow.harmonyJobForTests().testCommand = okPass (s);
+            proc.startSplit (s.file);                        // a cache hit: StemSplitter shows its stems
+            StemSplitterEditor ed (proc);
+            expect (ed.stemsScreen().isVisible() && ed.stemsScreen().hasHarmonyButton());
+            ed.stemsScreen().harmonyControl().onClick();
+            expectEquals (proc.getProduct(), juce::String ("harmonies"));
+            expect (ed.headerBar().showsHarmonies());
+            expect (proc.harmonyFlow.getSong() == s.file && proc.harmonyFlow.getStep() != Step::idle);
+            waitForFlow (proc);
+            expect (proc.harmonyFlow.getStep() == Step::done, proc.harmonyFlow.getError());
+            expect (proc.getLastInput() == s.file && ! proc.isSixStems());   // StemSplitter's song and 4/6 untouched
+        }
+
+        beginTest ("the editor: the name to Harmonies follows StemSplitter's song");
+        {
+            CachedSong x, y;
+            writeResult (x.stems, "best");
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.startHarmonies (x.file);                    // Harmonies' own song, with a result
+            proc.startSplit (y.file);                        // StemSplitter's, split, without harmonies
+            StemSplitterEditor ed (proc);
+            ed.headerBar().onName();
+            expectEquals (proc.getProduct(), juce::String ("harmonies"));
+            auto st = uiStateFor (proc);
+            expect (st.screen == Screen::HarmonyDrop && st.offerSong == "song", "the drop screen offers the song on screen");
+            ed.tick();
+            ed.headerBar().onName();                         // back: the drop screen has no song, StemSplitter keeps its own
+            expectEquals (proc.getProduct(), juce::String ("stems"));
+            expect (proc.getLastInput() == y.file);
+            ed.tick();
+            writeResult (y.stems, "quick");
+            ed.headerBar().onName();                         // y has harmonies now: they open
+            st = uiStateFor (proc);
+            expect (st.screen == Screen::Harmonies && st.harmonyStemDir == y.stems);
+        }
+
+        beginTest ("the editor: the name back to StemSplitter takes Harmonies' song along, from the cache");
+        {
+            CachedSong x, y;
+            writeResult (x.stems, "quick");
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.startSplit (y.file);
+            proc.setProduct ("harmonies");
+            proc.startHarmonies (x.file);                    // a result: done at once
+            StemSplitterEditor ed (proc);
+            expect (ed.harmonyScreen().isVisible() && ed.headerBar().isNameClickable());
+            ed.headerBar().onName();
+            expectEquals (proc.getProduct(), juce::String ("stems"));
+            expect (! ed.headerBar().showsHarmonies());
+            expect (proc.getLastInput() == x.file);
+            expect (proc.job.getState() == JobState::Done, "a cache hit: no Python ran");
+        }
+
+        beginTest ("the editor: while Harmonies works, the name, the switches and file drops wait");
+        {
+            CachedSong s;
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.harmonyFlow.harmonyJobForTests().testCommand = fakeCommand (s.root.getChildFile ("slow"),
+                "@echo off\r\nping -n 4 127.0.0.1 >nul\r\n", "#!/bin/sh\nexec sleep 3\n");
+            proc.setProduct ("harmonies");
+            StemSplitterEditor ed (proc);
+            const juce::StringArray drag { s.root.getChildFile ("x.wav").getFullPathName() };
+            expect (ed.headerBar().isNameClickable() && ed.isInterestedInFileDrag (drag));
+            proc.startHarmonies (s.file);
+            ed.tick();
+            expect (proc.harmonyFlow.getStep() == Step::harmonies);
+            expect (! ed.headerBar().isNameClickable());
+            expect (! ed.isInterestedInFileDrag (drag));
+            expect (! ed.headerBar().stemsPillControl().isEnabled());
+            proc.harmonyFlow.cancel();
+            ed.tick();
+            expect (ed.headerBar().isNameClickable() && ed.isInterestedInFileDrag (drag));
+            juce::Thread::sleep (3500);                      // the orphaned ping/sleep lets go of the folder
+        }
+
+        beginTest ("the editor: Best on a Quick result redoes it");
+        {
+            CachedSong s;
+            writeResult (s.stems, "quick");
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.harmonyFlow.harmonyJobForTests().testCommand = okPass (s);
+            proc.setProduct ("harmonies");
+            proc.startHarmonies (s.file);
+            StemSplitterEditor ed (proc);
+            expect (ed.harmonyScreen().isVisible());
+            ed.headerBar().onHarmonyQuality (true);
+            expectEquals (proc.getHarmonyQuality(), juce::String ("best"));
+            expect (proc.harmonyFlow.getStep() == Step::harmonies);
+            waitForFlow (proc);
+            expect (proc.harmonyFlow.getStep() == Step::done, proc.harmonyFlow.getError());
+            expectEquals (HarmonyJob::qualityOf (s.stems), juce::String ("best"));
+        }
+
+        beginTest ("the editor: Retry on a song that's gone shows Harmonies' drop screen");
+        {
+            CachedSong s;
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            proc.harmonyFlow.harmonyJobForTests().testCommand = fakeCommand (s.root.getChildFile ("bad"),
+                "@echo off\r\necho NEEDS SETUP: no model\r\nexit /b 3\r\n", "#!/bin/sh\necho NEEDS SETUP: no model\nexit 3\n");
+            proc.setProduct ("harmonies");
+            proc.startHarmonies (s.file);
+            waitForFlow (proc);
+            StemSplitterEditor ed (proc);
+            expect (ed.errorScreen().isVisible());
+            s.file.deleteFile();
+            ed.errorScreen().onRetry();
+            expect (proc.harmonyFlow.getStep() == Step::idle, "no flow on a missing file");
+            expect (uiStateFor (proc).screen == Screen::HarmonyDrop);
+        }
+
+        beginTest ("the editor: reopened in Harmonies, it is there at once");
+        {
+            CachedSong s;
+            writeResult (s.stems, "best");
+            juce::MemoryBlock saved;
+            {
+                StemSplitterProcessor a;
+                a.setProduct ("harmonies");
+                a.startHarmonies (s.file);
+                a.getStateInformation (saved);
+            }
+            StemSplitterProcessor b;
+            b.introShown = true;
+            b.setStateInformation (saved.getData(), (int) saved.getSize());
+            StemSplitterEditor ed (b);
+            expect (ed.headerBar().showsHarmonies() && ! ed.headerBar().isSpinning());
+            expect (ed.harmonyScreen().isVisible() && ! ed.stemsScreen().isVisible());
+            expectEquals (ed.harmonyScreen().getX(), 0);
+        }
     }
 
     void runTest() override
@@ -242,6 +396,7 @@ struct HarmonyTests : juce::UnitTest
 
         juce::Thread::sleep (3500);   // the orphaned ping/sleep lets go of the folder
         root.deleteRecursively();
+        editorTests();
     }
 };
 
