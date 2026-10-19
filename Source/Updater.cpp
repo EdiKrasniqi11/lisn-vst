@@ -2,6 +2,16 @@
 #include "HarmonyJob.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_cryptography/juce_cryptography.h>
+#if JUCE_WINDOWS
+ #ifndef NOMINMAX
+  #define NOMINMAX
+ #endif
+ #ifndef WIN32_LEAN_AND_MEAN
+  #define WIN32_LEAN_AND_MEAN
+ #endif
+ #include <windows.h>
+ #include <shellapi.h>
+#endif
 
 JUCE_IMPLEMENT_SINGLETON (Updater)
 
@@ -154,7 +164,37 @@ void Updater::run()
     });
 }
 
-int Updater::launchInstaller (const juce::File&, bool)
+int Updater::launchInstaller (const juce::File& installer, bool standalone)
 {
-    return -1;   // Task 4
+   #if JUCE_WINDOWS
+    // The exe's manifest asks for admin, so "open" shows UAC.
+    const auto exe = installer.getFullPathName().toWideCharPointer();
+    const std::wstring args = standalone ? L"/SILENT /SUPPRESSMSGBOXES /NORESTART /RELAUNCH=1"
+                                         : L"/SILENT /SUPPRESSMSGBOXES /NORESTART";
+    SHELLEXECUTEINFOW sei {};
+    sei.cbSize = sizeof (sei);
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+    sei.lpVerb = L"open";
+    sei.lpFile = exe;
+    sei.lpParameters = args.c_str();
+    sei.nShow = SW_SHOWNORMAL;
+    if (! ShellExecuteExW (&sei))
+        return GetLastError() == ERROR_CANCELLED ? 1223 : -1;
+    if (sei.hProcess == nullptr) return standalone ? -2 : -1;
+    if (standalone) { CloseHandle (sei.hProcess); return -2; }   // the editor quits the app; the installer relaunches it
+
+    // Wait in short turns so a closing host never has to kill this thread; the installer itself is left running.
+    while (WaitForSingleObject (sei.hProcess, 200) == WAIT_TIMEOUT)
+        if (juce::Thread::currentThreadShouldExit()) { CloseHandle (sei.hProcess); return -1; }
+    DWORD code = 0;
+    const auto got = GetExitCodeProcess (sei.hProcess, &code);
+    CloseHandle (sei.hProcess);
+    return got ? (int) code : -1;
+   #elif JUCE_MAC
+    juce::ignoreUnused (standalone);
+    return installer.startAsProcess() ? -2 : -1;
+   #else
+    juce::ignoreUnused (installer, standalone);
+    return -1;
+   #endif
 }
