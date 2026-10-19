@@ -1,5 +1,6 @@
 #include "../Source/UpdateCheck.h"
 #include "../Source/Screens.h"
+#include "../Source/PluginEditor.h"
 
 struct UpdateCheckTests : juce::UnitTest
 {
@@ -100,10 +101,64 @@ struct UpdateCheckTests : juce::UnitTest
             juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
             expectEquals (clicks, 1);
 
+            // A plugin's long text takes the name's place, clear of the pills (the desktop app's longest is "Downloading 99%").
+            h.showUpdate ("0.2.5", titleBar ? "Downloading 99%" : "Restart FL Studio to finish");
+            expect (pill->getButtonText() != "Update 0.2.5");
+            expect (pill->isVisible() && pill->getRight() + 12 <= firstPill->getX(), juce::String (pill->getRight()));
+
             h.showUpdate ({});
             expect (! pill->isVisible());
         }
+
+        beginTest ("the update panel");
+        {
+            StemSplitterProcessor proc;
+            proc.introShown = true;
+            StemSplitterEditor ed (proc);
+            UiState error;
+            error.screen = Screen::Error;
+            ed.forceState (error);
+            ed.tick();
+            auto& panel = ed.updateScreen();
+            expect (! panel.isVisible() && ed.errorScreen().isVisible());
+            ed.headerBar().onUpdate();                       // the pill opens it in place of the screen
+            expect (panel.isVisible() && ! ed.errorScreen().isVisible());
+            ed.headerBar().onUpdate();                       // and closes it
+            expect (! panel.isVisible() && ed.errorScreen().isVisible());
+            ed.headerBar().onUpdate();
+            ed.setHelpOpen (true);                           // help takes the panel's place
+            expect (! panel.isVisible() && ed.helpSheet().isVisible());
+            ed.setUpdateOpen (true);                         // and the other way round
+            expect (panel.isVisible() && ! ed.helpSheet().isVisible());
+            panel.onLater();                                 // Later: back to the screen that was there
+            expect (! panel.isVisible() && ! ed.helpSheet().isVisible() && ed.errorScreen().isVisible());
+        }
+        {
+            UpdateScreen u;
+            u.setBounds (0, 0, 712, 400);
+            ReleaseInfo r;
+            r.version = "0.3.1";
+            r.notes = { "**Harmonies**: split the lead from the backing vocals", "Faster splits", "Fixes" };
+            r.installerUrl = "https://example.com/LISN-Setup.exe";
+            r.installerSize = 26 * 1024 * 1024;
+            u.setRelease (r, "0.3.0");
+            u.setView (UpdateScreen::View::whatsNew, 0.0f, true, false, "FL Studio");
+            expect (! u.primaryButton().isEnabled());        // a split is running
+            expectEquals (u.primaryButton().getButtonText(), juce::String ("Update now"));
+            u.setView (UpdateScreen::View::whatsNew, 0.0f, false, false, "FL Studio");
+            expect (u.primaryButton().isEnabled());          // the job ended: it wakes up in place
+
+            juce::Image shot (juce::Image::RGB, 152, 100, true);
+            u.setScreenshots ({ shot, shot, shot });
+            expectEquals (u.shownScreenshot(), 0);
+            const auto p = u.dotArea (1).getCentre();
+            const auto now = juce::Time::getCurrentTime();
+            u.mouseUp (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                         &u, &u, now, p, now, 1, false));
+            expectEquals (u.shownScreenshot(), 1);
+        }
     }
 };
+
 
 static UpdateCheckTests updateCheckTests;

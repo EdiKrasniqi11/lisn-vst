@@ -86,7 +86,7 @@ class UpdatePill : public juce::Button
 public:
     UpdatePill();
     void setAccent (juce::Colour);
-    int preferredWidth() const;                  // for getButtonText(), "Update 0.2.5"
+    int preferredWidth() const;                  // for getButtonText(): "Update 0.2.5", "Downloading 58%", "Restart FL Studio to finish"
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 
 private:

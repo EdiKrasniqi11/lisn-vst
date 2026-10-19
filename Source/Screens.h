@@ -2,6 +2,7 @@
 #include "StemRow.h"
 #include "SeparationJob.h"
 #include "Peaks.h"
+#include "ReleaseInfo.h"
 
 // The screens of docs/design. Each screen takes the panel bounds (24, 76, 712, 400) and lays out in panel coordinates;
 // it paints only its own content over the WaveBackground panel. Nothing here takes keyboard focus.
@@ -38,8 +39,9 @@ public:
     // the pills, and a drag anywhere else (the symbol and text too) moves the window. With no callbacks (the Mac, whose
     // window has its own buttons) it adds no buttons and no separator.
     void makeTitleBar (std::function<void()> minimise, std::function<void()> close);
-    // "Update 0.2.5" in a pill 16 px after the title (the update-notice mockup, option A); empty hides it.
-    void showUpdate (const juce::String& version);
+    // "Update 0.2.5" in a pill 16 px after the title (the update-notice mockup, option A); an empty version hides it.
+    // `text` replaces "Update <version>" ("Downloading 58%", "Restart FL Studio to finish").
+    void showUpdate (const juce::String& version, const juce::String& text = {});
     std::function<void()> onUpdate;
     // The name after "LISN" is a slot reel (the Harmony Split canvas, Main and Reel boards): spinTo (true) spins up through
     // the stem names in their colours and lands on "Harmonies" (a gold glow) in 1.9 s; spinTo (false) spins back to
@@ -85,6 +87,7 @@ private:
     WindowButton minimiseButton { false }, closeButton { true };
     UpdatePill update;
     bool titleBar = false, nativeButtons = false;
+    bool pillOverName = false;                     // the update pill sits after "LISN" (see placeUpdate)
     juce::ComponentDragger dragger;
 };
 
@@ -433,6 +436,8 @@ public:
     ErrorScreen();
     void setTheme (const Theme&);
     void setError (ErrorKind, const juce::String& text, const juce::String& pythonExe);
+    // An update changed the AI engine while this process runs: "Restart <host> to finish the update", no box, no buttons.
+    void setRestart (const juce::String& host);
     std::function<void()> onRetry, onFindPython;
 
     void paint (juce::Graphics&) override;
@@ -443,6 +448,7 @@ private:
     ErrorKind kind = ErrorKind::PythonMissing;
     juce::String title, body, command, copyText;   // command: the one-line code (Python / Demucs missing)
     juce::StringArray lines;                       // Failed: the last lines of demucs' output
+    bool restart = false;                          // setRestart's message
     float top = 0.0f, bodyHeight = 0.0f;
     juce::Rectangle<float> box;
     LisnButton copy, retry, findPython;
@@ -465,4 +471,46 @@ public:
 private:
     SegmentedPill tabs;
     LisnButton close;
+};
+
+// The update's "What's new" (update-popup.html, layout C "In the panel"): in panel coordinates with a 24 px inset, the
+// screenshot on the left 55 % (dots to flip when there are several; none: the LISN symbol), the release on the right, the
+// buttons at its bottom right. The editor shows it in the panel in place of the current screen, from the header's pill.
+class UpdateScreen : public juce::Component
+{
+public:
+    UpdateScreen();
+    void setTheme (const Theme&);
+    void setRelease (const ReleaseInfo&, const juce::String& currentVersion);
+    void setScreenshots (juce::Array<juce::Image>);   // empty: the LISN symbol on the panel instead
+    // What the right side shows. busyJob dims Update now with "Finish the current split first". installing: the ready view
+    // with its button dimmed, reading "Installing...". No repaint when nothing changed (the editor calls it every tick).
+    enum class View { whatsNew, downloading, ready, installing, installed, waiting, failedDownload, failedInstall, inUse, engine };
+    void setView (View, float progress, bool busyJob, bool standalone, const juce::String& host);
+    std::function<void()> onLater, onUpdate, onCancel, onInstall, onRetry, onWebsite;
+
+    // test hooks
+    int shownScreenshot() const { return shot; }
+    LisnButton& primaryButton() { return primary; }
+    juce::Rectangle<float> dotArea (int index) const;  // the 16 px hit area of a screenshot's dot
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseUp (const juce::MouseEvent&) override;   // a dot shows its screenshot
+
+private:
+    juce::Rectangle<float> shotArea() const;         // the screenshot fitted in the left 55 %
+    void refresh();                                  // the copy and the buttons for the view and the release
+    Theme theme = themeFor ("dusk");
+    ReleaseInfo release;
+    juce::String current, host, message;
+    juce::Array<juce::Image> shots;
+    int shot = 0;
+    View view = View::whatsNew;
+    float progress = 0.0f;
+    bool busy = false, standalone = false;
+    std::vector<juce::TextLayout> notes;             // shaped once per release: the panel repaints with the waves
+    std::unique_ptr<juce::Drawable> symbol;
+    LisnButton later, primary, cancel, website;
+    juce::HyperlinkButton more;
 };

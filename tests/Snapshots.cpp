@@ -250,6 +250,36 @@ int runSnapshots (const juce::File& outDir)
     const auto reelMid = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().setReelPosition (9.4); };
     const auto best = [] (StemSplitterProcessor&, StemSplitterEditor& ed) { ed.headerBar().onHarmonyQuality (true); };
     const auto appUpdate = [titleBar, update] (StemSplitterProcessor& p, StemSplitterEditor& ed) { titleBar (p, ed); update (p, ed); };
+    // The update panel (layout C) with a test release: 3 notes, a 1520 x 1000 gradient as the screenshot.
+    juce::Image gradient (juce::Image::RGB, 1520, 1000, true);
+    {
+        juce::Graphics g (gradient);
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff45283A), 0.0f, 0.0f, juce::Colour (0xffF08A7C), 1520.0f, 1000.0f, false));
+        g.fillAll();
+    }
+    ReleaseInfo release;
+    release.version = "0.3.1";
+    release.pageUrl = "https://github.com/EdiKrasniqi11/lisn-vst/releases/tag/v0.3.1";
+    release.notes = { "**Harmonies**: split the lead from the backing vocals", "Faster splits on Apple Silicon",
+                      "The stems screen remembers your loop" };
+    release.installerUrl = "https://example.com/LISN-Setup.exe";
+    release.installerSize = 26 * 1024 * 1024;
+    using View = UpdateScreen::View;
+    const auto updatePanel = [gradient, release] (View view, float progress, bool busy, bool standalone, juce::String pill, int shots)
+    {
+        return Setup ([=] (StemSplitterProcessor&, StemSplitterEditor& ed)
+        {
+            if (standalone) ed.makeTitleBar ([] {}, [] {});
+            ed.headerBar().showUpdate ("0.3.1", pill);
+            ed.setUpdateOpen (true);
+            auto& u = ed.updateScreen();
+            u.setRelease (release, "0.3.0");
+            juce::Array<juce::Image> images;
+            for (int i = 0; i < shots; ++i) images.add (gradient);
+            u.setScreenshots (images);
+            u.setView (view, progress, busy, standalone, "FL Studio");
+        });
+    };
 
     const std::vector<Shot> shots {
         { "drop-dusk", "dusk", state (Screen::Drop, false) },
@@ -289,6 +319,16 @@ int runSnapshots (const juce::File& outDir)
         { "update-dusk", "dusk", state (Screen::Stems, false), 1.0f, update },
         { "update-titlebar-dusk@2x", "dusk", state (Screen::Stems, false), 2.0f, appUpdate },
         { "update-titlebar-midnight", "midnight", state (Screen::Drop, false), 1.0f, appUpdate },
+        { "update-whatsnew", "dusk", state (Screen::Stems, false), 1.0f, updatePanel (View::whatsNew, 0.0f, false, false, {}, 3) },
+        { "update-whatsnew-noshots-midnight", "midnight", state (Screen::Drop, false), 1.0f, updatePanel (View::whatsNew, 0.0f, false, false, {}, 0) },
+        { "update-busy", "dusk", state (Screen::Drop, false), 1.0f, updatePanel (View::whatsNew, 0.0f, true, false, {}, 1) },
+        { "update-downloading", "dusk", state (Screen::Drop, false), 1.0f, updatePanel (View::downloading, 0.58f, false, false, "Downloading 58%", 1) },
+        { "update-ready-app", "dusk", state (Screen::Drop, false), 1.0f, updatePanel (View::ready, 1.0f, false, true, {}, 1) },
+        { "update-ready-daw", "dusk", state (Screen::Drop, false), 1.0f, updatePanel (View::ready, 1.0f, false, false, {}, 1) },
+        { "update-installed-daw", "dusk", state (Screen::Drop, false), 1.0f, updatePanel (View::installed, 1.0f, false, false, "Restart FL Studio to finish", 1) },
+        { "update-waiting-mac", "dusk", state (Screen::Drop, false), 1.0f, updatePanel (View::waiting, 1.0f, false, false, {}, 1) },
+        { "update-failed-download", "dusk", state (Screen::Drop, false), 1.0f, updatePanel (View::failedDownload, 0.0f, false, false, {}, 1) },
+        { "update-inuse", "dusk", state (Screen::Drop, false), 1.0f, updatePanel (View::inUse, 1.0f, false, false, {}, 1) },
         { "harmony-dusk", "dusk", harmoniesState, 1.0f, harmonyPlaying },
         { "harmony-midnight", "midnight", harmoniesState, 1.0f, harmonyPlaying },
         { "harmonies-reopened-dusk", "dusk", harmoniesState, 1.0f, reopened },

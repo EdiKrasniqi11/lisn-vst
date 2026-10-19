@@ -70,7 +70,7 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     addAndMakeVisible (header);
     panelContent.setInterceptsMouseClicks (false, true);
     addAndMakeVisible (panelContent);
-    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmonyDrop, &harmonySplitting, &harmony, &error, &help })
+    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmonyDrop, &harmonySplitting, &harmony, &error, &help, &updatePanel })
         panelContent.addChildComponent (s);
     addAndMakeVisible (info);
 
@@ -158,24 +158,52 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
         });
     };
 
-    // A newer LISN: the header's update pill opens its installer. Not in the tests (no plugin wrapper), which stay offline.
+    // A newer LISN: the header's update pill opens What's new in the panel, and Update now downloads and installs it.
+    // UpdateCheck and Updater only in the plugin and the app: the tests (no plugin wrapper) stay offline and drive the panel.
     using Wrapper = juce::AudioProcessor::WrapperType;
     const auto wrapper = juce::PluginHostType::getPluginLoadedAs();
-    header.onUpdate = [standalone = wrapper == Wrapper::wrapperType_Standalone]
+    live = wrapper != Wrapper::wrapperType_Undefined;
+    standaloneApp = wrapper == Wrapper::wrapperType_Standalone;
+    header.onUpdate = [this] { setUpdateOpen (! updateOpen); };
+    updatePanel.onLater = [this] { setUpdateOpen (false); };   // a download goes on
+    updatePanel.onUpdate = [this]
     {
-       #if JUCE_MAC
-        const char* const installer = "LISN-Mac.pkg";   // one installer for the app and the plugins
-        juce::ignoreUnused (standalone);
-       #else
-        const char* const installer = standalone ? "LISN-Setup.exe" : "LISN-StemSplitter-Setup.exe";
-       #endif
-        juce::URL (juce::String ("https://github.com/EdiKrasniqi11/lisn-vst/releases/latest/download/") + installer).launchInDefaultBrowser();
+        if (! live) return;
+        const auto& r = UpdateCheck::getInstance()->getRelease();
+        if (r.installerUrl.isEmpty()) juce::URL (r.pageUrl).launchInDefaultBrowser();   // published without this installer
+        else                          Updater::getInstance()->startDownload (r);
     };
-    if (wrapper != Wrapper::wrapperType_Undefined)
+    updatePanel.onCancel = [this] { if (live) Updater::getInstance()->cancel(); };
+    updatePanel.onRetry = [this]
     {
+        if (! live) return;
+        Updater::getInstance()->reset();
+        Updater::getInstance()->startDownload (UpdateCheck::getInstance()->getRelease());   // a file whose hash matches is reused
+    };
+    // Install. After "close the DAW" or an engine failure the file is still there: reset, and startDownload finds it (with a
+    // hash) and is ready at once, so this one click installs again. Without a hash it downloads first.
+    updatePanel.onInstall = [this]
+    {
+        if (! live) return;
+        auto& u = *Updater::getInstance();
+        if (u.getStep() == Updater::Step::failed)
+        {
+            u.reset();
+            u.startDownload (UpdateCheck::getInstance()->getRelease());
+        }
+        if (u.getStep() != Updater::Step::ready) return;
+        // The engine's ready.txt: python is <engine>/venv/Scripts/python.exe (bin/python3 on the Mac).
+        const auto python = proc.getPythonPath();
+        u.install (juce::File::isAbsolutePath (python)
+                       ? juce::File (python).getParentDirectory().getParentDirectory().getParentDirectory().getChildFile ("ready.txt")
+                       : juce::File());
+    };
+    updatePanel.onWebsite = [this]
+    {
+        juce::URL ("https://github.com/EdiKrasniqi11/lisn-vst/releases/latest/download/" + installerAssetName (standaloneApp)).launchInDefaultBrowser();
+    };
+    if (live)
         UpdateCheck::getInstance()->addChangeListener (this);
-        changeListenerCallback (nullptr);
-    }
 
     setSize (760, 500);
     tick();   // first screen and theme before the window shows
@@ -232,9 +260,90 @@ StemSplitterEditor::~StemSplitterEditor()
     proc.player.pause();
 }
 
-void StemSplitterEditor::changeListenerCallback (juce::ChangeBroadcaster*)
+void StemSplitterEditor::syncUpdate()
 {
-    header.showUpdate (UpdateCheck::getInstance()->getNewerVersion());
+    if (! live) return;
+    const auto version = UpdateCheck::getInstance()->getNewerVersion();
+    const auto& u = *Updater::getInstance();
+    using Step = Updater::Step;
+    using View = UpdateScreen::View;
+    const auto step = u.getStep();
+    juce::String pill;
+    if (step == Step::downloading)                       pill = "Downloading " + juce::String (juce::roundToInt (u.getProgress() * 100.0f)) + "%";
+    else if (step == Step::installed && ! standaloneApp) pill = "Restart " + hostName() + " to finish";
+    if (pill != pillText || version != pillVersion)    // showUpdate repaints: not every tick
+    {
+        pillText = pill;
+        pillVersion = version;
+        header.showUpdate (version, pill);
+    }
+
+    auto view = View::whatsNew;
+    switch (step)
+    {
+        case Step::idle:                break;
+        case Step::downloading:         view = View::downloading; break;
+        case Step::ready:               view = View::ready; break;
+        case Step::installing:          view = View::installing; break;
+        case Step::installed:           view = View::installed; break;
+        case Step::waitingForInstaller: view = View::waiting; break;
+        case Step::failed:
+            switch (u.getFailure())
+            {
+                case Updater::Failure::download: view = View::failedDownload; break;
+                case Updater::Failure::inUse:    view = View::inUse; break;
+                case Updater::Failure::engine:   view = View::engine; break;
+                default:                         view = View::failedInstall; break;
+            }
+            break;
+    }
+    updatePanel.setView (view, u.getProgress(), jobRunning(), standaloneApp, hostName());
+
+    // The desktop app quits for its installer (Windows: the installer reopens it; Mac: once the Installer is open).
+    if (standaloneApp && step == Step::waitingForInstaller && ! quitAsked)
+    {
+        quitAsked = true;
+        if (auto* app = juce::JUCEApplicationBase::getInstance())
+            app->systemRequestedQuit();
+    }
+}
+
+void StemSplitterEditor::loadScreenshots()
+{
+    if (shotsAsked || ! live) return;
+    shotsAsked = true;
+    const auto urls = UpdateCheck::getInstance()->getRelease().screenshots;
+    if (urls.isEmpty()) return;
+    shotPool.addJob ([urls, safe = juce::Component::SafePointer<StemSplitterEditor> (this)]
+    {
+        juce::Array<juce::Image> images;
+        for (const auto& url : urls)
+        {
+            juce::MemoryBlock data;   // readEntireBinaryStream, with a timeout so a closing editor never waits long
+            if (auto in = juce::URL (url).createInputStream (juce::URL::InputStreamOptions (juce::URL::ParameterHandling::inAddress)
+                                                                  .withConnectionTimeoutMs (5000).withNumRedirectsToFollow (5)))
+                in->readIntoMemoryBlock (data);
+            if (auto img = juce::ImageFileFormat::loadFrom (data.getData(), data.getSize()); img.isValid())
+                images.add (img);
+        }
+        if (! images.isEmpty())   // none: the panel keeps the LISN symbol
+            juce::MessageManager::callAsync ([safe, images]
+            {
+                if (safe != nullptr) safe->updatePanel.setScreenshots (images);
+            });
+    });
+}
+
+bool StemSplitterEditor::updateBlocksJobs()
+{
+    if (! live || ! Updater::getInstance()->engineChanged()) return false;
+    const bool right = shown.has_value() && shown->harmoniesProduct;
+    error.setRestart (hostName());
+    errorOnRight = right;
+    pageScreen[right ? 1 : 0] = Screen::Error;       // until the screen changes (show() sets it again)
+    helpOpen = updateOpen = false;
+    layoutSlide();
+    return true;
 }
 
 void StemSplitterEditor::resized()
@@ -243,7 +352,7 @@ void StemSplitterEditor::resized()
     const auto lights = nativeButtons ? 64 : 0;      // the pills stay right-aligned at x 736
     header.setBounds (24 + lights, 16, 712 - lights, 44);
     panelContent.setBounds (panel);
-    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmonyDrop, &harmonySplitting, &harmony, &error, &help })
+    for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmonyDrop, &harmonySplitting, &harmony, &error, &help, &updatePanel })
         s->setBounds (panel.withZeroOrigin());
     layoutSlide();
     info.setBounds (716, 476, 24, 24);   // its 16 px ring centred under the panel's right edge, in the 24 px bottom margin
@@ -344,6 +453,7 @@ void StemSplitterEditor::tick()
     const bool busy = s.screen == Screen::Splitting || s.screen == Screen::HarmonySplitting || jobRunning();
     header.setEnabledSwitches (! busy);
     header.setNameClickable (! busy);
+    syncUpdate();
     if (proc.getTheme() != appliedThemeId)           // e.g. the host restored another project
         applyTheme (themeFor (proc.getTheme()));
 
@@ -461,6 +571,20 @@ void StemSplitterEditor::show (const UiState& s)
 void StemSplitterEditor::setHelpOpen (bool open)
 {
     helpOpen = open;
+    updateOpen = updateOpen && ! open;
+    showScreen();
+}
+
+void StemSplitterEditor::setUpdateOpen (bool open)
+{
+    updateOpen = open;
+    helpOpen = helpOpen && ! open;
+    if (open && live)
+    {
+        updatePanel.setRelease (UpdateCheck::getInstance()->getRelease(), JucePlugin_VersionString);
+        loadScreenshots();
+        syncUpdate();
+    }
     showScreen();
 }
 
@@ -469,7 +593,7 @@ void StemSplitterEditor::showScreen()
     // Each page shows its last screen while any of it is in the panel.
     const auto on = [this] (bool right, Screen x)
     {
-        return ! helpOpen && shown.has_value() && pageScreen[right ? 1 : 0] == x && (right ? slide > 0.0f : slide < 1.0f);
+        return ! helpOpen && ! updateOpen && shown.has_value() && pageScreen[right ? 1 : 0] == x && (right ? slide > 0.0f : slide < 1.0f);
     };
     drop.setVisible (on (false, Screen::Drop));
     splitting.setVisible (on (false, Screen::Splitting));
@@ -487,6 +611,7 @@ void StemSplitterEditor::showScreen()
         c->setInterceptsMouseClicks (settled && right, settled && right);
     error.setInterceptsMouseClicks (settled && errorOnRight == right, settled && errorOnRight == right);
     help.setVisible (helpOpen);
+    updatePanel.setVisible (updateOpen);
     info.setToggleState (helpOpen, juce::dontSendNotification);
 }
 
@@ -512,6 +637,7 @@ void StemSplitterEditor::applyTheme (const Theme& t)
     harmony.setTheme (t);
     error.setTheme (t);
     help.setTheme (t);
+    updatePanel.setTheme (t);
 }
 
 void StemSplitterEditor::choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then)
@@ -549,6 +675,7 @@ void StemSplitterEditor::fileDragExit (const juce::StringArray&)
 void StemSplitterEditor::filesDropped (const juce::StringArray& files, int, int)
 {
     setHelpOpen (false);
+    setUpdateOpen (false);
     drop.setHighlighted (false);
     harmonyDrop.setHighlighted (false);
     const juce::File f (files[0]);
@@ -625,7 +752,7 @@ void StemSplitterEditor::layoutSlide()
 // chooser that returns after a job started, a click on the page being left while it slides).
 void StemSplitterEditor::startSplit (const juce::File& input)
 {
-    if (jobRunning()) return;
+    if (jobRunning() || updateBlocksJobs()) return;
     mixJob.cancel();
     proc.setProduct ("stems");                       // its progress and Cancel are on StemSplitter's page (show() snaps there)
     proc.startSplit (input);
@@ -633,7 +760,7 @@ void StemSplitterEditor::startSplit (const juce::File& input)
 
 void StemSplitterEditor::startHarmonies (const juce::File& song, bool keepExistingResult)
 {
-    if (jobRunning()) return;
+    if (jobRunning() || updateBlocksJobs()) return;
     if (! song.existsAsFile())
     {
         proc.clearHarmonySong();                     // never a flow on nothing

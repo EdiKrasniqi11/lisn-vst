@@ -5,6 +5,7 @@
 #include "Screens.h"
 #include "UiState.h"
 #include "UpdateCheck.h"
+#include "Updater.h"
 #include "WaveBackground.h"
 #include <optional>
 
@@ -35,6 +36,7 @@ public:
     bool keyStateChanged (bool isKeyDown) override;
     void mouseDown (const juce::MouseEvent&) override;
     void setHelpOpen (bool);                         // the help sheet in the panel in place of the screen, the info button lit
+    void setUpdateOpen (bool);                       // the update's What's new in its place (the header's pill); closes help
 
     bool isInterestedInFileDrag (const juce::StringArray&) override;   // one audio file
     void fileDragEnter (const juce::StringArray&, int, int) override;
@@ -49,6 +51,7 @@ public:
     WaveBackground& background() { return waves; }
     StemsScreen& stemsScreen() { return stems; }
     HelpSheet& helpSheet() { return help; }
+    UpdateScreen& updateScreen() { return updatePanel; }
     HarmonyScreen& harmonyScreen() { return harmony; }
     ErrorScreen& errorScreen() { return error; }
     HarmonyDropScreen& harmonyDropScreen() { return harmonyDrop; }
@@ -58,7 +61,11 @@ public:
 
 private:
     void timerCallback() override { tick(); }
-    void changeListenerCallback (juce::ChangeBroadcaster*) override;   // UpdateCheck found a newer LISN
+    void changeListenerCallback (juce::ChangeBroadcaster*) override { syncUpdate(); }   // UpdateCheck found a newer LISN
+    // The pill's text and the update panel's view from UpdateCheck and Updater (plugin and app only: the tests stay offline).
+    void syncUpdate();
+    void loadScreenshots();                          // the release's screenshots, once, on shotPool
+    bool updateBlocksJobs();                         // an install changed the engine: the Error screen asks for a restart
     void advanceIntro();                             // one display frame of the intro
     void show (const UiState&);
     void showScreen();                               // the shown screen, or the help sheet in its place
@@ -91,9 +98,13 @@ private:
     HarmonyScreen harmony;
     ErrorScreen error;                               // on the page of the product that failed
     HelpSheet help;
+    UpdateScreen updatePanel;
     InfoButton info;                                 // bottom-right corner: opens and closes the help sheet
     juce::TooltipWindow tooltips { this };           // the choir icon's and the Best side's tooltips
-    bool helpOpen = false;
+    bool helpOpen = false, updateOpen = false;
+    bool live = false, standaloneApp = false;        // a real plugin or the app (not the tests); the desktop app
+    bool shotsAsked = false, quitAsked = false;
+    juce::String pillText, pillVersion;              // what the header's pill shows
     bool nativeButtons = false;                      // the title bar's buttons are macOS's, not LISN's
     std::optional<UiState> forced, shown;
     Screen pageScreen[2] { Screen::Drop, Screen::HarmonyDrop };   // the last screen of each page (StemSplitter, Harmonies)
@@ -113,6 +124,7 @@ private:
     float slide = 0.0f, slideFrom = 0.0f, slideTarget = 0.0f;
     double slideStart = 0.0;
     std::unique_ptr<juce::VBlankAttachment> slideFrames;   // while sliding
+    juce::ThreadPool shotPool { 1 };                 // goes first: a screenshot download (5 s timeout) ends before the editor
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StemSplitterEditor)
 };

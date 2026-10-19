@@ -131,20 +131,22 @@ Header::Header()
     addChildComponent (update);
 }
 
-void Header::showUpdate (const juce::String& version)
+void Header::showUpdate (const juce::String& version, const juce::String& label)
 {
-    update.setButtonText ("Update " + version);
+    update.setButtonText (label.isNotEmpty() ? label : "Update " + version);
     updateVersion = version;
     placeUpdate();
 }
 
 void Header::placeUpdate()
 {
-    // The title bar has no room for the name and the pill: the pill takes the name's place (after "LISN") while it rests
-    // on StemSplitter, and steps aside while the reel spins to or shows Harmonies.
+    // The title bar has no room for the name and the pill, nor the plugin's header for a long pill ("Restart FL Studio to
+    // finish"): the pill takes the name's place (after "LISN") while it rests on StemSplitter, and steps aside while the
+    // reel spins to or shows Harmonies.
     const auto reelBusy = spinning || reelTarget > 0.0 || reelPos != 0.0;
-    update.setVisible (updateVersion.isNotEmpty() && ! (titleBar && reelBusy));
-    const auto x = titleBar ? juce::roundToInt (title.getBoundingBox (0, -1, true).getRight()) : nameArea().getRight() - 4;
+    pillOverName = titleBar || nameArea().getRight() - 4 + 16 + update.preferredWidth() + 12 > themePill.getX();
+    update.setVisible (updateVersion.isNotEmpty() && ! (pillOverName && reelBusy));
+    const auto x = pillOverName ? juce::roundToInt (title.getBoundingBox (0, -1, true).getRight()) : nameArea().getRight() - 4;
     update.setBounds (x + 16, 9, update.preferredWidth(), 26);   // 16 px after the title, centred on the capitals (y 22)
     repaint (nameArea().expanded (14, 0));
 }
@@ -360,7 +362,7 @@ void Header::paint (juce::Graphics& g)
 
     g.setColour (Theme::cream);
     title.draw (g);
-    if (! (titleBar && update.isVisible()))          // in the title bar the update pill sits where the name goes
+    if (! (pillOverName && update.isVisible()))      // the update pill sits where the name goes
     {
         // The reel: the words around reelPos, faded by their distance from the line. Mid-spin each word leaves two faint
         // copies along its path (motion blur); the landed "Harmonies" glows for 1.2 s.
@@ -411,11 +413,11 @@ void Header::resized()
         minimiseButton.setBounds (closeButton.getX() - 8 - 32, 6, 32, 32);
         right = minimiseButton.getX() - 21;
     }
-    // The update pill: 16 px after the title, centred on the header like the capitals (y 22)
-    placeUpdate();
     const auto w = stemsPill.preferredWidth();
     stemsPill.setBounds (right - w, 3, w, 38);
     themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);
+    // The update pill: 16 px after the title, centred on the header like the capitals (y 22); clear of the theme pill
+    placeUpdate();
 }
 
 void Header::mouseDown (const juce::MouseEvent& e)
@@ -1668,6 +1670,7 @@ void ErrorScreen::setTheme (const Theme& t)
 void ErrorScreen::setError (ErrorKind k, const juce::String& text, const juce::String& pythonExe)
 {
     kind = k == ErrorKind::PythonMissing || k == ErrorKind::DemucsMissing ? k : ErrorKind::Failed;
+    restart = false;
     const juce::String pip ("python -m pip install demucs");
     lines.clear();
    #if JUCE_MAC
@@ -1712,12 +1715,25 @@ void ErrorScreen::setError (ErrorKind k, const juce::String& text, const juce::S
     repaint();
 }
 
+void ErrorScreen::setRestart (const juce::String& host)
+{
+    setError (ErrorKind::Failed, {}, {});
+    restart = true;
+    title = "Restart " + host + " to finish the update";
+    body = "The update changed LISN's AI engine. Splits and Harmonies work again once " + host + " restarts.";
+    lines.clear();
+    resized();
+    repaint();
+}
+
 void ErrorScreen::resized()
 {
     const bool failed = kind == ErrorKind::Failed;
     bodyHeight = (float) lineCount (Fonts::body (14.0f), body, 520.0f) * 14.0f * 1.55f;
     const auto boxH = failed ? 20.0f + 18.0f * (float) lines.size() : 46.0f;
     top = 1.0f + (398.0f - (44.0f + 16.0f + bodyHeight + 16.0f + boxH + 16.0f + 4.0f + 38.0f)) / 2.0f;
+    if (restart)
+        top = 1.0f + (398.0f - (44.0f + 16.0f + bodyHeight)) / 2.0f;
     box = { 96.0f, top + 44.0f + 16.0f + bodyHeight + 16.0f, 520.0f, boxH };
 
     const auto copyW = copy.preferredWidth();   // 1 px border + 6 px padding from the box edge
@@ -1727,6 +1743,8 @@ void ErrorScreen::resized()
     retry.setBounds (96, y, retry.preferredWidth(), retry.height);
     findPython.setBounds (retry.getRight() + 10, y, findPython.preferredWidth(), findPython.height);
     findPython.setVisible (! failed);
+    copy.setVisible (! restart);
+    retry.setVisible (! restart);
 }
 
 void ErrorScreen::paint (juce::Graphics& g)
@@ -1740,6 +1758,8 @@ void ErrorScreen::paint (juce::Graphics& g)
           juce::Justification::centredLeft);
     paragraph (g, Fonts::body (14.0f), Theme::cream.withAlpha (0.8f), body, { 96.0f, top + 60.0f, 520.0f, bodyHeight }, 14.0f * 1.55f,
                juce::Justification::left);
+    if (restart)
+        return;
 
     g.setColour (juce::Colour (0xff0C060A).withAlpha (0.55f));
     g.fillRoundedRectangle (box, 12.0f);
@@ -2192,4 +2212,261 @@ void HarmonyScreen::paintOverChildren (juce::Graphics& g)
         const auto x = (float) l.wave.getX() + (float) (fraction * l.wave.getWidth());
         g.fillRoundedRectangle (x - 1.0f, (float) l.wave.getY() + 2.0f, 2.0f, (float) l.wave.getHeight() - 4.0f, 1.0f);
     }
+}
+
+//==============================================================================
+namespace
+{
+    constexpr float inset = 24.0f, columnX = inset + 365.0f + inset, columnW = panelW - inset - columnX;   // 413, 275
+    constexpr float bodyY = 92.0f, buttonY = 400.0f - inset - 34.0f;
+
+    // "**Harmonies**: split ..." with the ** runs in Bold.
+    juce::TextLayout noteLayout (const juce::String& bullet, float width)
+    {
+        juce::AttributedString a;
+        a.setWordWrap (juce::AttributedString::byWord);
+        auto rest = bullet;
+        bool bold = false;
+        while (rest.isNotEmpty())
+        {
+            const auto run = rest.upToFirstOccurrenceOf ("**", false, false);
+            if (run.isNotEmpty())
+                a.append (run, bold ? Fonts::body (14.0f, 700) : Fonts::body (14.0f), bold ? Theme::cream : Theme::cream.withAlpha (0.82f));
+            rest = rest.fromFirstOccurrenceOf ("**", false, false);
+            bold = ! bold;
+        }
+        juce::TextLayout t;
+        t.createLayout (a, width);
+        return t;
+    }
+}
+
+UpdateScreen::UpdateScreen()
+    : symbol (juce::Drawable::createFromImageData (BinaryData::lisnsymbolglass_svg, (size_t) BinaryData::lisnsymbolglass_svgSize)),
+      later ("Later", LisnButton::Style::Ghost), primary ("Update now", LisnButton::Style::Primary),
+      cancel ("Cancel", LisnButton::Style::Ghost), website ("Download from the website", LisnButton::Style::Ghost)
+{
+    cancel.borderAlpha = website.borderAlpha = 0.3f;
+    later.onClick = [this] { if (onLater != nullptr) onLater(); };
+    cancel.onClick = [this] { if (onCancel != nullptr) onCancel(); };
+    website.onClick = [this] { if (onWebsite != nullptr) onWebsite(); };
+    primary.onClick = [this]
+    {
+        const auto call = [] (const std::function<void()>& f) { if (f != nullptr) f(); };
+        switch (view)
+        {
+            case View::whatsNew:       call (onUpdate); break;
+            case View::failedDownload:
+            case View::failedInstall:  call (onRetry); break;
+            default:                   call (onInstall); break;   // ready, inUse, engine
+        }
+    };
+    for (auto* b : { &later, &primary, &cancel, &website })
+        addChildComponent (b);
+    more.setButtonText (ellipsis + "and more");
+    more.setFont (Fonts::body (14.0f), false, juce::Justification::centredLeft);
+    more.setWantsKeyboardFocus (false);
+    more.setMouseClickGrabsKeyboardFocus (false);
+    addChildComponent (more);
+    setTheme (theme);
+    setBufferedToImage (true);                       // the waves move behind it every motion frame
+    refresh();
+}
+
+void UpdateScreen::setTheme (const Theme& t)
+{
+    theme = t;
+    more.setColour (juce::HyperlinkButton::textColourId, t.guitar);
+    repaint();
+}
+
+void UpdateScreen::setRelease (const ReleaseInfo& r, const juce::String& currentVersion)
+{
+    release = r;
+    current = currentVersion;
+    more.setURL (juce::URL (r.pageUrl));
+    notes.clear();
+    for (const auto& n : r.notes)
+        notes.push_back (noteLayout (n, columnW - 16.0f));
+    refresh();
+}
+
+void UpdateScreen::setScreenshots (juce::Array<juce::Image> images)
+{
+    shots = std::move (images);
+    shot = 0;
+    resized();
+    repaint();
+}
+
+void UpdateScreen::setView (View v, float p, bool busyJob, bool app, const juce::String& hostName)
+{
+    p = juce::jlimit (0.0f, 1.0f, p);
+    if (v == view && juce::exactlyEqual (p, progress) && busyJob == busy && app == standalone && hostName == host)
+        return;
+    view = v;
+    progress = p;
+    busy = busyJob;
+    standalone = app;
+    host = hostName;
+    refresh();
+}
+
+void UpdateScreen::refresh()
+{
+    const auto v = view;
+    const auto app = standalone;
+    const auto next = "LISN " + release.version + " starts the next time you open " + host + ".";
+    juce::String label ("Install");
+    switch (v)
+    {
+        case View::whatsNew:       message = {}; label = "Update now"; break;
+        case View::downloading:    message = juce::String (juce::roundToInt (progress * 100.0f)) + "%" + dot + "keep making music, it downloads in the background"; break;
+        case View::ready:
+        case View::installing:
+           #if JUCE_MAC
+            message = app ? juce::String ("Apple's Installer opens and asks for your Mac password, then LISN closes.")
+                          : "Apple's Installer opens and asks for your Mac password. " + next;
+           #else
+            message = app ? "LISN closes, the installer finishes in a minute, then LISN opens again on " + release.version + "."
+                          : "Windows asks for permission, then the installer runs while " + host + " stays open. " + next;
+            if (app) label = "Install and restart";
+           #endif
+            if (v == View::installing) label = "Installing" + ellipsis;
+            break;
+        case View::installed:      message = "Installed. " + next; break;
+        case View::waiting:        message = "Finish in the Installer. " + next; break;
+        case View::failedDownload: message = "The download didn't finish."; label = "Try again"; break;
+        case View::failedInstall:  message = "The update didn't install."; label = "Try again"; break;
+        case View::inUse:          message = "Close " + host + ", then click Install"; break;
+        case View::engine:         message = "Installed, but the AI engine could not be set up. Check your internet connection and click Install again."; break;
+    }
+    primary.setButtonText (label);
+    primary.setEnabled (! (v == View::whatsNew && busy) && v != View::installing);
+    later.setButtonText (v == View::installed || v == View::waiting ? "Close" : "Later");
+    resized();
+    repaint();
+}
+
+juce::Rectangle<float> UpdateScreen::shotArea() const
+{
+    const juce::Rectangle<float> area (inset, inset, columnX - 2.0f * inset, 400.0f - 2.0f * inset - (shots.size() > 1 ? 24.0f : 0.0f));
+    const auto img = shots[shot];
+    if (! img.isValid())
+        return area;
+    return juce::RectanglePlacement (juce::RectanglePlacement::centred).appliedTo (img.getBounds().toFloat(), area);
+}
+
+juce::Rectangle<float> UpdateScreen::dotArea (int i) const
+{
+    const auto r = shotArea();
+    const auto x = r.getCentreX() + ((float) i - (float) (shots.size() - 1) / 2.0f) * 14.0f;
+    return juce::Rectangle<float> (16.0f, 16.0f).withCentre ({ x, r.getBottom() + 14.0f });
+}
+
+void UpdateScreen::mouseUp (const juce::MouseEvent& e)
+{
+    for (int i = 0; i < shots.size() && shots.size() > 1; ++i)
+        if (i != shot && dotArea (i).contains (e.position))
+        {
+            shot = i;
+            repaint();
+        }
+}
+
+void UpdateScreen::resized()
+{
+    const bool failed = view == View::failedDownload || view == View::failedInstall;
+    auto x = juce::roundToInt (panelW - inset);
+    const auto place = [&x] (LisnButton& b, bool show)
+    {
+        b.setVisible (show);
+        if (! show) return;
+        x -= b.preferredWidth();
+        b.setBounds (x, juce::roundToInt (buttonY), b.preferredWidth(), b.height);
+        x -= 8;
+    };
+    place (primary, view != View::downloading && view != View::installed && view != View::waiting);
+    place (cancel, view == View::downloading);
+    place (later, true);
+
+    // The notes, 10 px apart, as far as they fit above the buttons; "...and more" under them.
+    auto notesBottom = bodyY;
+    for (const auto& n : notes)
+    {
+        if (notesBottom + n.getHeight() > buttonY - 40.0f) break;   // ponytail: notes that don't fit are cut; the link stays
+        notesBottom += n.getHeight() + 10.0f;
+    }
+    more.setVisible (view == View::whatsNew && release.moreNotes);
+    more.setBounds (juce::roundToInt (columnX + 16.0f), juce::roundToInt (notesBottom - 4.0f),
+                    juce::roundToInt (juce::GlyphArrangement::getStringWidth (Fonts::body (14.0f), more.getButtonText()) + 4.0f), 22);
+
+    const auto lines = lineCount (Fonts::body (14.0f), message, columnW);
+    website.setVisible (failed);
+    website.setBounds (juce::roundToInt (columnX), juce::roundToInt (bodyY + (float) lines * 21.0f + 16.0f), website.preferredWidth(), website.height);
+}
+
+void UpdateScreen::paint (juce::Graphics& g)
+{
+    // Left: the screenshot, rounded 10 px with a hairline, its dots under it; none: the LISN symbol on the panel.
+    const auto r = shotArea();
+    if (const auto img = shots[shot]; img.isValid())
+    {
+        juce::Path clip;
+        clip.addRoundedRectangle (r, 10.0f);
+        {
+            juce::Graphics::ScopedSaveState save (g);
+            g.reduceClipRegion (clip);
+            g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+            g.drawImage (img, r, juce::RectanglePlacement::stretchToFit);
+        }
+        g.setColour (Theme::cream.withAlpha (0.1f));
+        g.drawRoundedRectangle (r.reduced (0.5f), 9.5f, 1.0f);
+        if (shots.size() > 1)
+            for (int i = 0; i < shots.size(); ++i)
+            {
+                g.setColour (i == shot ? Theme::cream : Theme::cream.withAlpha (0.3f));
+                g.fillEllipse (dotArea (i).withSizeKeepingCentre (6.0f, 6.0f));
+            }
+    }
+    else if (symbol != nullptr)
+        symbol->drawWithin (g, r.withSizeKeepingCentre (120.0f, 120.0f), juce::RectanglePlacement::centred, 1.0f);
+
+    // Right: "LISN 0.3.1" (Unbounded, as the screen titles), "26 MB · you have 0.3.0".
+    text (g, Fonts::display (22.0f), Theme::cream, "LISN " + release.version, { columnX, inset, columnW, 30.0f }, juce::Justification::centredLeft);
+    auto sub = "you have " + current;
+    if (release.installerSize > 0)
+        sub = juce::String (juce::jmax (1, juce::roundToInt ((double) release.installerSize / (1024.0 * 1024.0)))) + " MB" + dot + sub;
+    text (g, Fonts::body (13.0f), Theme::cream.withAlpha (0.64f), sub, { columnX, inset + 34.0f, columnW, 18.0f }, juce::Justification::centredLeft);
+
+    if (view == View::whatsNew)
+    {
+        auto y = bodyY;
+        for (const auto& n : notes)
+        {
+            if (y + n.getHeight() > buttonY - 40.0f) break;
+            const auto firstLine = n.getNumLines() > 0 ? n.getLine (0).getLineBoundsY().getLength() : n.getHeight();
+            text (g, Fonts::body (14.0f, 700), theme.guitar, juce::String (juce::CharPointer_UTF8 ("\xe2\x80\xa2")),
+                  { columnX + 2.0f, y, 10.0f, firstLine }, juce::Justification::centredLeft);
+            n.draw (g, { columnX + 16.0f, y, columnW - 16.0f, n.getHeight() });
+            y += n.getHeight() + 10.0f;
+        }
+        if (busy)
+            text (g, Fonts::body (12.0f), Theme::cream.withAlpha (0.6f), "Finish the current split first",
+                  { columnX, buttonY - 26.0f, columnW, 18.0f }, juce::Justification::centredRight);
+        return;
+    }
+    auto y = bodyY;
+    if (view == View::downloading)   // a gold bar over the caption
+    {
+        const juce::Rectangle<float> bar (columnX, y + 2.0f, columnW, 6.0f);
+        g.setColour (Theme::cream.withAlpha (0.12f));
+        g.fillRoundedRectangle (bar, 3.0f);
+        g.setColour (theme.guitar);
+        g.fillRoundedRectangle (bar.withWidth (juce::jmax (6.0f, columnW * progress)), 3.0f);
+        y += 22.0f;
+    }
+    const auto lines = lineCount (Fonts::body (14.0f), message, columnW);
+    paragraph (g, Fonts::body (14.0f), Theme::cream.withAlpha (view == View::downloading ? 0.72f : 0.88f), message,
+               { columnX, y, columnW, (float) lines * 21.0f }, 21.0f, juce::Justification::left);
 }
