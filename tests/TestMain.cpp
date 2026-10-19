@@ -26,7 +26,7 @@ int main (int argc, char* argv[])
     }
     if (args[0] == "--update-check")   // the real request to GitHub, and what it saved (see UpdateCheck.h)
     {
-        std::printf ("GitHub's latest: '%s'\n", fetchLatestRelease().toRawUTF8());
+        std::printf ("GitHub's latest: '%s'\n", fetchLatestReleaseJson()["tag_name"].toString().toRawUTF8());
         UpdateCheck::getInstance();
         juce::MessageManager::getInstance()->runDispatchLoopUntil (8000);
         const auto saved = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("StemSplitter/update.settings");

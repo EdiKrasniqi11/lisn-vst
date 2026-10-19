@@ -23,6 +23,47 @@ struct UpdateCheckTests : juce::UnitTest
         expect (! isNewerVersion ("latest", "0.2.4"));
         expect (! isNewerVersion ("v0..3", "0.2.4"));
 
+        beginTest ("the cache rule");
+        {
+            const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("lisn-update-test");
+            dir.deleteRecursively();
+            dir.createDirectory();
+            juce::PropertiesFile::Options options;
+            options.filenameSuffix = ".settings";
+            juce::PropertiesFile seen (dir.getChildFile ("seen.settings"), options);
+            const juce::int64 now = 10'000'000'000;
+            const auto hour = juce::int64 (3600 * 1000);
+            const auto stored = juce::JSON::parse (R"({"tag_name":"v0.9.0"})");
+            const auto fresh = juce::JSON::parse (R"({"tag_name":"v1.0.0"})");
+            int calls = 0;
+            const auto fetchFresh = [&] { ++calls; return fresh; };
+            const auto fetchNothing = [&] { ++calls; return juce::var(); };
+
+            seen.setValue ("release", juce::JSON::toString (stored, true));
+            seen.setValue ("checked", juce::String (now - hour));
+            expectEquals (UpdateCheck::releaseFor (seen, now, fetchFresh)["tag_name"].toString(), juce::String ("v0.9.0"));
+            expectEquals (calls, 0);                                         // fresh: no request
+
+            seen.setValue ("checked", juce::String (now - 25 * hour));
+            expectEquals (UpdateCheck::releaseFor (seen, now, fetchFresh)["tag_name"].toString(), juce::String ("v1.0.0"));
+            expectEquals (calls, 1);                                         // stale: one request, kept
+            expect (seen.getValue ("release").contains ("v1.0.0"));
+            expectEquals (seen.getValue ("checked"), juce::String (now));
+            expectEquals (seen.getValue ("latest"), juce::String ("v1.0.0"));   // for 0.2.5 processes
+
+            seen.setValue ("checked", juce::String (now - 25 * hour));
+            expectEquals (UpdateCheck::releaseFor (seen, now, fetchNothing)["tag_name"].toString(), juce::String ("v1.0.0"));
+            expectEquals (calls, 2);                                         // offline: the stored one stays
+            expectEquals (seen.getValue ("checked"), juce::String (now - 25 * hour));
+
+            seen.removeValue ("release");                                    // a 0.2.5 cache: only the tag
+            seen.setValue ("latest", "v0.9.0");
+            seen.setValue ("checked", juce::String (now - hour));
+            expectEquals (UpdateCheck::releaseFor (seen, now, fetchFresh)["tag_name"].toString(), juce::String ("v1.0.0"));
+            expectEquals (calls, 3);
+            dir.deleteRecursively();
+        }
+
         beginTest ("the header's pill");
         for (const bool titleBar : { false, true })
         {
