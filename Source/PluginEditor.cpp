@@ -66,15 +66,25 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     // clicks on every child, including buttons, which don't grab focus themselves.
     setWantsKeyboardFocus (true);
     addMouseListener (this, true);
-    addAndMakeVisible (waves);
-    addAndMakeVisible (header);
+    root.setInterceptsMouseClicks (false, true);
+    root.setBounds (0, 0, 760, 500);
+    addAndMakeVisible (root);
+    root.addAndMakeVisible (waves);
+    root.addAndMakeVisible (header);
     panelContent.setInterceptsMouseClicks (false, true);
-    addAndMakeVisible (panelContent);
+    root.addAndMakeVisible (panelContent);
     for (auto* s : std::initializer_list<juce::Component*> { &drop, &splitting, &stems, &harmonyDrop, &harmonySplitting, &harmony, &error, &help, &updatePanel })
         panelContent.addChildComponent (s);
-    addAndMakeVisible (info);
+    root.addAndMakeVisible (info);
+    root.addAndMakeVisible (themeButton);
+    addAndMakeVisible (grip);
 
-    header.onTheme = [this] (juce::String id) { proc.setTheme (id); applyTheme (themeFor (id)); };
+    themeButton.onClick = [this]
+    {
+        const auto id = proc.getTheme() == "midnight" ? "dusk" : "midnight";
+        proc.setTheme (id);
+        applyTheme (themeFor (id));
+    };
     header.onSixStems = [this] (bool six)            // which may re-split: not after an update changed the engine
     {
         if (updateBlocksJobs())
@@ -212,7 +222,15 @@ StemSplitterEditor::StemSplitterEditor (StemSplitterProcessor& p) : AudioProcess
     if (live)
         UpdateCheck::getInstance()->addChangeListener (this);
 
-    setSize (760, 500);
+    auto maxWidth = 1520;                            // 2x, or what fits the main screen
+    if (const auto* d = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        maxWidth = juce::jlimit (760, 1520, (int) juce::jmin (d->userBounds.getWidth(), d->userBounds.getHeight() * 760.0f / 500.0f));
+    sizes.setSizeLimits (760, 500, maxWidth, juce::roundToInt (maxWidth * 500.0 / 760.0));
+    sizes.setFixedAspectRatio (760.0 / 500.0);
+    setConstrainer (&sizes);
+    setResizable (true, false);                      // the host may resize it too; the grip is LISN's own
+    const auto w = juce::jlimit (760, maxWidth, proc.getEditorWidth());   // the size it was left at
+    setSize (w, juce::roundToInt (w * 500.0 / 760.0));
     tick();   // first screen and theme before the window shows
     if (! proc.introShown && introEnabled())
     {
@@ -236,6 +254,7 @@ void StemSplitterEditor::setIntroTime (std::optional<float> seconds)
         header.setInterceptsMouseClicks (! introPlaying, ! introPlaying);
         panelContent.setInterceptsMouseClicks (false, ! introPlaying);
         info.setInterceptsMouseClicks (! introPlaying, false);
+        themeButton.setInterceptsMouseClicks (! introPlaying, false);
     }
     waves.setIntro (seconds);
     // Board 4A: the screen sits in the panel and moves with it; the header and the info button fade in last (CSS `ease`).
@@ -243,6 +262,7 @@ void StemSplitterEditor::setIntroTime (std::optional<float> seconds)
     const auto fade = WaveBackground::cubicBezier (0.25f, 0.1f, 0.25f, 1.0f, (t - 1.3f) / 0.6f);
     header.setAlpha (fade);
     info.setAlpha (fade);
+    themeButton.setAlpha (fade);
     panelContent.setAlpha (WaveBackground::panelIntro (t));
     panelContent.setTransform (juce::AffineTransform::translation (0.0f, (float) WaveBackground::panelDrop (t)));
 }
@@ -366,7 +386,12 @@ bool StemSplitterEditor::updateBlocksJobs()
 
 void StemSplitterEditor::resized()
 {
-    waves.setBounds (getLocalBounds());
+    // Everything is laid out at 760 x 500 in root, scaled to the window: the waves' caches and the header's symbol follow the
+    // physical pixel scale, so they stay sharp. The larger factor, so a height rounded down leaves no uncovered row.
+    root.setTransform (juce::AffineTransform::scale (juce::jmax (getWidth() / 760.0f, getHeight() / 500.0f)));
+    grip.setBounds (getWidth() - 16, getHeight() - 16, 16, 16);
+    proc.setEditorWidth (getWidth());
+    waves.setBounds (root.getLocalBounds());
     const auto lights = nativeButtons ? 64 : 0;      // the pills stay right-aligned at x 736
     header.setBounds (24 + lights, 16, 712 - lights, 44);
     panelContent.setBounds (panel);
@@ -374,6 +399,7 @@ void StemSplitterEditor::resized()
         s->setBounds (panel.withZeroOrigin());
     layoutSlide();
     info.setBounds (716, 476, 24, 24);   // its 16 px ring centred under the panel's right edge, in the 24 px bottom margin
+    themeButton.setBounds (692, 476, 24, 24);   // its ring 8 px left of the info button's
 }
 
 void StemSplitterEditor::mouseDown (const juce::MouseEvent&)
@@ -647,6 +673,7 @@ void StemSplitterEditor::applyTheme (const Theme& t)
     appliedThemeId = t.id;
     waves.setTheme (t);
     header.setTheme (t);
+    themeButton.setTheme (t);
     drop.setTheme (t);
     splitting.setTheme (t);
     stems.setTheme (t);

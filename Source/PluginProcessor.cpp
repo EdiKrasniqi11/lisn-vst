@@ -138,6 +138,7 @@ void StemSplitterProcessor::getStateInformation (juce::MemoryBlock& dest)
         auto python = pythonPath;
         applyJobResults (dir, python);
         s.setProperty ("theme", theme, nullptr);
+        s.setProperty ("width", editorWidth, nullptr);
         s.setProperty ("model", model, nullptr);
         s.setProperty ("python", python, nullptr);
         s.setProperty ("input", lastInput.getFullPathName(), nullptr);
@@ -160,6 +161,7 @@ void StemSplitterProcessor::setStateInformation (const void* data, int size)
 
     const juce::ScopedLock sl (settingsLock);
     theme      = s.getProperty ("theme", "dusk").toString();
+    editorWidth = (int) s.getProperty ("width", 760);   // the editor clamps it to its sizes
     model      = s.getProperty ("model", "htdemucs").toString();
     pythonPath = s.getProperty ("python", "").toString();
     lastInput  = juce::File::isAbsolutePath (in) ? juce::File (in) : juce::File();

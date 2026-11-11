@@ -113,19 +113,17 @@ namespace
 //==============================================================================
 Header::Header()
     : symbol (juce::Drawable::createFromImageData (BinaryData::lisnsymbolglass_svg, (size_t) BinaryData::lisnsymbolglass_svgSize)),
-      themePill ({ "Dusk", "Midnight" }), stemsPill ({ "4 stems", "6 stems" })
+      stemsPill ({ "4 stems", "6 stems" })
 {
     jassert (symbol != nullptr);
     title.addLineOfText (tracked (Fonts::display (22.0f), 0.08f), "LISN", titleX, 30.25f);   // the reel shares its baseline
     makeReel (themeFor ("dusk"));
 
-    themePill.onChange = [this] (int i) { if (onTheme != nullptr) onTheme (i == 1 ? "midnight" : "dusk"); };
     stemsPill.onChange = [this] (int i)
     {
         if (harmoniesPill) { bestSelected = i == 1; if (onHarmonyQuality != nullptr) onHarmonyQuality (bestSelected); }
         else               { sixSelected = i == 1;  if (onSixStems != nullptr) onSixStems (sixSelected); }
     };
-    addAndMakeVisible (themePill);
     addAndMakeVisible (stemsPill);
     update.onClick = [this] { if (onUpdate != nullptr) onUpdate(); };
     addChildComponent (update);
@@ -143,12 +141,12 @@ void Header::placeUpdate()
 {
     // The title bar has no room for the name and the pill: the pill takes the name's place (after "LISN") while it rests
     // on StemSplitter, and steps aside while the reel spins to or shows Harmonies. In a plugin it stays after the name,
-    // with the short text when the long one would reach the theme pill.
+    // with the short text when the long one would reach the stems pill.
     const auto reelBusy = spinning || reelTarget > 0.0 || reelPos != 0.0;
     update.setVisible (updateVersion.isNotEmpty() && ! (titleBar && reelBusy));
     const auto x = titleBar ? juce::roundToInt (title.getBoundingBox (0, -1, true).getRight()) : nameArea().getRight() - 4;
     update.setButtonText (updateLabel);
-    if (! titleBar && updateShortLabel.isNotEmpty() && x + 16 + update.preferredWidth() + 12 > themePill.getX())
+    if (! titleBar && updateShortLabel.isNotEmpty() && x + 16 + update.preferredWidth() + 12 > stemsPill.getX())
         update.setButtonText (updateShortLabel);
     update.setBounds (x + 16, 9, update.preferredWidth(), 26);   // 16 px after the title, centred on the capitals (y 22)
     repaint (nameArea().expanded (14, 0));
@@ -282,10 +280,8 @@ void Header::setTheme (const Theme& t)
 {
     makeReel (t);
     repaint();
-    themePill.setTheme (t);
     stemsPill.setTheme (t);
     update.setAccent (t.accent());
-    themePill.setSelected (t.id == "midnight" ? 1 : 0);
 }
 
 void Header::setSixStems (bool six)
@@ -323,11 +319,8 @@ void Header::refreshStemsPill()
 
 void Header::setEnabledSwitches (bool on)
 {
-    for (auto* p : { &themePill, &stemsPill })
-    {
-        p->setEnabled (on);
-        p->setAlpha (on ? 1.0f : 0.55f);
-    }
+    stemsPill.setEnabled (on);
+    stemsPill.setAlpha (on ? 1.0f : 0.55f);
 }
 
 void Header::makeTitleBar (std::function<void()> minimise, std::function<void()> close)
@@ -418,7 +411,6 @@ void Header::resized()
     }
     const auto w = stemsPill.preferredWidth();
     stemsPill.setBounds (right - w, 3, w, 38);
-    themePill.setBounds (stemsPill.getX() - 8 - themePill.preferredWidth(), 3, themePill.preferredWidth(), 38);
     // The update pill: 16 px after the title, centred on the header like the capitals (y 22); clear of the theme pill
     placeUpdate();
 }

@@ -79,6 +79,28 @@ public:
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 };
 
+// The theme switch left of the info button (the theme switch canvas, board E): the info button's 16 px ring around a 10 px
+// dot in the current theme's colours. A click swaps Dusk and Midnight (the owner's onClick); the tooltip says which is on.
+class ThemeButton : public juce::Button
+{
+public:
+    ThemeButton();
+    void setTheme (const Theme&);
+    void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
+
+private:
+    juce::Colour from, mid, to;                  // the dot's 135 degree gradient
+};
+
+// The window's bottom-right corner (the Resize board's grip): six dots, cream 0.35 (0.8 hovered or dragging), 3 px in from
+// the corner of its 16 px square. A drag resizes the target through the constrainer.
+class ResizeGrip : public juce::ResizableCornerComponent
+{
+public:
+    ResizeGrip (juce::Component* target, juce::ComponentBoundsConstrainer* c) : juce::ResizableCornerComponent (target, c) {}
+    void paint (juce::Graphics&) override;
+};
+
 // The header's "Update 0.2.5" pill (the update-notice mockup, option A): 26 tall, rgba(32,18,27,.55) with a 1 px cream@0.22
 // border (0.72 and 0.36 hovered), padding 0 10 0 8: a 7 px dot in the theme's accent, 6 px, Bold 12.
 class UpdatePill : public juce::Button

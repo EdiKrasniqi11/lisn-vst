@@ -28,6 +28,7 @@ struct ProcessorStateTests : juce::UnitTest
             StemSplitterProcessor a;
             load (a, xml);
             a.setTheme ("midnight");
+            a.setEditorWidth (1140);
             a.setPythonPath ("C:\\Py\\python.exe");
 
             juce::MemoryBlock blob;
@@ -35,6 +36,7 @@ struct ProcessorStateTests : juce::UnitTest
             StemSplitterProcessor b;
             b.setStateInformation (blob.getData(), (int) blob.getSize());
             expectEquals (b.getTheme(), juce::String ("midnight"));
+            expectEquals (b.getEditorWidth(), 1140);
             expect (b.isSixStems());
             expectEquals (b.getPythonPath(), juce::String ("C:\\Py\\python.exe"));
             expect (b.getLastInput() == input);
@@ -48,6 +50,7 @@ struct ProcessorStateTests : juce::UnitTest
             StemSplitterProcessor p;
             load (p, *juce::parseXML ("<StemSplitter model=\"htdemucs\" python=\"python\" input=\"\" stems=\"\"/>"));
             expectEquals (p.getTheme(), juce::String ("dusk"));
+            expectEquals (p.getEditorWidth(), 760);
             expectEquals (p.getPythonPath(), juce::String ("python"));
             expect (! p.isSixStems());
             expect (p.getLastInput() == juce::File() && ! p.hasStems());

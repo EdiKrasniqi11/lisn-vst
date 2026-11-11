@@ -10,7 +10,8 @@
 #include "WaveBackground.h"
 #include <optional>
 
-// Fixed 760 x 500: wave background, header and one screen per UiState::Screen. A 30 Hz timer maps the processor to a
+// Laid out at 760 x 500 and scaled to the window, which keeps that ratio from 1x to 2x or what fits the main screen (the
+// corner grip or the host resizes it): wave background, header and one screen per UiState::Screen. A 30 Hz timer maps the processor to a
 // UiState, updates the stem rows from the player and moves the waves while it plays. The panel has two pages: StemSplitter's
 // screens on the left, Harmonies' on the right; the name reel switches products and the panel slides between the pages.
 class StemSplitterEditor : public juce::AudioProcessorEditor,
@@ -89,6 +90,7 @@ private:
     void choose (const juce::String& title, const juce::String& patterns, std::function<void (const juce::File&)> then);
 
     StemSplitterProcessor& proc;
+    juce::Component root;                            // everything below at 760 x 500, scaled to the window
     WaveBackground waves;
     Header header;
     juce::Component panelContent;                    // holds the screens; the intro fades and lowers it, not them (keeps their caches)
@@ -102,6 +104,9 @@ private:
     HelpSheet help;
     UpdateScreen updatePanel;
     InfoButton info;                                 // bottom-right corner: opens and closes the help sheet
+    ThemeButton themeButton;                         // left of it: Dusk / Midnight
+    juce::ComponentBoundsConstrainer sizes;          // the ratio and the limits
+    ResizeGrip grip { this, &sizes };                // the window's corner, unscaled, over root
     juce::TooltipWindow tooltips { this };           // the choir icon's and the Best side's tooltips
     bool helpOpen = false, updateOpen = false;
     bool live = false, standaloneApp = false;        // a real plugin or the app (not the tests); the desktop app

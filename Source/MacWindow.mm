@@ -3,8 +3,9 @@
 
 namespace
 {
-// The header row's centre, from the window's top: the header sits at y 16 and is 44 high.
-constexpr CGFloat rowCentre = 38.0;
+// The header row's centre, from the window's top: the header sits at y 16 and is 44 high at 1x (760 wide); the editor scales
+// with the window's width.
+CGFloat rowCentre (NSWindow* ns) { return 38.0 * ns.frame.size.width / 760.0; }
 
 // macOS puts the three lights in a 28 px strip at the window's top, centred in it. Make that strip tall enough to hold them at the
 // header row's centre and move them there (they only take clicks inside their parent's frame). AppKit lays them out again now
@@ -17,7 +18,8 @@ void alignLights (NSWindow* ns)
     if (bar == nil || container == nil || frameView == nil)
         return;
 
-    const CGFloat height = rowCentre + 10.0;   // the lights' bottoms, 7 px under the centre, and a little more
+    const CGFloat centre = rowCentre (ns);
+    const CGFloat height = centre + 10.0;      // the lights' bottoms, 7 px under the centre, and a little more
     const NSRect wanted = NSMakeRect (container.frame.origin.x, NSMaxY (frameView.bounds) - height, container.frame.size.width, height);
     if (! NSEqualRects (container.frame, wanted))
         container.frame = wanted;
@@ -27,7 +29,7 @@ void alignLights (NSWindow* ns)
     for (const auto kind : { NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton })
     {
         NSButton* b = [ns standardWindowButton: kind];
-        const CGFloat y = bar.isFlipped ? rowCentre - b.frame.size.height / 2 : height - rowCentre - b.frame.size.height / 2;
+        const CGFloat y = bar.isFlipped ? centre - b.frame.size.height / 2 : height - centre - b.frame.size.height / 2;
         if (b != nil && b.frame.origin.y != y)
             [b setFrameOrigin: NSMakePoint (b.frame.origin.x, y)];
     }

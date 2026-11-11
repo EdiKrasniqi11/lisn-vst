@@ -5,8 +5,9 @@
 
 // The wave background (Waves.dc.html) plus the frosted panel (Main.dc.html). Layer masks are rendered once per scale;
 // per theme each layer's shadow + shape is composited into one image, and the panel (drop shadow, frost, tint, border)
-// into another. A frame only blits them, the layers at snapped offsets.
-class WaveBackground : public juce::Component
+// into another. A frame only blits them, the layers at snapped offsets. While the scale keeps changing (a window being
+// resized) the frames draw those images resampled; they are rebuilt once the scale has held still for 150 ms.
+class WaveBackground : public juce::Component, private juce::Timer
 {
 public:
     WaveBackground();
@@ -36,7 +37,10 @@ public:
     static Mask shadowMask (const LayerShape&, juce::Rectangle<float> area, float scale);
 
 private:
+    void timerCallback() override { stopTimer(); repaint(); }   // the scale settled: rebuild at it
+
     Theme theme = themeFor ("dusk");
+    float seenScale = 0.0f;                                // the last paint's physical scale; 0 = no paint yet
     juce::Rectangle<int> panel;
     float radius = 0.0f, tint = 0.0f, flow = 0.0f, pulse = 0.0f;
     std::optional<float> intro;
