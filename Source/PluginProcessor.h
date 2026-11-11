@@ -48,6 +48,10 @@ public:
     juce::String getProduct() const        { const juce::ScopedLock sl (settingsLock); return product; }          // "stems" or "harmonies"
     juce::String getHarmonyQuality() const { const juce::ScopedLock sl (settingsLock); return harmonyQuality; }   // "quick" or "best"
     juce::File getHarmonyInput() const     { const juce::ScopedLock sl (settingsLock); return harmonyInput; }
+    // The editor's width (its height follows the 760 x 500 ratio). Saved without telling the host: a resize doesn't mark the
+    // project as modified.
+    int getEditorWidth() const             { const juce::ScopedLock sl (settingsLock); return editorWidth; }
+    void setEditorWidth (int w)            { const juce::ScopedLock sl (settingsLock); editorWidth = w; }
 
     void setTheme (const juce::String& id);
     void setPythonPath (const juce::String& exe) { const juce::ScopedLock sl (settingsLock); pythonPath = exe; }
@@ -79,6 +83,7 @@ private:
 
     juce::CriticalSection settingsLock;
     juce::String theme = "dusk";
+    int editorWidth = 760;
     juce::String model = "htdemucs";
     juce::String pythonPath;   // a hint (the user's pick or the last Python that worked); empty = search
     juce::File lastInput;      // last dropped file

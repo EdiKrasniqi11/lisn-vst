@@ -93,7 +93,7 @@ struct UpdateCheckTests : juce::UnitTest
             expectEquals (pill->getHeight(), 26);
             expectEquals (pill->getY(), 9);
             expect (pill->getX() > (titleBar ? 100 : 200), juce::String (pill->getX()));      // after "LISN" / "LISN StemSplitter"
-            expect (pill->getRight() + 24 < firstPill->getX(), juce::String (pill->getRight()));   // clear of the theme pill
+            expect (pill->getRight() + 24 < firstPill->getX(), juce::String (pill->getRight()));   // clear of the stems pill
 
             int clicks = 0;
             h.onUpdate = [&] { ++clicks; };
@@ -102,7 +102,8 @@ struct UpdateCheckTests : juce::UnitTest
             expectEquals (clicks, 1);
 
             // The longest texts stay clear of the pills: the desktop app's "Downloading 99%"; in a plugin "Restart FL Studio
-            // to finish" becomes "Restart to finish" after the name, on StemSplitter and on Harmonies alike.
+            // to finish" fits after the name, and a text that wouldn't becomes "Restart to finish", on StemSplitter and on
+            // Harmonies alike.
             if (titleBar)
             {
                 h.showUpdate ("0.2.5", "Downloading 99%");
@@ -114,10 +115,11 @@ struct UpdateCheckTests : juce::UnitTest
                     h.spinTo (harmonies, false);
                     h.showUpdate ("0.2.5", "Restart FL Studio to finish", "Restart to finish");
                     expect (pill->isVisible(), "on Harmonies: " + juce::String ((int) harmonies));
-                    expectEquals (pill->getButtonText(), juce::String ("Restart to finish"));
+                    expectEquals (pill->getButtonText(), juce::String ("Restart FL Studio to finish"));
                     expect (pill->getX() > 200, juce::String (pill->getX()));   // after "LISN StemSplitter", never over it
                     expect (pill->getRight() + 12 <= firstPill->getX(), juce::String (pill->getRight()));
-                    h.showUpdate ("0.2.5", "Restart Ableton Live to finish", "Restart to finish");
+                    h.showUpdate ("0.2.5", "Restart PreSonus Studio One Professional Edition to finish", "Restart to finish");
+                    expectEquals (pill->getButtonText(), juce::String ("Restart to finish"));
                     expect (pill->getRight() + 12 <= firstPill->getX(), juce::String (pill->getRight()));
                 }
             h.spinTo (false, false);

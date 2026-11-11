@@ -8,7 +8,7 @@
 // it paints only its own content over the WaveBackground panel. Nothing here takes keyboard focus.
 
 // Main.dc.html header, bounds (24, 16, 712, 44): the logo kit's glass symbol, "LISN StemSplitter" (HeaderLogoGlass.dc.html,
-// option A), then [Dusk | Midnight] and [4 stems | 6 stems].
+// option A), then [4 stems | 6 stems]. The theme switch is the editor's ThemeButton, beside the info button.
 // Board 1A's round Minimise / Close buttons: 32 px, cream@0.18 border, rgba(32,18,27,.55) fill.
 class WindowButton : public juce::Button
 {
@@ -23,7 +23,7 @@ class Header : public juce::Component
 {
 public:
     Header();
-    void setTheme (const Theme&);                  // pill tints and the theme selection
+    void setTheme (const Theme&);                  // the pill's tint and the reel's colours
     void setSixStems (bool);                       // selection only, no callback (shown while StemSplitter's pill is up)
     // The second pill is "4 stems | 6 stems" in StemSplitter and "Quick | Best quality" in Harmonies. setSixStems and
     // setHarmonyQuality each keep their own selection, so a product switch shows the right one.
@@ -32,8 +32,7 @@ public:
     void setBestTooltip (bool show);               // "900 MB download first" on the Best side, in Harmonies only
     std::function<void (bool best)> onHarmonyQuality;
     SegmentedPill& stemsPillControl() { return stemsPill; }   // test hook
-    void setEnabledSwitches (bool);                // disabled pills are drawn at 0.55
-    std::function<void (juce::String)> onTheme;    // "dusk" / "midnight"
+    void setEnabledSwitches (bool);                // a disabled pill is drawn at 0.55
     std::function<void (bool)> onSixStems;
     // The desktop app (board 1A): the header is the title bar. It reads "LISN" after the symbol, gets Minimise / Close after
     // the pills, and a drag anywhere else (the symbol and text too) moves the window. With no callbacks (the Mac, whose
@@ -83,7 +82,7 @@ private:
     void reelFrame();
     juce::Rectangle<int> nameArea() const;
     void refreshStemsPill();
-    SegmentedPill themePill, stemsPill;
+    SegmentedPill stemsPill;
     bool harmoniesPill = false, sixSelected = false, bestSelected = false, bestTip = false;
     WindowButton minimiseButton { false }, closeButton { true };
     UpdatePill update;

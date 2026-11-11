@@ -289,6 +289,8 @@ int runSnapshots (const juce::File& outDir)
         { "titlebar-midnight", "midnight", state (Screen::Drop, false), 1.0f, titleBar },
         { "titlebar-mac-dusk", "dusk", state (Screen::Drop, false), 1.0f, macTitleBar },
         { "titlebar-dusk@1.25x", "dusk", state (Screen::Drop, false), 1.25f, titleBar },
+        { "titlebar-dusk-150", "dusk", state (Screen::Drop, false), 1.0f, [] (StemSplitterProcessor&, StemSplitterEditor& ed)
+            { ed.makeTitleBar ([] {}, [] {}); ed.setSize (1140, 750); } },   // the window dragged to 1.5x
         { "titlebar-dusk@2x", "dusk", state (Screen::Drop, false), 2.0f, titleBar },
         { "titlebar-midnight@2x", "midnight", state (Screen::Drop, false), 2.0f, titleBar },
         { "splitting-dusk", "dusk", withProgress (state (Screen::Splitting, false), 0.58) },

@@ -253,6 +253,45 @@ void InfoButton::paintButton (juce::Graphics& g, bool isMouseOver, bool)
     g.fillEllipse (juce::Rectangle<float> (1.4f, 1.4f).withCentre ({ icon.getX() + 6.0f, icon.getY() + 3.625f }));
 }
 
+ThemeButton::ThemeButton() : juce::Button ("Theme")
+{
+    setWantsKeyboardFocus (false);
+    setMouseClickGrabsKeyboardFocus (false);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    setBufferedToImage (true);   // in the waves' motion region, like the info button
+    setTheme (themeFor ("dusk"));
+}
+
+void ThemeButton::setTheme (const Theme& t)
+{
+    from = t.layers[2];          // Dusk: plum, coral, peach. Midnight: ink, navy, blue
+    mid = t.layers[0];
+    to = t.layers[1];
+    setTooltip (t.id == "midnight" ? "Midnight. Click for Dusk" : "Dusk. Click for Midnight");
+    repaint();
+}
+
+void ThemeButton::paintButton (juce::Graphics& g, bool isMouseOver, bool)
+{
+    const auto ring = getLocalBounds().toFloat().withSizeKeepingCentre (16.0f, 16.0f);
+    g.setColour (Theme::cream.withAlpha (isMouseOver ? 0.8f : 0.35f));
+    g.drawEllipse (ring.reduced (0.5f), 1.0f);
+    const auto dot = ring.withSizeKeepingCentre (10.0f, 10.0f);
+    juce::ColourGradient fill (from, dot.getTopLeft(), to, dot.getBottomRight(), false);
+    fill.addColour (0.55, mid);
+    g.setGradientFill (fill);
+    g.fillEllipse (dot);
+}
+
+void ResizeGrip::paint (juce::Graphics& g)
+{
+    g.setColour (Theme::cream.withAlpha (isMouseOverOrDragging() ? 0.8f : 0.35f));
+    const juce::Point<float> corner ((float) getWidth() - 15.0f, (float) getHeight() - 15.0f);   // the dots' 12 px box
+    for (const auto& p : std::initializer_list<juce::Point<float>> { { 10.0f, 2.5f }, { 6.25f, 6.25f }, { 10.0f, 6.25f },
+                                                                     { 2.5f, 10.0f }, { 6.25f, 10.0f }, { 10.0f, 10.0f } })
+        g.fillEllipse (juce::Rectangle<float> (2.2f, 2.2f).withCentre (corner + p));
+}
+
 UpdatePill::UpdatePill() : juce::Button ({})
 {
     setWantsKeyboardFocus (false);

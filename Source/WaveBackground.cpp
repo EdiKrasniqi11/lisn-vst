@@ -190,7 +190,17 @@ void WaveBackground::paint (juce::Graphics& g)
     // JUCE 8.0.4 has no "preferred image type" query: window paints and snapshots use the native (Direct2D) context,
     // images made with SoftwareImageType use the software renderer.
     auto& context = g.getInternalContext();
-    const auto scale = juce::jlimit (1.0f, 2.0f, context.getPhysicalPixelScaleFactor());
+    auto scale = juce::jlimit (1.0f, 2.0f, context.getPhysicalPixelScaleFactor());
+    // A live resize changes the scale on every frame, and rebuilding the blurred caches each time would stall it: until
+    // the scale holds still for 150 ms, the caches are drawn at their own scale (the renderer resamples them).
+    if (scale != seenScale)
+    {
+        if (seenScale != 0.0f)
+            startTimer (150);
+        seenScale = scale;
+    }
+    if (isTimerRunning() && ! cacheBounds.isEmpty())
+        scale = cacheScale;
     const bool software = dynamic_cast<juce::LowLevelGraphicsSoftwareRenderer*> (&context) != nullptr;
     const juce::ImageType& type = software ? static_cast<const juce::ImageType&> (softwareType) : nativeType;
     const auto window = getLocalBounds().toFloat();
